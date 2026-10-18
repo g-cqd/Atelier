@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public struct ScrollMetrics: Sendable, Equatable {
     public var contentLength: Int

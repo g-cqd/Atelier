@@ -3,7 +3,7 @@ import AtelierGrammar
 import AtelierGrammarCorpus
 import AtelierQuery
 import Foundation
-import KittyCodecs
+import TerminalKitCodecs
 import Testing
 
 @testable import KittySyntax

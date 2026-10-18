@@ -1,6 +1,6 @@
 import AtelierDiff
-public import AtelierText
 import Foundation
+public import TerminalKitText
 
 /// A snapshot read in bounded line chunks, so diffing avoids one rope descent per line.
 struct RopeLineSource: DiffSource {

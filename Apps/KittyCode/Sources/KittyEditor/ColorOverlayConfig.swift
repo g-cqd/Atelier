@@ -1,5 +1,5 @@
 import Foundation
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public struct ColorOverlayConfig: Codable, Sendable, Equatable {
     public var color: ColorRGB

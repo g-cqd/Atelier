@@ -1,5 +1,5 @@
-import AtelierText
-import KittyCodecs
+import TerminalKitCodecs
+import TerminalKitText
 
 @MainActor
 public func jumpWordForward(state: EditorState) {

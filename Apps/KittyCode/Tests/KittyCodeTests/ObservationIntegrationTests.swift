@@ -1,7 +1,7 @@
 import KittyApp
-import KittyCodecs
 import Observation
 import Synchronization
+import TerminalKitCodecs
 import Testing
 
 @testable import KittyEditor

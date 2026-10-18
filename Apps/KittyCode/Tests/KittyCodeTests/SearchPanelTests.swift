@@ -1,13 +1,13 @@
 import AemiTesting
-import AtelierText
 import Foundation
-import KittyCodecs
-import KittyInput
-import KittyRenderer
 import KittySearch
-import KittyTerminal
 import KittyWidgets
 import KittyWorkspace
+import TerminalKitCodecs
+import TerminalKitIO
+import TerminalKitInput
+import TerminalKitRender
+import TerminalKitText
 import Testing
 
 @testable import KittyEditor

@@ -1,5 +1,5 @@
 public import AtelierSyntaxModel
-public import AtelierText
+public import TerminalKitText
 
 /// Where the syntax granularity of intraline emphasis reads token boundaries: a side's lines, by index, as UTF-16
 /// ranges from each line's start.

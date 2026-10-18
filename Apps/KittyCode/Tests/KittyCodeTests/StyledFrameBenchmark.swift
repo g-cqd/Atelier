@@ -1,5 +1,5 @@
 import Foundation
-import KittyRenderer
+import TerminalKitRender
 import Testing
 
 @testable import KittyEditor

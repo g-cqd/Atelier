@@ -1,5 +1,5 @@
-import AtelierText
-public import KittyCodecs
+public import TerminalKitCodecs
+import TerminalKitText
 
 private let blockedTextInsertionModifiers: KeyModifiers = [.ctrl, .super, .hyper, .meta]
 

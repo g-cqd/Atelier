@@ -1,10 +1,10 @@
 import AtelierDiff
 public import AtelierGit
 public import AtelierProcess
-public import AtelierText
 import Foundation
 public import KittyFileTree
 import Synchronization
+public import TerminalKitText
 import os
 
 /// The working tree's git statuses and per-line change markers for open buffers, read through the core git

@@ -1,9 +1,9 @@
 import AemiTesting
-import AtelierText
 import Foundation
 import KittyFileTree
-import KittyStyle
 import KittySyntax
+import TerminalKitStyle
+import TerminalKitText
 import Testing
 
 @testable import KittyWorkspace

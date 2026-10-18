@@ -1,9 +1,9 @@
 import AemiCore
 import AemiTesting
 import Foundation
-import KittyStyle
 import KittySyntax
 import Synchronization
+import TerminalKitStyle
 import Testing
 
 @testable import KittyEditor

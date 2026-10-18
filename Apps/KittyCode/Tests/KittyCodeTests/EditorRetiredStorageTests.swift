@@ -1,8 +1,8 @@
 import AemiTesting
 import Foundation
-import KittyStyle
 import KittyWorkspace
 import Synchronization
+import TerminalKitStyle
 import Testing
 
 @testable import KittyEditor

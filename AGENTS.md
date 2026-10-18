@@ -16,13 +16,15 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
 
 ## Shared building blocks
 
-- `KittyTerminal`, `KittyCodecs`, `KittyInput`, `KittyRenderer`, `KittyStyle` and `AtelierText` are
-  compatibility re-exports, not implementation homes. Change the implementation and owning tests in
-  TerminalKit, then update the same pinned revision in KittyCode and AtelierCore. Use `EscapeSequences`
-  and `TerminalLogger`; do not restore the old nominal types or copy the terminal sources back here.
+- The terminal and text modules live in TerminalKit: `TerminalKitIO`, `TerminalKitCodecs`,
+  `TerminalKitInput`, `TerminalKitRender`, `TerminalKitStyle`, `TerminalKitText`. Import them directly;
+  there are no compatibility aliases. Change the implementation and owning tests in TerminalKit, then
+  update the same pinned revision here. Use `EscapeSequences` and `TerminalLogger`; do not restore the
+  old nominal types or copy the terminal sources back here.
 - Tests that inspect TerminalKit internals declare the owning product dependency and import that module
   directly. Select testability explicitly for optimized tests: `swift test -c release --enable-testable-imports`.
-
+- Run allocation ceilings in a filtered process without unrelated suites. Taking a minimum across
+  repeated samples can reduce interference but does not guarantee an uncontaminated measurement.
 - Diffing goes through `AtelierDiff`: `LineDiff.diffLines(old:new:pipeline:)` over any `DiffSource` (a rope, a
   mapped file, `SubstringLines`, `ByteLines`); `LineChangeMarkers` turns an edit script into gutter marks. No other
   diff code lives in the umbrella.
