@@ -47,7 +47,7 @@ public struct CLIArguments: Sendable {
             return .run(parsed.toLaunchConfig())
         } catch {
             let message = KittyCodeCommand.message(for: error)
-            KittyLogger.stderr(message)
+            TerminalLogger.stderr(message)
             exit(1)
         }
     }

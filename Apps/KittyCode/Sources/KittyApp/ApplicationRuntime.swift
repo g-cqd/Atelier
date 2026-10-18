@@ -58,7 +58,7 @@ public final class ApplicationRuntime {
             do {
                 try connection.write(PixelChrome.deleteAllBytes)
             } catch {
-                KittyLogger.warning("Deleting the pixel chrome failed: \(error)")
+                TerminalLogger.warning("Deleting the pixel chrome failed: \(error)")
             }
         }
     }
@@ -80,7 +80,7 @@ public final class ApplicationRuntime {
         do {
             try pipeline.forceRedraw()
         } catch {
-            KittyLogger.error("Redraw after resize failed: \(error)")
+            TerminalLogger.error("Redraw after resize failed: \(error)")
         }
     }
 
@@ -108,34 +108,34 @@ public final class ApplicationRuntime {
         defer {
             let cleanup =
                 PixelChrome.deleteAllBytes
-                + KittySequences.popKeyboardMode
-                + KittySequences.disableMouseSGR
-                + KittySequences.disableFocusEvents
-                + KittySequences.disableBracketedPaste
-                + KittySequences.showCursor
-                + KittySequences.leaveAlternateScreen
+                + EscapeSequences.popKeyboardMode
+                + EscapeSequences.disableMouseSGR
+                + EscapeSequences.disableFocusEvents
+                + EscapeSequences.disableBracketedPaste
+                + EscapeSequences.showCursor
+                + EscapeSequences.leaveAlternateScreen
             // Best-effort cleanup — log but don't propagate errors during teardown
             do {
                 try connection.write(cleanup)
             } catch {
-                KittyLogger.warning("Cleanup write failed: \(error)")
+                TerminalLogger.warning("Cleanup write failed: \(error)")
             }
             do {
                 try connection.restoreMode()
             } catch {
-                KittyLogger.warning("Restore mode failed: \(error)")
+                TerminalLogger.warning("Restore mode failed: \(error)")
             }
         }
 
         // Setup terminal
         let setup =
-            KittySequences.enterAlternateScreen
-            + KittySequences.hideCursor
-            + KittySequences.clearScreen
-            + KittySequences.pushKeyboardMode(flags: 31)
-            + KittySequences.enableMouseSGR
-            + KittySequences.enableFocusEvents
-            + KittySequences.enableBracketedPaste
+            EscapeSequences.enterAlternateScreen
+            + EscapeSequences.hideCursor
+            + EscapeSequences.clearScreen
+            + EscapeSequences.pushKeyboardMode(flags: 31)
+            + EscapeSequences.enableMouseSGR
+            + EscapeSequences.enableFocusEvents
+            + EscapeSequences.enableBracketedPaste
         do {
             try connection.write(setup)
         } catch {
@@ -191,7 +191,7 @@ public final class ApplicationRuntime {
                 if let newSize = try? conn.getSize() {
                     inputSource.inject(.resize(TerminalCapabilities.clampedSize(newSize)))
                 } else {
-                    KittyLogger.debug(public: "Failed to query terminal size on SIGWINCH")
+                    TerminalLogger.debug(public: "Failed to query terminal size on SIGWINCH")
                 }
             },
             onShutdown: { [inputSource] in
@@ -205,7 +205,7 @@ public final class ApplicationRuntime {
         do {
             try pipeline.flush()
         } catch {
-            KittyLogger.error("Initial flush failed: \(error)")
+            TerminalLogger.error("Initial flush failed: \(error)")
         }
 
         // Event loop
@@ -231,7 +231,7 @@ public final class ApplicationRuntime {
             do {
                 try pipeline.flush()
             } catch {
-                KittyLogger.error("Flush failed: \(error)")
+                TerminalLogger.error("Flush failed: \(error)")
             }
         }
         signalTask.cancel()

@@ -1,8 +1,8 @@
 import AtelierSyntaxModel
 import Testing
 
-@testable import KittyCodecs
 @testable import KittySyntax
+@testable import TerminalKitCodecs
 
 @Suite
 struct HighlightMergerTests {

@@ -1,8 +1,8 @@
 import Testing
 
-@testable import KittyCodecs
-@testable import KittyRenderer
 @testable import KittyWidgets
+@testable import TerminalKitCodecs
+@testable import TerminalKitRender
 
 @Suite
 struct FrameModifierTests {
