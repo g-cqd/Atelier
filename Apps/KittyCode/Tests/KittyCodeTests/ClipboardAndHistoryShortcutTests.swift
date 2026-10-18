@@ -59,7 +59,7 @@ struct ClipboardAndHistoryShortcutTests {
         )
 
         #expect(handled)
-        #expect(writes == [KittySequences.requestClipboard])
+        #expect(writes == [EscapeSequences.requestClipboard])
     }
 
     @Test

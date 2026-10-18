@@ -1,10 +1,10 @@
 import Testing
 
 @testable import KittyApp
-@testable import KittyCodecs
-@testable import KittyInput
-@testable import KittyTerminal
 @testable import KittyWidgets
+@testable import TerminalKitCodecs
+@testable import TerminalKitIO
+@testable import TerminalKitInput
 
 @Suite
 struct AppProtocolTests {
