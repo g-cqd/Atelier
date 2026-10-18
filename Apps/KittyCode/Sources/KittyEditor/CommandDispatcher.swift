@@ -1,15 +1,15 @@
 import AemiCore
-import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity file_length function_body_length
 import Foundation
 import KittyApp
-import KittyCodecs
 import KittyFileTree
-public import KittyRenderer
 import KittySearch
 import KittyWidgets
 import KittyWorkspace
+import TerminalKitCodecs
+public import TerminalKitRender
+import TerminalKitText
 
 @MainActor
 public func dispatchCommand(

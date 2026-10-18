@@ -1,7 +1,7 @@
 import AtelierLexers
 import AtelierSyntaxModel
-import AtelierText
 import Synchronization
+import TerminalKitText
 import Testing
 
 /// Lexing visible lines first, then the rest (P1a), as tier 0 of the tier job.

@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 /// The look of `ScrollView`'s indicator; by default the track is blank, so only a dim gray thumb shows.
 public struct ScrollViewStyle: Sendable, Equatable {

@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 // MARK: - Tree Node
 

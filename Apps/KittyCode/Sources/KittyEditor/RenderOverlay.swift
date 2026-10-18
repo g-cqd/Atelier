@@ -1,6 +1,6 @@
-public import KittyCodecs
-public import KittyRenderer
 import KittyWidgets
+public import TerminalKitCodecs
+public import TerminalKitRender
 
 @MainActor
 public func renderOverlay(

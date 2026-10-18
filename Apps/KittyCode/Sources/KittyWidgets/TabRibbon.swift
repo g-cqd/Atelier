@@ -1,6 +1,6 @@
-import AtelierText
-public import KittyCodecs
-public import KittyRenderer
+public import TerminalKitCodecs
+public import TerminalKitRender
+import TerminalKitText
 
 public struct TabRibbon: View, Sendable {
     public struct Tab: Sendable {

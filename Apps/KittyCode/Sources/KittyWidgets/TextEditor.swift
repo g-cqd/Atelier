@@ -1,6 +1,6 @@
-public import AtelierText
-public import KittyCodecs
 public import KittySyntax
+public import TerminalKitCodecs
+public import TerminalKitText
 
 /// A highlighted range within a single line, carrying its own style.
 public struct TextHighlight: Sendable, Equatable {

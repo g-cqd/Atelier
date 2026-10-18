@@ -1,9 +1,9 @@
-public import AtelierText
 public import Foundation
 import KittyFileTree
 public import KittyGit
-import KittyStyle
 public import KittySyntax
+import TerminalKitStyle
+public import TerminalKitText
 
 @MainActor
 public final class DocumentBuffer {

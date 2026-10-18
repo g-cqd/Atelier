@@ -1,4 +1,4 @@
-import KittyInput
+import TerminalKitInput
 
 /// Manages focus state for view hierarchies.
 /// Tab/Shift-Tab cycles focus; the focused view receives input events first.

@@ -1,6 +1,6 @@
 import AtelierSyntaxModel
 public import AtelierTheme
-public import KittyStyle
+public import TerminalKitStyle
 
 /// Maps capture names to visual styles with hierarchical fallback.
 /// For example, `@keyword.function` falls back to `@keyword` if no specific mapping exists.

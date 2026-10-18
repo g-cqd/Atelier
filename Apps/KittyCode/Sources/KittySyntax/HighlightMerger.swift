@@ -1,6 +1,6 @@
 public import AtelierSyntaxModel
 import Foundation
-public import KittyStyle
+public import TerminalKitStyle
 
 extension HighlightMerger {
     /// Resolve merged tokens to styled spans using a theme resolver.

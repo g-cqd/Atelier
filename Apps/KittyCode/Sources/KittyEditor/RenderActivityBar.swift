@@ -1,7 +1,7 @@
-import KittyCodecs
-public import KittyRenderer
 import KittySymbols
 public import KittyWidgets
+import TerminalKitCodecs
+public import TerminalKitRender
 
 @MainActor
 public func renderActivityBar(

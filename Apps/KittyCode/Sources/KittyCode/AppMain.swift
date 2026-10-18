@@ -4,13 +4,13 @@ import AemiCore
 import AtelierProcess
 import Foundation
 import KittyApp
-import KittyCodecs
 import KittyEditor
 import KittyFileTree
 import KittyGit
-import KittyRenderer
-import KittyTerminal
 import KittyWorkspace
+import TerminalKitCodecs
+import TerminalKitIO
+import TerminalKitRender
 
 import class AemiRuntime.BlockingOffloadPool
 

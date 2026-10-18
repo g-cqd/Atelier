@@ -1,7 +1,7 @@
 import AemiKernel
 import Foundation
-import KittyCodecs
-import KittyInput
+import TerminalKitCodecs
+import TerminalKitInput
 
 public enum KeyStrokeFormatter {
     public static func label(for stroke: KeyStroke) -> String {

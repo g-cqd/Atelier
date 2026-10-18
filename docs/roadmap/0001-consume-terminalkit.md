@@ -19,7 +19,9 @@ copy of the terminal/text code or its owning tests.
 - [x] Run AtelierCore's full suite (1,628 tests, 22 targets) and GitDiffViewer's (1,161 tests,
       215 suites): both exit 0.
 - [x] Review the diff, verify dependency locks, lint every changed file, and check the binary runs.
-- [ ] Publish the migration commit to main.
+- [ ] Publish the migration and shim removal to main (PR g-cqd/Atelier#4 and follow-up).
+- [x] Remove the six compatibility modules and migrate every import and qualified reference to the
+      owning TerminalKit module (ADR-0002).
 
 ADR: `docs/adr/0001-consume-terminalkit.md`.
 Owning library tests: TerminalKit, not the compatibility modules.

@@ -1,13 +1,13 @@
-import AtelierText
 import Foundation
-import KittyCodecs
 import KittyFileTree
 import KittyGit
-import KittyRenderer
 import KittySyntax
-import KittyTerminal
 import KittyWidgets
 import KittyWorkspace
+import TerminalKitCodecs
+import TerminalKitIO
+import TerminalKitRender
+import TerminalKitText
 import Testing
 
 @testable import KittyEditor
