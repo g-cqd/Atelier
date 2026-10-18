@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 
-@testable import AtelierText
 @testable import KittyWorkspace
+@testable import TerminalKitText
 
 @Suite
 @MainActor

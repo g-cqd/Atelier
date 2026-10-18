@@ -48,6 +48,7 @@ let package = Package(
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "7a1f22a6d78e63df717e9f5fb0a7968a15a3f38b"),
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "d0f8108bf205e92a3a683db072cf54b0badb40f1"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.0"),
@@ -149,7 +150,10 @@ let package = Package(
             swiftSettings: strict
         ),
         // Text storage: a UTF-8 rope with a line index, cursors, selections, mutations and display metrics.
-        .target(name: "AtelierText", swiftSettings: strict),
+        .target(
+            name: "AtelierText",
+            dependencies: [.product(name: "TerminalKitText", package: "TerminalKit")],
+            swiftSettings: strict),
         // File trees: a lazily scanned directory tree with secure paths, visibility rules and git statuses, and a
         // tree built from relative paths with chain compaction, as a comparison's explorer shows it.
         .target(
@@ -232,7 +236,6 @@ let package = Package(
         .target(name: "AtelierTheme", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(
             name: "AtelierThemeTests", dependencies: ["AtelierTheme", "AtelierSyntaxModel"], swiftSettings: strict),
-        .testTarget(name: "AtelierTextTests", dependencies: ["AtelierText"], swiftSettings: strict),
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         .testTarget(
             name: "AtelierParserTests", dependencies: ["AtelierParser", "AtelierScanners"], swiftSettings: strict),

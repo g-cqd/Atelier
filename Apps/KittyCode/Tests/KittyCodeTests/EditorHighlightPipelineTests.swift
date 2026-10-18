@@ -5,9 +5,9 @@ import KittyWorkspace
 import Synchronization
 import Testing
 
-@testable import AtelierText
 @testable import KittyEditor
 @testable import KittySyntax
+@testable import TerminalKitText
 
 /// The highlight pipeline on large documents: the lines on screen are highlighted from the rope at once, and the rest
 /// of the document by a full pass off the main actor that installs only onto the text it read.

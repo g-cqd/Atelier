@@ -312,7 +312,7 @@ extension EditorState {
             activeBuffer.fileName = previousName
             activeBuffer.language = previousLanguage
             statusMessage = "Error saving: \(error.localizedDescription)"
-            KittyLogger.error("Saving \(destinationPath) failed: \(error)")
+            TerminalLogger.error("Saving \(destinationPath) failed: \(error)")
             return false
         }
     }

@@ -234,7 +234,7 @@ public func handleCopy(state: EditorState) {
     let text = selection.extractText(
         from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
     let base64 = Data(text.utf8).base64EncodedString()
-    state.terminalWriter?(KittySequences.setClipboard(base64))
+    state.terminalWriter?(EscapeSequences.setClipboard(base64))
     state.statusMessage = "Copied \(text.count) chars"
 }
 
@@ -244,7 +244,7 @@ public func handleCut(state: EditorState) {
     let text = selection.extractText(
         from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
     let base64 = Data(text.utf8).base64EncodedString()
-    state.terminalWriter?(KittySequences.setClipboard(base64))
+    state.terminalWriter?(EscapeSequences.setClipboard(base64))
     let previousSnapshot = state.activeBufferSnapshot()
     let mutation = TextOperations.deleteRange(
         in: &state.textBuffer, at: &state.textCursor, selection: selection)
@@ -256,7 +256,7 @@ public func handleCut(state: EditorState) {
 @MainActor
 public func handlePasteRequest(state: EditorState) {
     if let terminalWriter = state.terminalWriter {
-        terminalWriter(KittySequences.requestClipboard)
+        terminalWriter(EscapeSequences.requestClipboard)
         state.pendingClipboardReplies += 1
     }
     state.statusMessage = "Paste request sent"

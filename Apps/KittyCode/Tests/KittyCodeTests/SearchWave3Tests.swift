@@ -6,8 +6,8 @@ import KittyWidgets
 import KittyWorkspace
 import Testing
 
-@testable import AtelierText
 @testable import KittyEditor
+@testable import TerminalKitText
 
 @Suite @MainActor struct SearchWave3Tests {
     @Test func `visible match lookup returns only matches in the requested rows`() {

@@ -669,7 +669,7 @@ public struct KittyConfig: Codable, Sendable {
                 // Missing file is the common case (no user config) — silent fallback.
                 // Other read errors (permission, I/O) warrant a log entry.
                 if (error as NSError).code != NSFileReadNoSuchFileError {
-                    KittyLogger.warning("config unreadable at \(url.path): \(error). using defaults")
+                    TerminalLogger.warning("config unreadable at \(url.path): \(error). using defaults")
                 }
                 return KittyConfig()
             }
@@ -678,13 +678,13 @@ public struct KittyConfig: Codable, Sendable {
             decoder.options.maxDepth = Self.maxJSONDepth
             return try decoder.decode(KittyConfig.self, from: Self.utf8JSONBytes(data))
         } catch let error as DecodingError {
-            KittyLogger.warning("config decode failed at \(url.path): \(error). using defaults")
+            TerminalLogger.warning("config decode failed at \(url.path): \(error). using defaults")
             return KittyConfig()
         } catch let error as JSONError {
-            KittyLogger.warning("config is not valid JSON at \(url.path): \(error). using defaults")
+            TerminalLogger.warning("config is not valid JSON at \(url.path): \(error). using defaults")
             return KittyConfig()
         } catch {
-            KittyLogger.warning("config load failed at \(url.path): \(error). using defaults")
+            TerminalLogger.warning("config load failed at \(url.path): \(error). using defaults")
             return KittyConfig()
         }
     }

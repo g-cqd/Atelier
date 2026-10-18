@@ -52,6 +52,14 @@
         "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
         "version" : "1.8.1"
       }
+    },
+    {
+      "identity" : "terminalkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/TerminalKit.git",
+      "state" : {
+        "revision" : "7a1f22a6d78e63df717e9f5fb0a7968a15a3f38b"
+      }
     }
   ],
   "version" : 3

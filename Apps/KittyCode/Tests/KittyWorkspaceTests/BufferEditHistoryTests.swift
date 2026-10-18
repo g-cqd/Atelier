@@ -1,7 +1,7 @@
 import Testing
 
-@testable import AtelierText
 @testable import KittyWorkspace
+@testable import TerminalKitText
 
 @Suite struct BufferEditHistoryTests {
     private func makeSnapshot(

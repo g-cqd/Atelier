@@ -4,9 +4,9 @@ import Foundation
 import KittySyntax
 import Testing
 
-@testable import AtelierText
 @testable import KittyEditor
 @testable import KittyWorkspace
+@testable import TerminalKitText
 
 /// Opening a file installs the rope its read built, and a document's width is measured only off the main actor: by
 /// the post-load pass after an open, by the full pass otherwise.

@@ -5,9 +5,9 @@ import KittyWorkspace
 import Synchronization
 import Testing
 
-@testable import AtelierText
 @testable import KittyEditor
 @testable import KittySyntax
+@testable import TerminalKitText
 
 /// Closing, switching away from or replacing a tab and reloading a file hand the old document's storage to `retire`,
 /// whose consumer frees it off the main actor, and keep no other reference to it, so the consumer's is the last.

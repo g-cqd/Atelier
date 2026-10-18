@@ -1,9 +1,9 @@
 import Testing
 
-@testable import KittyCodecs
-@testable import KittyRenderer
 @testable import KittySyntax
 @testable import KittyWidgets
+@testable import TerminalKitCodecs
+@testable import TerminalKitRender
 
 /// The text editor draws a file's control characters as blank columns instead of sending them, and gives NUL no
 /// column, as its cursor layout does.
