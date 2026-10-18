@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 date: 2026-10-18
 ---
 
@@ -19,7 +19,7 @@ copy of the terminal/text code or its owning tests.
 - [x] Run AtelierCore's full suite (1,628 tests, 22 targets) and GitDiffViewer's (1,161 tests,
       215 suites): both exit 0.
 - [x] Review the diff, verify dependency locks, lint every changed file, and check the binary runs.
-- [ ] Publish the migration and shim removal to main (PR g-cqd/Atelier#4 and follow-up).
+- [x] Publish the extraction and direct-import migration through PRs g-cqd/Atelier#4 and #5.
 - [x] Remove the six compatibility modules and migrate every import and qualified reference to the
       owning TerminalKit module (ADR-0002).
 
