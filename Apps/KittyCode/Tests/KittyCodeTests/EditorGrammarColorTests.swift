@@ -6,9 +6,9 @@ import KittySyntax
 import Synchronization
 import Testing
 
-@testable import AtelierText
 @testable import KittyEditor
 @testable import KittyWorkspace
+@testable import TerminalKitText
 
 /// A document whose grammar qualifies (its artifacts load and its parse passes the quality gate) keeps its grammar
 /// color through refreshes and edits: an edit re-colors only its own lines with the lexer, and the reparse that

@@ -1,10 +1,10 @@
 import Testing
 
-@testable import AtelierText
-@testable import KittyCodecs
-@testable import KittyRenderer
 @testable import KittySyntax
 @testable import KittyWidgets
+@testable import TerminalKitCodecs
+@testable import TerminalKitRender
+@testable import TerminalKitText
 
 @Suite
 struct TextEditorTests {

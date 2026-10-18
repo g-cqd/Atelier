@@ -1,10 +1,10 @@
 import Foundation
 import Testing
 
-@testable import KittyCodecs
-@testable import KittyRenderer
 @testable import KittySyntax
 @testable import KittyWidgets
+@testable import TerminalKitCodecs
+@testable import TerminalKitRender
 
 @Suite
 struct StyledLineViewportTests {

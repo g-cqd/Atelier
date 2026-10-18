@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Core (kernel) | every library in `Packages/AtelierCore` | `AemiRuntime` (`BlockingOffloadPool`, `LiveClock`, `mapConcurrently`); an injected `any Clock<Duration>`; **no unstructured tasks and no `TaskProvider`**: a core service exposes `async` functions, task groups and `AsyncStream`s the caller drives | `AemiTestKit` |
 | App models | `Apps/GitDiffViewer` (`DiffComparison`, `DiffTextKit`, `DiffRendering`, app), `Apps/KittyCode` (`KittyWorkspace`, `KittyEditor`, `KittyApp`, `KittyWidgets`) | `AemiCore` (`TaskProvider`, `DefaultTaskProvider`) plus an injected clock | `AemiTesting` (`TaskProviderSpy`, `TestClock`, `AsyncProbe`, `CountProbe`) |
-| Terminal kernel | `KittyTerminal`, `KittyCodecs`, `KittyInput`, `KittyRenderer`, `KittyStyle` | none, or `AemiRuntime` | `AemiTestKit` |
+| Terminal kernel | `TerminalKitIO`, `TerminalKitCodecs`, `TerminalKitInput`, `TerminalKitRender`, `TerminalKitStyle`, `TerminalKitText` in the pinned TerminalKit dependency | none, or `AemiRuntime` | owning suites in TerminalKit; app integration suites here |
 
 `AemiCore` and `AemiRuntime` both define `TaskProvider` and `TaskRole`; `AemiTesting` and `AemiTestKit` both
 define `TestClock`, `TaskProviderSpy` and `AsyncProbe`. Never import both families unqualified in one file. An
@@ -15,6 +15,13 @@ app-tier file that needs a runtime helper imports it scoped: `import func AemiRu
 One `BlockingOffloadPool` per app, created in the composition root and injected; the core never creates a global one.
 
 ## Shared building blocks
+
+- `KittyTerminal`, `KittyCodecs`, `KittyInput`, `KittyRenderer`, `KittyStyle` and `AtelierText` are
+  compatibility re-exports, not implementation homes. Change the implementation and owning tests in
+  TerminalKit, then update the same pinned revision in KittyCode and AtelierCore. Use `EscapeSequences`
+  and `TerminalLogger`; do not restore the old nominal types or copy the terminal sources back here.
+- Tests that inspect TerminalKit internals declare the owning product dependency and import that module
+  directly. Select testability explicitly for optimized tests: `swift test -c release --enable-testable-imports`.
 
 - Diffing goes through `AtelierDiff`: `LineDiff.diffLines(old:new:pipeline:)` over any `DiffSource` (a rope, a
   mapped file, `SubstringLines`, `ByteLines`); `LineChangeMarkers` turns an edit script into gutter marks. No other

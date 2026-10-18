@@ -2,10 +2,10 @@ import AemiTesting
 import Testing
 
 @testable import KittyApp
-@testable import KittyCodecs
-@testable import KittyInput
-@testable import KittyRenderer
-@testable import KittyTerminal
+@testable import TerminalKitCodecs
+@testable import TerminalKitIO
+@testable import TerminalKitInput
+@testable import TerminalKitRender
 
 /// The runtime sizes its cell buffers and its pixel chrome from what the terminal reports, so an absurd window size
 /// must reach neither an allocation nor a division.

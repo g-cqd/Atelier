@@ -6,8 +6,8 @@ import Testing
 @testable import AtelierGrammar
 @testable import AtelierParser
 @testable import AtelierQuery
-@testable import KittyCodecs
 @testable import KittySyntax
+@testable import TerminalKitCodecs
 
 @Suite
 struct GrammarLoaderBundledGrammarTests {

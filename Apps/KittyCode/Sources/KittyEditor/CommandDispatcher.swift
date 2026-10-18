@@ -425,7 +425,7 @@ public func dispatchCommand(
             let yankLine = state.fileLine(at: yankRow)
             let yankText = yankLine + "\n"
             let base64 = Data(yankText.utf8).base64EncodedString()
-            state.terminalWriter?(KittySequences.setClipboard(base64))
+            state.terminalWriter?(EscapeSequences.setClipboard(base64))
             state.statusMessage = "Yanked line"
             state.vimMode = .normal
             state.vimVisualAnchor = nil

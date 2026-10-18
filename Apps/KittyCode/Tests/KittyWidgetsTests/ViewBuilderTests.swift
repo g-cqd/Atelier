@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 
-@testable import KittyRenderer
 @testable import KittyWidgets
+@testable import TerminalKitRender
 
 @Suite
 struct ViewBuilderTests {
