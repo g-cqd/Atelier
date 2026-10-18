@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 date: 2026-10-18
 ---
 
@@ -16,6 +16,7 @@ TerminalKit revision `ask` already uses instead of carrying a local patch.
 - [x] Run all three full release suites on the new pins: KittyCode 968 and GitDiffViewer 1,161
       exit 0. AtelierCore 1,628 with one failure, the contaminated lexer allocation case, which
       passes in isolation on the same build and predates this change (entry 0003).
-- [ ] Land on main and confirm CI.
+- [x] Land on main (PR #6, `2535e73`). Superseded pins: TerminalKit `98650f4`, Aemi `a6446f1`,
+      AemiJSON `6cbe2ae`, which add the router and flush ceilings and the thread-scoped counter.
 
 Out of scope: the renderer and input-router allocation ceilings, which belong to TerminalKit.

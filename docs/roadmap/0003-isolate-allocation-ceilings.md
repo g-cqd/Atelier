@@ -1,5 +1,5 @@
 ---
-status: not-started
+status: done
 date: 2026-10-18
 ---
 
@@ -28,3 +28,11 @@ suite allocated during its measurement window.
    for its decoder ceiling. Needs an Atelier CI job with its own toolchain setup.
 
 Do not loosen the bound or delete the test.
+
+## Resolution
+
+Option 1, in Aemi `a6446f1` (Aemi ADR-0010): the counter counts only the thread that opened the
+window. A fresh thread's 10,000 allocations had added 10,008 to a count; now none. Atelier pins it with
+TerminalKit `98650f4` and AemiJSON `6cbe2ae`. Full suites on those pins: AtelierCore 1,628 tests with
+zero failures, the lexer ceiling included, inside the parallel suite; KittyCode 968 and GitDiffViewer
+1,161, exit 0. The bound stays at 4 and the test is unchanged.
