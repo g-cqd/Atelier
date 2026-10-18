@@ -1,6 +1,6 @@
 import AtelierLexers
 import AtelierSyntaxModel
-import AtelierText
+import TerminalKitText
 import Testing
 
 /// Scanning a line at a time, each line from the state the last one ended in (P1a), gives each line the tokens the

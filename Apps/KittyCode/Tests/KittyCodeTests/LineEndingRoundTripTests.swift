@@ -1,7 +1,7 @@
 import AemiTesting
-import AtelierText
 import Foundation
 import KittyWorkspace
+import TerminalKitText
 import Testing
 
 @testable import KittyEditor

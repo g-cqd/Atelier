@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public enum WhitespaceRenderer {
     /// Controls which whitespace categories are revealed inside a selection.

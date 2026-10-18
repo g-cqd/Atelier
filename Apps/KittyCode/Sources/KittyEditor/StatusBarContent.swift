@@ -1,9 +1,9 @@
 import AtelierGit
-import AtelierText
 import Foundation
 import KittyFileTree
 import KittyWorkspace
 import System
+import TerminalKitText
 
 extension EditorState {
     private static let statusBarSeparator = " │ "

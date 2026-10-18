@@ -1,5 +1,5 @@
-public import KittyCodecs
 import KittyFileTree
+public import TerminalKitCodecs
 
 @MainActor
 public func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Bool {

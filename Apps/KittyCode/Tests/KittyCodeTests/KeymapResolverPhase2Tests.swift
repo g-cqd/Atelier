@@ -1,5 +1,5 @@
-import KittyCodecs
-import KittyInput
+import TerminalKitCodecs
+import TerminalKitInput
 import Testing
 
 @testable import KittyEditor

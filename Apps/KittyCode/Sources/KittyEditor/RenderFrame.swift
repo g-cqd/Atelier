@@ -1,7 +1,7 @@
 import Foundation
 import KittyFileTree
-public import KittyRenderer
 import KittyWidgets
+public import TerminalKitRender
 
 /// Tracks the previous frame's visual scroll offset for terminal scroll optimization.
 @MainActor private var lastVisualScrollOffset = 0

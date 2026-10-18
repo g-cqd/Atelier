@@ -1,5 +1,5 @@
-public import KittyCodecs
-import KittyInput
+public import TerminalKitCodecs
+import TerminalKitInput
 
 extension KeyEvent {
     public typealias Modifiers = KeyModifiers

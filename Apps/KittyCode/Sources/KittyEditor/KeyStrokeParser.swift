@@ -1,7 +1,7 @@
 import AemiKernel
 import Foundation
-import KittyCodecs
-import KittyInput
+import TerminalKitCodecs
+import TerminalKitInput
 
 public enum KeyStrokeParser {
     public static func parse(_ string: String) -> KeyStroke? {

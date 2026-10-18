@@ -1,4 +1,4 @@
-public import AtelierText
+public import TerminalKitText
 
 /// What a line of the new side did relative to the old side: the marks an editor gutter shows next to a buffer.
 public enum LineChange: Sendable, Hashable {

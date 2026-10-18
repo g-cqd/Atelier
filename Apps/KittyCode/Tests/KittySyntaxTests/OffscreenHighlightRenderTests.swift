@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import KittyStyle
+import TerminalKitStyle
 import Testing
 
 @testable import KittySyntax

@@ -1,11 +1,11 @@
-import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity function_body_length
 import Foundation
-import KittyCodecs
 import KittyFileTree
-public import KittyInput
-public import KittyRenderer
+import TerminalKitCodecs
+public import TerminalKitInput
+public import TerminalKitRender
+import TerminalKitText
 
 /// How long command feedback stays on screen after the key sequence that produced it.
 private let commandFeedbackDuration: Duration = .milliseconds(1500)

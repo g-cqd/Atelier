@@ -8,8 +8,8 @@ public import AtelierSyntaxModel
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length function_body_length type_body_length
 import Foundation
-import KittyStyle
 import Synchronization
+import TerminalKitStyle
 import os
 
 /// Highlighter signposts, so Instruments can attribute frame time to parsing, merging and each kind of highlight.

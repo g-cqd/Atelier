@@ -2,9 +2,9 @@
 // swiftlint:disable function_body_length
 import AtelierTheme
 import Foundation
-import KittyCodecs
 import KittySyntax
 import KittyWidgets
+import TerminalKitCodecs
 
 extension EditorState {
     public static func makeColorScheme(config: KittyConfig) -> ColorScheme {

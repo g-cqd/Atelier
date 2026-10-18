@@ -1,12 +1,12 @@
 import AemiCore
 import AemiTesting
-import AtelierText
 import Foundation
 import KittyFileTree
-import KittyRenderer
-import KittyStyle
 import KittySyntax
-import KittyTerminal
+import TerminalKitIO
+import TerminalKitRender
+import TerminalKitStyle
+import TerminalKitText
 import Testing
 
 import func AemiTestKit.mallocDelta

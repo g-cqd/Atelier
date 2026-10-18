@@ -1,8 +1,8 @@
 import AemiIO
-import AtelierText
 import Darwin
 import Foundation
 import Synchronization
+import TerminalKitText
 import Testing
 
 @testable import KittyWorkspace

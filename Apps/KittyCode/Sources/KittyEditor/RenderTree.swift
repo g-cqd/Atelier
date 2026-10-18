@@ -1,10 +1,10 @@
 import AtelierGit
-import AtelierText
-import KittyCodecs
 import KittyFileTree
-public import KittyRenderer
 import KittySymbols
 public import KittyWidgets
+import TerminalKitCodecs
+public import TerminalKitRender
+import TerminalKitText
 
 @MainActor
 public func renderTreePanel(

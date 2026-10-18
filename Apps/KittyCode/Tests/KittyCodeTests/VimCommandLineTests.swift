@@ -1,10 +1,10 @@
-import AtelierText
 import Foundation
-import KittyCodecs
-import KittyInput
-import KittyRenderer
-import KittyTerminal
 import KittyWorkspace
+import TerminalKitCodecs
+import TerminalKitIO
+import TerminalKitInput
+import TerminalKitRender
+import TerminalKitText
 import Testing
 
 @testable import KittyEditor
