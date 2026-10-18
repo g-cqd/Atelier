@@ -1,5 +1,5 @@
 {
-  "originHash" : "d2ba0bc076152851fd23b47690a8878dc9e5deaa990ecf21ee894c40fd92d626",
+  "originHash" : "9932b8c08a3a3c3542d07f5f5e037002764ef2e1ab7845f1cb991eb6f61be899",
   "pins" : [
     {
       "identity" : "aemi",
@@ -14,7 +14,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "6cbe2ae39b91e2721b25d6c6321e3cbdfe3496a9"
+        "revision" : "e0895cdab8a7b50470cd18617f4b16250fa670d8"
       }
     },
     {
@@ -22,8 +22,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
-        "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
-        "version" : "1.6.0"
+        "revision" : "35a1edcb8ebd2bfe251d587f0b69e62af28f508c",
+        "version" : "1.7.3"
       }
     },
     {
