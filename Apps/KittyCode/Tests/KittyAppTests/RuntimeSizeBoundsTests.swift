@@ -31,7 +31,8 @@ struct RuntimeSizeBoundsTests {
     ) async throws -> [Frame] {
         let connection = MockTerminalConnection(size: size)
         let runtime = ApplicationRuntime(
-            connection: connection, taskProvider: TaskProviderSpy(), environment: environment)
+            connection: connection, taskProvider: TaskProviderSpy(), environment: environment,
+            makeSignals: SignalSessionSpy().factory)
         var frames: [Frame] = []
         try await runtime.run(
             render: { pipeline in
