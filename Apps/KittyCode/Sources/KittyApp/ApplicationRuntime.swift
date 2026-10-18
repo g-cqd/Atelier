@@ -9,16 +9,35 @@ public import TerminalKitIO
 public import TerminalKitInput
 public import TerminalKitRender
 
+/// One session's process-signal delivery: started after terminal setup, stopped on every exit.
+///
+/// ``SignalHandler`` is the production delivery. It owns process-wide state, one handler per process, so tests
+/// substitute their own; that also keeps them from replacing the test runner's SIGINT and SIGTERM dispositions.
+protocol SignalSession: Sendable {
+    func start() throws(SignalHandlerError)
+    func stop()
+}
+
+extension SignalHandler: SignalSession {}
+
+/// Builds a session's signal delivery from its resize and shutdown callbacks, which run off the main thread.
+typealias SignalSessionFactory =
+    @Sendable (_ onResize: @escaping @Sendable () -> Void, _ onShutdown: @escaping @Sendable (Int32) -> Void)
+    -> any SignalSession
+
 /// Orchestrates the application lifecycle.
 @MainActor
 public final class ApplicationRuntime {
     private let connection: any TerminalConnection
     private let taskProvider: any TaskProvider
     private let environment: [String: String]
+    private let makeSignals: SignalSessionFactory
 
-    /// A runtime whose pixel chrome follows the process environment.
+    /// A runtime whose pixel chrome follows the process environment and which installs process signal handlers.
     public convenience init(connection: any TerminalConnection, taskProvider: any TaskProvider = .default) {
-        self.init(connection: connection, taskProvider: taskProvider, environment: ProcessInfo.processInfo.environment)
+        self.init(
+            connection: connection, taskProvider: taskProvider, environment: ProcessInfo.processInfo.environment,
+            makeSignals: { SignalHandler(onResize: $0, onShutdown: $1) })
     }
 
     /// A runtime whose pixel chrome follows `environment` rather than the process environment.
@@ -26,10 +45,15 @@ public final class ApplicationRuntime {
     ///   - connection: The terminal the session reads from and draws to.
     ///   - taskProvider: Starts the render clock's observation task.
     ///   - environment: The variables that decide pixel chrome.
-    init(connection: any TerminalConnection, taskProvider: any TaskProvider, environment: [String: String]) {
+    ///   - makeSignals: Builds the session's resize and shutdown signal delivery.
+    init(
+        connection: any TerminalConnection, taskProvider: any TaskProvider, environment: [String: String],
+        makeSignals: @escaping SignalSessionFactory
+    ) {
         self.connection = connection
         self.taskProvider = taskProvider
         self.environment = environment
+        self.makeSignals = makeSignals
     }
 
     /// The cell size pixel chrome draws with, when the terminal supports it. `KITTYCODE_PIXEL_CHROME=0`
@@ -183,10 +207,10 @@ public final class ApplicationRuntime {
             observationTask = nil
         }
 
-        // Start signal handler for SIGWINCH
+        // Resize and shutdown arrive on TerminalKit's signal thread; both only touch thread-safe state.
         let conn = connection
-        let signalHandler = SignalHandler(
-            onResize: { [inputSource] in
+        let signals = makeSignals(
+            { [inputSource] in
                 // Query new size and inject resize event
                 if let newSize = try? conn.getSize() {
                     inputSource.inject(.resize(TerminalCapabilities.clampedSize(newSize)))
@@ -194,11 +218,19 @@ public final class ApplicationRuntime {
                     TerminalLogger.debug(public: "Failed to query terminal size on SIGWINCH")
                 }
             },
-            onShutdown: { [inputSource] in
+            { [inputSource] _ in
                 inputSource.stop()
             }
         )
-        let signalTask = signalHandler.start()
+        do {
+            try signals.start()
+        } catch {
+            inputSource.stop()
+            readTask.cancel()
+            observationTask?.cancel()
+            throw .terminalSetupFailed("Could not install signal handlers: \(String(describing: error))")
+        }
+        defer { signals.stop() }
 
         // Initial render
         render(pipeline)
@@ -216,7 +248,6 @@ public final class ApplicationRuntime {
             let shouldContinue = onEvent(event, pipeline)
             if !shouldContinue {
                 readTask.cancel()
-                signalTask.cancel()
                 observationTask?.cancel()
                 return
             }
@@ -234,7 +265,6 @@ public final class ApplicationRuntime {
                 TerminalLogger.error("Flush failed: \(error)")
             }
         }
-        signalTask.cancel()
         observationTask?.cancel()
     }
 
