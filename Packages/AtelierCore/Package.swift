@@ -54,7 +54,7 @@ let package = Package(
         // Pinned to the tip of AemiJSON's main (`JSON.withRawJSONBytes`, JSON5 escapes), which pins the same aemi
         // revision; the private mirror needs the g-cqd SSH credentials. Iterate locally with
         // `.package(path: "../../../AemiJSON")`.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "6cbe2ae39b91e2721b25d6c6321e3cbdfe3496a9")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "e0895cdab8a7b50470cd18617f4b16250fa670d8")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
