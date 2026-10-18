@@ -1,3 +1,4 @@
+import AemiTesting
 import Testing
 
 @testable import KittyApp
@@ -14,7 +15,7 @@ struct ApplicationRuntimeTests {
         let mock = MockTerminalConnection()
         mock.feedInput([0x03])  // Ctrl+C (keyCode 3) to quit immediately
 
-        let runtime = ApplicationRuntime(connection: mock)
+        let runtime = makeRuntime(mock)
 
         // Writes the setup sequences, then the cleanup once Ctrl+C ends the run.
         try await runtime.run(TestApp.self)
@@ -34,7 +35,7 @@ struct ApplicationRuntimeTests {
         let mock = MockTerminalConnection()
         mock.feedInput([0x03])
 
-        let runtime = ApplicationRuntime(connection: mock)
+        let runtime = makeRuntime(mock)
 
         try await runtime.run(TestApp.self)
 
@@ -53,7 +54,7 @@ struct ApplicationRuntimeTests {
     @MainActor
     func `configureInputSource can inject refresh events into the runtime loop`() async throws {
         let mock = MockTerminalConnection()
-        let runtime = ApplicationRuntime(connection: mock)
+        let runtime = makeRuntime(mock)
         var events: [InputEvent] = []
         var renderCallCount = 0
         var refreshEventCount = 0
@@ -94,6 +95,43 @@ struct ApplicationRuntimeTests {
             return
         }
         #expect(key.keyCode == 3)
+    }
+
+    @Test
+    @MainActor
+    func `a run stops the signal delivery it started`() async throws {
+        let mock = MockTerminalConnection()
+        mock.feedInput([0x03])
+        let signals = SignalSessionSpy()
+
+        try await makeRuntime(mock, signals: signals).run(TestApp.self)
+
+        #expect(signals.startCount == 1)
+        #expect(signals.stopCount == 1)
+    }
+
+    @Test
+    @MainActor
+    func `signal delivery that cannot start fails setup and still restores the terminal`() async {
+        let mock = MockTerminalConnection()
+        let signals = SignalSessionSpy(failingWith: .alreadyRunning)
+
+        await #expect(throws: AppError.terminalSetupFailed("Could not install signal handlers: alreadyRunning")) {
+            try await makeRuntime(mock, signals: signals).run(TestApp.self)
+        }
+        #expect(signals.startCount == 1)
+        #expect(signals.stopCount == 0)
+        #expect(mock.restoreModeCallCount == 1)
+        #expect(!mock.isRawMode)
+    }
+
+    /// A runtime with a fixed environment and a signal spy in place of process-wide delivery.
+    @MainActor
+    private func makeRuntime(
+        _ connection: MockTerminalConnection, signals: SignalSessionSpy = SignalSessionSpy()
+    ) -> ApplicationRuntime {
+        ApplicationRuntime(
+            connection: connection, taskProvider: TaskProviderSpy(), environment: [:], makeSignals: signals.factory)
     }
 
     struct TestApp: App {
