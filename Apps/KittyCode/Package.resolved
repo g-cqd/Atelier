@@ -1,12 +1,12 @@
 {
-  "originHash" : "87b251079e4d315beaf74ab41d789726dbb587a78251db8a0d869f7809f8c720",
+  "originHash" : "b3e28a5a24c71b1af96eecdb3c8c1d2824dd880e6db4935f3f2cf524103e8570",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "a6446f154b42945891107e739c0617fbe965db8c"
+        "revision" : "08e7c649c013e43fad927e31c01cb7c925c50796"
       }
     },
     {
@@ -14,7 +14,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "e0895cdab8a7b50470cd18617f4b16250fa670d8"
+        "revision" : "e8a6b0e5db6671cb73ddd80348defd0c3275245e"
       }
     },
     {
@@ -40,8 +40,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-subprocess.git",
       "state" : {
-        "revision" : "b3937ab85dd32f6e9435914599c1519074769c1a",
-        "version" : "1.0.0"
+        "revision" : "dbe21bd7dfd4ffef8c32588918542a8abfa1b54c",
+        "version" : "1.0.2"
       }
     },
     {
@@ -67,7 +67,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/TerminalKit.git",
       "state" : {
-        "revision" : "98650f4a0c3220121f5866cb0b018b1653034b8b"
+        "revision" : "080af9e8192036c4609e6597ea119a04f066589a"
       }
     }
   ],
