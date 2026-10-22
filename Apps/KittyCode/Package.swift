@@ -31,12 +31,12 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "98650f4a0c3220121f5866cb0b018b1653034b8b"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "080af9e8192036c4609e6597ea119a04f066589a"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "a6446f154b42945891107e739c0617fbe965db8c"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "08e7c649c013e43fad927e31c01cb7c925c50796"),
         // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
         // versions in the same graph.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "e0895cdab8a7b50470cd18617f4b16250fa670d8")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "e8a6b0e5db6671cb73ddd80348defd0c3275245e")
     ],
     targets: [
         // Layer 2d — File system browsing
