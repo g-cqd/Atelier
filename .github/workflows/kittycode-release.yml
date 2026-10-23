@@ -37,7 +37,7 @@ jobs:
 
       # The package declares tools 6.4; no hosted macOS image ships that toolchain yet, so the family's
       # setup-swift action installs the pinned swift.org snapshot.
-      - uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
+      - uses: Aemi-Studio/aemi/.github/actions/setup-swift@afc1be3d578045b381e76f6b1712a81b39956ced # aemi afc1be3
 
       - name: Inject release version
         # `RAW_REF` is set via `env:` so the tag is substituted into the
