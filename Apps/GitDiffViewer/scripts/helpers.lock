@@ -4,5 +4,5 @@
 # The commits are fixed revisions on the main branch of each g-cqd mirror (decision D15).
 # Bump a pin in a commit of its own.
 arcleak   https://github.com/g-cqd/arcleak.git   aecf2992d2abb5ce7394583be80cb16d602838b5
-dolly     https://github.com/g-cqd/dolly.git     f7eb05b8f5bc88bf522e01ca48ad0ea72a85c604
+dolly     https://github.com/g-cqd/dolly.git     32876a0f04d631f7ab6bb328ae2d13b1622878be
 deadwood  https://github.com/g-cqd/deadwood.git  7bb917e9bcd37ffe597e16582d1c94fbddf2383d
