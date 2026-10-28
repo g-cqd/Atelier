@@ -1,12 +1,12 @@
 {
-  "originHash" : "a0ff71018e7c03443c4ee32a19757c7e17f8e0a3127105d5a39cd5075bbea76e",
+  "originHash" : "7ba1cd7b442a312fe3a4d9de8745adf3b6bebed6c0ae8d00c181cb551627a657",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "785c6b25cb3f4dc16ca2334fd69428fae4ee0b01"
+        "revision" : "f6da05cd0efdf60700e854efb5b6092eae89b8c5"
       }
     },
     {
@@ -14,15 +14,15 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "ff380fad3d485619fb9aa4900021c34a7b40dcef"
+        "revision" : "5542d37ff0edb17c822b48fe69bff6e792354c57"
       }
     },
     {
       "identity" : "aemiregex",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/g-cqd/aemiregex.git",
+      "location" : "https://github.com/g-cqd/AemiRegex.git",
       "state" : {
-        "revision" : "4ddbcd4ed15b56805528a3b90402556d027dd707"
+        "revision" : "fe9b07f00f7b52d2d210ed4df43bd2b18f4ad674"
       }
     },
     {
@@ -66,7 +66,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/TerminalKit.git",
       "state" : {
-        "revision" : "554a2248e16ce925f83f5f37ee06855156554079"
+        "revision" : "cc0c60c5921ce9deea02e042f6bb0de0de0c2134"
       }
     }
   ],
