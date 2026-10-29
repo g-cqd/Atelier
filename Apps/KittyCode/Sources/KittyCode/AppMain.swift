@@ -1,6 +1,7 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
 import AemiCore
+import AemiIO
 import AtelierProcess
 import Foundation
 import KittyApp

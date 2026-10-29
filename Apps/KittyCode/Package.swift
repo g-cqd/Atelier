@@ -31,12 +31,12 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "cc0c60c5921ce9deea02e042f6bb0de0de0c2134"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "30b0fcc27410a23793db0549c7dbace575c61930"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "f6da05cd0efdf60700e854efb5b6092eae89b8c5"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "dcad319f1f41a7f59978767451396d77e85e91ff"),
         // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
         // versions in the same graph.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "5542d37ff0edb17c822b48fe69bff6e792354c57")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "8db07fbd1fd7d4c22e06c419b38ab5bf3c123548")
     ],
     targets: [
         // Layer 2d — File system browsing
@@ -141,6 +141,7 @@ let package = Package(
         .executableTarget(
             name: "KittyCode",
             dependencies: [
+                .product(name: "AemiIO", package: "aemi"),
                 "KittyEditor", "KittyApp", .product(name: "TerminalKitIO", package: "TerminalKit"),
                 .product(name: "TerminalKitCodecs", package: "TerminalKit"),
                 "KittyFileTree", "KittyGit", .product(name: "TerminalKitRender", package: "TerminalKit"),
@@ -187,6 +188,7 @@ let package = Package(
         .testTarget(
             name: "KittyCodeTests",
             dependencies: [
+                .product(name: "AemiIO", package: "aemi"),
                 "KittyEditor", "KittyFileTree", "KittyWorkspace",
                 .product(name: "TerminalKitText", package: "TerminalKit"),
                 .product(name: "AemiTesting", package: "aemi"),

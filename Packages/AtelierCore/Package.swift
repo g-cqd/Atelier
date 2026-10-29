@@ -47,14 +47,14 @@ let package = Package(
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "cc0c60c5921ce9deea02e042f6bb0de0de0c2134"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "f6da05cd0efdf60700e854efb5b6092eae89b8c5"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "30b0fcc27410a23793db0549c7dbace575c61930"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "dcad319f1f41a7f59978767451396d77e85e91ff"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2"),
         // Pinned to the tip of AemiJSON's main (`JSON.withRawJSONBytes`, JSON5 escapes), which pins the same aemi
         // revision; the private mirror needs the g-cqd SSH credentials. Iterate locally with
         // `.package(path: "../../../AemiJSON")`.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "5542d37ff0edb17c822b48fe69bff6e792354c57")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "8db07fbd1fd7d4c22e06c419b38ab5bf3c123548")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
@@ -158,7 +158,11 @@ let package = Package(
         // tree built from relative paths with chain compaction, as a comparison's explorer shows it.
         .target(
             name: "AtelierFileTree",
-            dependencies: ["AtelierGit", "AtelierProcess", .product(name: "AemiRuntime", package: "aemi")],
+            dependencies: [
+                "AtelierGit", "AtelierProcess", .product(name: "AemiRuntime", package: "aemi"),
+                // The file watcher lives in AemiIO (aemi ADR 0016); `FileWatcher` here names it.
+                .product(name: "AemiIO", package: "aemi")
+            ],
             swiftSettings: strict
         ),
         // Workspace search: file enumeration, literal and regex matching over files read on the blocking pool, and

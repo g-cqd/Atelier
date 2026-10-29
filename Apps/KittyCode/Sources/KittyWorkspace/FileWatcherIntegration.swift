@@ -1,20 +1,12 @@
 public import AemiCore
+public import AemiIO
 import Foundation
-public import KittyFileTree
+import KittyFileTree
 import TerminalKitText
 import os
 
-/// The watcher calls the workspace makes, as a protocol so a test can inject a synthetic source.
-public protocol FileWatching: Sendable {
-    var events: AsyncStream<FileWatcher.FileWatchEvent> { get }
-    func watchDirectory(_ path: String) async
-    func watchFile(_ path: String) async
-    func unwatchFile(_ path: String) async
-    func suppressNotifications(for path: String)
-    func stop() async
-}
-
-extension FileWatcher: FileWatching {}
+// The watcher calls the workspace makes are AemiIO's `FileWatching` (re-exported by `AtelierFileTree`), so a test can
+// inject a synthetic source.
 
 @MainActor
 public protocol FileWatcherDelegate: AnyObject {

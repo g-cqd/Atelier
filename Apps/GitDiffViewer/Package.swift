@@ -24,10 +24,10 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "f6da05cd0efdf60700e854efb5b6092eae89b8c5"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "dcad319f1f41a7f59978767451396d77e85e91ff"),
         // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
         // versions in the same graph.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "5542d37ff0edb17c822b48fe69bff6e792354c57")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "8db07fbd1fd7d4c22e06c419b38ab5bf3c123548")
     ],
     targets: [
         // Re-exports the core diff, lexers and language vocabulary under the app's own module name.
@@ -78,6 +78,7 @@ let package = Package(
         .target(
             name: "DiffComparison",
             dependencies: [
+                .product(name: "AemiIO", package: "aemi"),
                 "DiffCore", "DiffGit", "DiffRendering", .product(name: "AtelierFileTree", package: "AtelierCore"),
                 .product(name: "AtelierHighlighting", package: "AtelierCore"),
                 .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
@@ -101,6 +102,7 @@ let package = Package(
         .testTarget(
             name: "GitDiffViewerTests",
             dependencies: [
+                .product(name: "AemiIO", package: "aemi"),
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit", "GitDiffViewer",
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
                 .product(name: "AtelierGrammar", package: "AtelierCore"),
