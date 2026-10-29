@@ -47,14 +47,14 @@ let package = Package(
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "30b0fcc27410a23793db0549c7dbace575c61930"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "dcad319f1f41a7f59978767451396d77e85e91ff"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "913aef181e04c14766b00dff8e398a591efe6df7"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "bfc4f5a701e8d80e5c63b13f606b578c5c0410c0"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2"),
         // Pinned to the tip of AemiJSON's main (`JSON.withRawJSONBytes`, JSON5 escapes), which pins the same aemi
         // revision; the private mirror needs the g-cqd SSH credentials. Iterate locally with
         // `.package(path: "../../../AemiJSON")`.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "8db07fbd1fd7d4c22e06c419b38ab5bf3c123548")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "1e0d930021be64548c7d52c648358324ad112008")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
