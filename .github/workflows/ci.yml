@@ -42,7 +42,7 @@ jobs:
   core:
     needs: changes
     if: ${{ needs.changes.outputs.core == 'true' }}
-    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@1580771faf9133ef8c72d0dc290b1d236678177d # aemi 1580771
+    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@d1b496ec940e2c2ecffb4b9b4fb5f08033b37f0a # aemi d1b496e
     with:
       package-path: Packages/AtelierCore
       dev-env-var: ATELIER_DEV
@@ -53,7 +53,7 @@ jobs:
   gitdiffviewer:
     needs: changes
     if: ${{ needs.changes.outputs.gitdiffviewer == 'true' }}
-    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@1580771faf9133ef8c72d0dc290b1d236678177d # aemi 1580771
+    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@d1b496ec940e2c2ecffb4b9b4fb5f08033b37f0a # aemi d1b496e
     with:
       package-path: Apps/GitDiffViewer
       dev-env-var: ATELIER_DEV
@@ -62,7 +62,7 @@ jobs:
   kittycode:
     needs: changes
     if: ${{ needs.changes.outputs.kittycode == 'true' }}
-    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@1580771faf9133ef8c72d0dc290b1d236678177d # aemi 1580771
+    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@d1b496ec940e2c2ecffb4b9b4fb5f08033b37f0a # aemi d1b496e
     with:
       package-path: Apps/KittyCode
       dev-env-var: ATELIER_DEV
