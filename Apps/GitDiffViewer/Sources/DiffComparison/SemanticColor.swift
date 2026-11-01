@@ -38,10 +38,16 @@ package final class SemanticColorSource {
         let shown = shownRight()
         guard let location = Self.onDiskLocation(of: revision, shownRight: shown.source, entries: shown.entries),
             let session = await registry.session(
-                forDocumentAt: location.document, within: location.root, server: .sourceKitLSP)
+                forDocumentAt: location.document,
+                within: location.root,
+                server: .sourceKitLSP
+            )
         else { return nil }
         return SemanticTokenTier.Document(
-            session: session, uri: location.document.absoluteString, languageID: Language.swift.lspLanguageID)
+            session: session,
+            uri: location.document.absoluteString,
+            languageID: Language.swift.lspLanguageID
+        )
     }
 
     /// Where the Swift side `revision` names lies on disk: the file of `entries`, the files of `shownRight`, whose blob
@@ -49,7 +55,9 @@ package final class SemanticColorSource {
     /// when `shownRight` is not a directory, the revision has no blob, or no file of the right side holds it, as a side
     /// from history does.
     package nonisolated static func onDiskLocation(
-        of revision: SourceRevision, shownRight: ComparisonSource?, entries: [SourceEntry]
+        of revision: SourceRevision,
+        shownRight: ComparisonSource?,
+        entries: [SourceEntry]
     ) -> (root: URL, document: URL)? {
         guard revision.language == .swift, case .content(let blob) = revision.key,
             case .directory(let directory)? = shownRight,

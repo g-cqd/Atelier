@@ -61,7 +61,8 @@ struct KeymapResolverOverrideTests {
 
         #expect(resolver.resolve(stroke(AsciiKey.k, .ctrl), context: .editor) == .previousTab)
         #expect(
-            resolver.resolve(stroke(Key.pageUp.rawValue, .ctrl), context: .editor) != .previousTab)
+            resolver.resolve(stroke(Key.pageUp.rawValue, .ctrl), context: .editor) != .previousTab
+        )
     }
 
     @Test

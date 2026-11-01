@@ -17,7 +17,8 @@ struct HoverContentQualityTests {
     func `fence followed by a prose paragraph has prose`() {
         #expect(
             HoverContentQuality.hasProse("```swift\nclass NSPopover\n```\n\nA means to display additional content.")
-                == true)
+                == true
+        )
     }
 
     @Test

@@ -66,11 +66,14 @@ public struct TerminalSymbolTheme: Sendable {
                 } else {
                     result[role] = Glyph(text: fallback, prefersSymbol: false)
                 }
-            })
+            }
+        )
     }
 
     private static func resolveGlyph(
-        name: String, catalog: inout SymbolCatalog??, loadCatalog: () -> SymbolCatalog?
+        name: String,
+        catalog: inout SymbolCatalog??,
+        loadCatalog: () -> SymbolCatalog?
     ) -> String? {
         if let cp = puaCodepoints[name], let scalar = UnicodeScalar(cp) {
             return String(Character(scalar))

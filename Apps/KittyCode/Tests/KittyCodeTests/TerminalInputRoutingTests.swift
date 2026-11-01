@@ -46,7 +46,10 @@ struct TerminalInputRoutingTests {
         state.mode = .editor
         state.fileContent = [""]
         let pipeline = RenderPipeline(
-            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)), columns: 80, rows: 24)
+            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),
+            columns: 80,
+            rows: 24
+        )
         return Editor(state: state, pipeline: pipeline)
     }
 
@@ -60,7 +63,8 @@ struct TerminalInputRoutingTests {
         let editor = makeEditor(themeFromTerminal: true)
 
         await editor.receive(
-            Array("\u{1B}]10;rgb:e6e6/e6e6/e6e6\u{1B}\\\u{1B}]4;5;rgb:c8/1e/c8\u{07}\u{1B}[?62;22c".utf8))
+            Array("\u{1B}]10;rgb:e6e6/e6e6/e6e6\u{1B}\\\u{1B}]4;5;rgb:c8/1e/c8\u{07}\u{1B}[?62;22c".utf8)
+        )
 
         #expect(editor.state.syntaxTheme.style(for: "keyword").fg == .rgb(r: 200, g: 30, b: 200))
         #expect(editor.state.fileContent == [""])

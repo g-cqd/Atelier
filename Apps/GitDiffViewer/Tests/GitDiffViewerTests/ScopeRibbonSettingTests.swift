@@ -67,9 +67,12 @@ struct ScopeRibbonSettingTests {
     private func gutter() throws -> DiffGutterView {
         let text = ScopeLinesTests.text
         let prepared = PreparedDiff(
-            FileDiffInput(title: "a.swift", oldText: text, newText: text, language: .swift), granularity: .word)
+            FileDiffInput(title: "a.swift", oldText: text, newText: text, language: .swift),
+            granularity: .word
+        )
         let rendered = try #require(
-            DiffRenderer.render(prepared: [prepared], options: .init(), layout: .full, withHeaders: false).new)
+            DiffRenderer.render(prepared: [prepared], options: .init(), layout: .full, withHeaders: false).new
+        )
         let gutter = DiffGutterView(clipView: nil)
         gutter.rendered = rendered
         gutter.decorations = DecorationSnapshot()

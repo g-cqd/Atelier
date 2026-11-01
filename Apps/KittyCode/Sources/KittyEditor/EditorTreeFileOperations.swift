@@ -28,7 +28,8 @@ extension EditorState {
                 .create(snapshot: .file(path: destinationPath, data: Data())),
                 undoSelectionPath: parentPath,
                 redoSelectionPath: destinationPath,
-                currentNodes: treeNodes)
+                currentNodes: treeNodes
+            )
             statusMessage = "Created \(destinationURL.lastPathComponent)"
             renderRefreshSource?.invalidate()
             return true
@@ -56,7 +57,8 @@ extension EditorState {
                 .create(snapshot: .directory(path: destinationPath, children: [])),
                 undoSelectionPath: parentPath,
                 redoSelectionPath: destinationPath,
-                currentNodes: treeNodes)
+                currentNodes: treeNodes
+            )
             statusMessage = "Created \(URL(fileURLWithPath: destinationPath).lastPathComponent)"
             renderRefreshSource?.invalidate()
             return true
@@ -130,7 +132,8 @@ extension EditorState {
                     .duplicate(snapshot: snapshot),
                     undoSelectionPath: parentPath,
                     redoSelectionPath: destinationPath,
-                    currentNodes: treeNodes)
+                    currentNodes: treeNodes
+                )
                 statusMessage = "Duplicated \(displayName)"
             } else {
                 fileTreeHistory.updateCurrent(nodes: treeNodes)
@@ -161,7 +164,8 @@ extension EditorState {
                     .delete(snapshot: snapshot),
                     undoSelectionPath: snapshot.path,
                     redoSelectionPath: parentPath,
-                    currentNodes: treeNodes)
+                    currentNodes: treeNodes
+                )
                 statusMessage = "Deleted \(displayName)"
             } else {
                 fileTreeHistory.updateCurrent(nodes: treeNodes)

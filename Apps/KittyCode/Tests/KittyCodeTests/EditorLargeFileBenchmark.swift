@@ -46,16 +46,28 @@ struct EditorLargeFileBenchmark {
             }
             .sorted()
         return String(
-            format: "median %.4f ms, p10 %.4f, p90 %.4f, n %d", milliseconds[milliseconds.count / 2],
-            milliseconds[milliseconds.count / 10], milliseconds[milliseconds.count * 9 / 10], milliseconds.count)
+            format: "median %.4f ms, p10 %.4f, p90 %.4f, n %d",
+            milliseconds[milliseconds.count / 2],
+            milliseconds[milliseconds.count / 10],
+            milliseconds[milliseconds.count * 9 / 10],
+            milliseconds.count
+        )
     }
 
     /// The document open in a buffer, fully highlighted and measured, with the cursor and a 60-row screen halfway down.
     private func makeHighlightedState(taskProvider: any TaskProvider = .default) -> EditorState {
         let state = EditorState(
-            rootPath: ".", config: KittyConfig(), taskProvider: taskProvider, searchPool: EditorTestPool.shared)
+            rootPath: ".",
+            config: KittyConfig(),
+            taskProvider: taskProvider,
+            searchPool: EditorTestPool.shared
+        )
         state.bufferManager.open(
-            filePath: "/bench/large.swift", fileName: "large.swift", content: Self.text, language: "swift")
+            filePath: "/bench/large.swift",
+            fileName: "large.swift",
+            content: Self.text,
+            language: "swift"
+        )
         state.restoreStateFromActiveBuffer()
         state.lastRenderRows = 60
         state.cursorRow = 500_000
@@ -78,7 +90,8 @@ struct EditorLargeFileBenchmark {
         let allocations = mallocDelta { state.highlightedLines.replaceSubrange(10 ..< 11, with: [edited]) }
         print(
             "BENCH keystroke, 1M lines: \(Self.summary(samples)); one replaceSubrange through the state: "
-                + "\(allocations.map { "\($0) allocations" } ?? "not counted")")
+                + "\(allocations.map { "\($0) allocations" } ?? "not counted")"
+        )
         if let allocations { #expect(allocations == 0) }
     }
 
@@ -137,17 +150,30 @@ struct EditorLargeFileBenchmark {
         for _ in 0 ..< 5 {
             let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
             let state = EditorState(
-                rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+                rootPath: ".",
+                config: KittyConfig(),
+                taskProvider: tasks,
+                searchPool: EditorTestPool.shared
+            )
             let pipeline = RenderPipeline(
-                connection: MockTerminalConnection(size: TerminalSize(columns: 200, rows: 60)), columns: 200, rows: 60)
+                connection: MockTerminalConnection(size: TerminalSize(columns: 200, rows: 60)),
+                columns: 200,
+                rows: 60
+            )
             let requestID = state.nextOpenRequestID()
             samples.append(
                 clock.measure {
                     state.finishOpeningFile(
-                        requestID: requestID, path: "/bench/large.swift", name: "large.swift", loadedFile: loadedFile,
-                        language: "swift", modificationDate: nil)
+                        requestID: requestID,
+                        path: "/bench/large.swift",
+                        name: "large.swift",
+                        loadedFile: loadedFile,
+                        language: "swift",
+                        modificationDate: nil
+                    )
                     renderFrame(pipeline: pipeline, state: state)
-                })
+                }
+            )
             // The post-load pass lands before the next sample.
             try await tasks.waitForAllTasks()
             state.shutdown()
@@ -158,10 +184,18 @@ struct EditorLargeFileBenchmark {
     /// The document as an open leaves it: highlighted by a full pass, whose lines the buffer and the screen share.
     private func makeOpenedState(tasks: TaskProviderSpy) async throws -> EditorState {
         let state = EditorState(
-            rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+            rootPath: ".",
+            config: KittyConfig(),
+            taskProvider: tasks,
+            searchPool: EditorTestPool.shared
+        )
         let spawned = tasks.spawnedTaskCount
         state.bufferManager.open(
-            filePath: "/bench/large.swift", fileName: "large.swift", content: Self.text, language: "swift")
+            filePath: "/bench/large.swift",
+            fileName: "large.swift",
+            content: Self.text,
+            language: "swift"
+        )
         state.lastRenderRows = 60
         state.restoreStateFromActiveBuffer()
         try await awaitFullPass(tasks, after: spawned)
@@ -193,7 +227,11 @@ struct EditorLargeFileBenchmark {
             let state = try await makeOpenedState(tasks: tasks)
             // A second tab over the same text, switched to as a user does, which evicts the first.
             state.bufferManager.open(
-                filePath: "/bench/second.swift", fileName: "second.swift", content: Self.text, language: "swift")
+                filePath: "/bench/second.swift",
+                fileName: "second.swift",
+                content: Self.text,
+                language: "swift"
+            )
             state.bufferManager.switchTo(index: 0)
             let spawned = tasks.spawnedTaskCount
             state.switchToTab(1)
@@ -223,8 +261,12 @@ struct EditorLargeFileBenchmark {
                     }
                     let (file, replaced) = try #require(consume reloaded)
                     state.fileWatcherDidReloadActiveBuffer(
-                        buffer: buffer, content: file.content, replaced: consume replaced)
-                })
+                        buffer: buffer,
+                        content: file.content,
+                        replaced: consume replaced
+                    )
+                }
+            )
             // The post-load pass lands before the next sample.
             try await tasks.waitForAllTasks()
             state.shutdown()
@@ -249,17 +291,27 @@ struct EditorLargeFileBenchmark {
         for _ in 0 ..< 11 {
             let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
             let state = EditorState(
-                rootPath: directory.path, config: KittyConfig(), taskProvider: tasks,
-                searchPool: EditorTestPool.shared)
+                rootPath: directory.path,
+                config: KittyConfig(),
+                taskProvider: tasks,
+                searchPool: EditorTestPool.shared
+            )
             state.lastRenderRows = 60
             state.finishOpeningFile(
-                requestID: state.nextOpenRequestID(), path: path, name: "large.swift", loadedFile: loadedFile,
-                language: "swift", modificationDate: nil)
+                requestID: state.nextOpenRequestID(),
+                path: path,
+                name: "large.swift",
+                loadedFile: loadedFile,
+                language: "swift",
+                modificationDate: nil
+            )
             try await tasks.waitForAllTasks()
             let buffer = try #require(state.bufferManager.activeBuffer)
             // An earlier reload, whose undo step holds the text it replaced.
             let earlier = try await buffer.reloadFromDisk(
-                offloadFileRead: { _ in reloaded }, syncLiveState: { state.saveStateToActiveBuffer() })
+                offloadFileRead: { _ in reloaded },
+                syncLiveState: { state.saveStateToActiveBuffer() }
+            )
             let (file, replaced) = try #require(consume earlier)
             state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: file.content, replaced: consume replaced)
             try await tasks.waitForAllTasks()
@@ -267,8 +319,12 @@ struct EditorLargeFileBenchmark {
             // The file changed on disk since the buffer read it.
             buffer.lastModifiedDate = .distantPast
             let integration = FileWatcherIntegration(
-                watcher: IdleFileWatcher(), workspace: state.workspace, delegate: state,
-                offloadFileRead: { _ in changed }, taskProvider: tasks)
+                watcher: IdleFileWatcher(),
+                workspace: state.workspace,
+                delegate: state,
+                offloadFileRead: { _ in changed },
+                taskProvider: tasks
+            )
             samples.append(await clock.measure { await integration.reconcileWithDisk(buffer) })
             #expect(!buffer.editHistory.hasUndo)
             // The post-load pass lands before the next sample.
@@ -285,8 +341,13 @@ struct EditorLargeFileBenchmark {
         let spawned = tasks.spawnedTaskCount
         state.saveStateToActiveBuffer()
         state.finishOpeningFile(
-            requestID: state.nextOpenRequestID(), path: "/bench/small.swift", name: "small.swift",
-            loadedFile: small, language: "swift", modificationDate: nil)
+            requestID: state.nextOpenRequestID(),
+            path: "/bench/small.swift",
+            name: "small.swift",
+            loadedFile: small,
+            language: "swift",
+            modificationDate: nil
+        )
         try await awaitFullPass(tasks, after: spawned)
     }
 
@@ -319,12 +380,21 @@ struct EditorLargeFileBenchmark {
         for _ in 0 ..< 11 {
             let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
             let state = EditorState(
-                rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+                rootPath: ".",
+                config: KittyConfig(),
+                taskProvider: tasks,
+                searchPool: EditorTestPool.shared
+            )
             state.config.tabRibbon.persistence = .preview
             state.lastRenderRows = 60
             state.finishOpeningFile(
-                requestID: state.nextOpenRequestID(), path: "/bench/large.swift", name: "large.swift",
-                loadedFile: loadedFile, language: "swift", modificationDate: nil)
+                requestID: state.nextOpenRequestID(),
+                path: "/bench/large.swift",
+                name: "large.swift",
+                loadedFile: loadedFile,
+                language: "swift",
+                modificationDate: nil
+            )
             try await tasks.waitForAllTasks()
             // What the open does before its read.
             state.saveStateToActiveBuffer()
@@ -332,9 +402,15 @@ struct EditorLargeFileBenchmark {
             samples.append(
                 clock.measure {
                     state.finishOpeningFile(
-                        requestID: requestID, path: "/bench/small.swift", name: "small.swift", loadedFile: small,
-                        language: "swift", modificationDate: nil)
-                })
+                        requestID: requestID,
+                        path: "/bench/small.swift",
+                        name: "small.swift",
+                        loadedFile: small,
+                        language: "swift",
+                        modificationDate: nil
+                    )
+                }
+            )
             try await tasks.waitForAllTasks()
             state.shutdown()
         }
@@ -357,8 +433,12 @@ struct EditorLargeFileBenchmark {
                     let reloaded = try await buffer.reloadFromDisk(offloadFileRead: { _ in changed }) {}
                     let (file, replaced) = try #require(consume reloaded)
                     state.fileWatcherDidReloadInactiveBuffer(
-                        buffer: buffer, content: file.content, replaced: consume replaced)
-                })
+                        buffer: buffer,
+                        content: file.content,
+                        replaced: consume replaced
+                    )
+                }
+            )
             // The post-load pass lands before the next sample.
             try await tasks.waitForAllTasks()
             state.shutdown()
@@ -382,12 +462,20 @@ extension EditorLargeFileBenchmark {
     /// inside a comment and a 60-row screen halfway down; `root` is the temporary directory it lives in.
     private func makeGrammarColoredState(tasks: TaskProviderSpy, root: URL) async throws -> EditorState {
         let state = EditorState(
-            rootPath: root.path, config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+            rootPath: root.path,
+            config: KittyConfig(),
+            taskProvider: tasks,
+            searchPool: EditorTestPool.shared
+        )
         state.lastRenderRows = 60
         state.finishOpeningFile(
-            requestID: state.nextOpenRequestID(), path: root.appending(path: "large.json").path, name: "large.json",
-            loadedFile: try WorkspaceFileLoading.decode(Data(Self.jsonText.utf8)), language: "json",
-            modificationDate: nil)
+            requestID: state.nextOpenRequestID(),
+            path: root.appending(path: "large.json").path,
+            name: "large.json",
+            loadedFile: try WorkspaceFileLoading.decode(Data(Self.jsonText.utf8)),
+            language: "json",
+            modificationDate: nil
+        )
         try await tasks.waitForAllTasks()
         #expect(isGrammarColored(state), "the post-open pass colors the file from its grammar")
         state.cursorRow = 4_001
@@ -437,7 +525,8 @@ extension EditorLargeFileBenchmark {
         print("BENCH refreshHighlights, grammar-colored JSON, 8K lines: \(Self.summary(refresh))")
         print(
             "BENCH full pass after a refresh, grammar-colored JSON, 8K lines: \(Self.summary(landing)); "
-                + "grammar color after the refreshes: \(isGrammarColored(state))")
+                + "grammar color after the refreshes: \(isGrammarColored(state))"
+        )
     }
 }
 

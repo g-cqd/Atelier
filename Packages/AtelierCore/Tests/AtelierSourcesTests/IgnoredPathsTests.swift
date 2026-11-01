@@ -14,9 +14,13 @@ struct IgnoredPathsTests {
 
         init() async throws {
             root = FileManager.default.temporaryDirectory.appending(
-                path: "gdv-ignored-paths-\(UUID().uuidString)", directoryHint: .isDirectory)
+                path: "gdv-ignored-paths-\(UUID().uuidString)",
+                directoryHint: .isDirectory
+            )
             try FileManager.default.createDirectory(
-                at: root.appending(path: "build", directoryHint: .isDirectory), withIntermediateDirectories: true)
+                at: root.appending(path: "build", directoryHint: .isDirectory),
+                withIntermediateDirectories: true
+            )
             try await git("init", "-q", "-b", "main")
             try write(".gitignore", "build/\n")
             try write("a.swift", "one\n")
@@ -37,7 +41,9 @@ struct IgnoredPathsTests {
                     "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.hooksPath=/dev/null", "-c",
                     "init.templateDir="
                 ] + arguments,
-                currentDirectory: root, environment: .inherited(overriding: GitClient.hardeningEnvironment))
+                currentDirectory: root,
+                environment: .inherited(overriding: GitClient.hardeningEnvironment)
+            )
             let output = try await TestProcesses.runner.run(spec)
             try #require(output.succeeded, "\(output.errorText)")
         }
@@ -64,7 +70,9 @@ struct IgnoredPathsTests {
         defer { repository.remove() }
 
         let ignored = try await TestProcesses.loader.ignoredPaths(
-            among: ["build/out.txt", "build/later.o", "a.swift", "new.swift"], in: .directory(repository.root))
+            among: ["build/out.txt", "build/later.o", "a.swift", "new.swift"],
+            in: .directory(repository.root)
+        )
 
         #expect(ignored == ["build/out.txt", "build/later.o"])
     }

@@ -48,19 +48,29 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
     ///   - deadline: How much CPU time a parse may take.
     ///   - pool: The threads parses run on, which bounds how many run at once; nil parses on the caller's thread.
     public init(
-        artifacts: SyntaxArtifactsCache, record: GrammarTierRecord = GrammarTierRecord(),
-        deadline: Duration = GrammarTier.defaultDeadline, pool: BlockingOffloadPool? = nil
+        artifacts: SyntaxArtifactsCache,
+        record: GrammarTierRecord = GrammarTierRecord(),
+        deadline: Duration = GrammarTier.defaultDeadline,
+        pool: BlockingOffloadPool? = nil
     ) {
         self.init(
-            artifacts: artifacts, record: record, deadline: deadline, pool: pool, cpuTime: Self.threadCPUTime
+            artifacts: artifacts,
+            record: record,
+            deadline: deadline,
+            pool: pool,
+            cpuTime: Self.threadCPUTime
         ) { engine, text, isCancelled in
             try engine.parse(text, externalScanner: engine.makeScanner(), isCancelled: isCancelled)
         }
     }
 
     init(
-        artifacts: SyntaxArtifactsCache, record: GrammarTierRecord, deadline: Duration, pool: BlockingOffloadPool?,
-        cpuTime: @escaping ThreadCPUTime, parse: @escaping Parse
+        artifacts: SyntaxArtifactsCache,
+        record: GrammarTierRecord,
+        deadline: Duration,
+        pool: BlockingOffloadPool?,
+        cpuTime: @escaping ThreadCPUTime,
+        parse: @escaping Parse
     ) {
         self.artifacts = artifacts
         self.record = record
@@ -93,7 +103,8 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
         guard let loaded = await artifacts.pin(name) else {
             throw TierFailure.failed(
                 artifacts.isOversized(name)
-                    ? "the \(name) grammar's tables are past the loading limit" : "the \(name) grammar does not load")
+                    ? "the \(name) grammar's tables are past the loading limit" : "the \(name) grammar does not load"
+            )
         }
         defer { artifacts.unpin(name) }
         try Task.checkCancellation()
@@ -111,11 +122,18 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
                 ..< request.lineRanges[chunk.upperBound - 1]
                 .upperBound
             let tokens = HighlightMerger.merge(
-                engine.tokens(in: tree, byteRange: bytes, layer: layer), sourceByteCount: bytes.upperBound)
+                engine.tokens(in: tree, byteRange: bytes, layer: layer),
+                sourceByteCount: bytes.upperBound
+            )
             await emit(
                 TierUpdate(
-                    layer: layer, coverage: coverage, revision: request.revision, lines: chunk,
-                    tokens: request.lineTokens(tokens, lines: chunk)))
+                    layer: layer,
+                    coverage: coverage,
+                    revision: request.revision,
+                    lines: chunk,
+                    tokens: request.lineTokens(tokens, lines: chunk)
+                )
+            )
         }
     }
 
@@ -146,7 +164,10 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
     /// `text`'s tree, parsed within its deadline, and recorded: its throughput, and its failure with the grammar and
     /// the content when it passes the deadline, throws or fails the gate.
     private func parseWithinDeadline(
-        _ text: String, engine: GrammarEngine, content: GrammarTierRecord.ContentKey, bytes: Int
+        _ text: String,
+        engine: GrammarEngine,
+        content: GrammarTierRecord.ContentKey,
+        bytes: Int
     ) async throws -> SyntaxTree {
         let (parse, cpuTime, deadline) = (parse, cpuTime, parseDeadline)
         let stop = Stop()
@@ -327,7 +348,9 @@ public final class GrammarTierRecord: Sendable {
                     grammarState.nanosecondsPerByte = Self.perByte(elapsed, bytes: bytes)
                 case .atLeast(let elapsed):
                     grammarState.nanosecondsPerByte = max(
-                        grammarState.nanosecondsPerByte ?? 0, Self.perByte(elapsed, bytes: bytes))
+                        grammarState.nanosecondsPerByte ?? 0,
+                        Self.perByte(elapsed, bytes: bytes)
+                    )
                 case nil:
                     break
             }

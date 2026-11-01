@@ -39,11 +39,19 @@ struct DiffGutterChangeMarkerTests {
         new.remove(at: 11)
         let prepared = PreparedDiff(
             FileDiffInput(
-                title: "", oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain), granularity: .word)
+                title: "",
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain
+            ),
+            granularity: .word
+        )
         let diff = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
-            layout: .changes(context: context, expansions: [:]), withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .changes(context: context, expansions: [:]),
+            withHeaders: false
+        )
         guard let unified = diff.unified else { return nil }
         let layout = StaticTextLayout(rendered: unified)
         layout.layOut(mode: .none, viewportWidth: 800)
@@ -62,7 +70,11 @@ struct DiffGutterChangeMarkerTests {
             self.layout = layout
             let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 800))
             window = NSWindow(
-                contentRect: scrollView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+                contentRect: scrollView.frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
             gutter.style = .dual
             gutter.source = layout
             gutter.rendered = layout.rendered
@@ -89,8 +101,16 @@ struct DiffGutterChangeMarkerTests {
         func mouse(_ type: NSEvent.EventType, at point: NSPoint) {
             guard
                 let event = NSEvent.mouseEvent(
-                    with: type, location: gutter.convert(point, to: nil), modifierFlags: [], timestamp: 0,
-                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+                    with: type,
+                    location: gutter.convert(point, to: nil),
+                    modifierFlags: [],
+                    timestamp: 0,
+                    windowNumber: window.windowNumber,
+                    context: nil,
+                    eventNumber: 0,
+                    clickCount: 1,
+                    pressure: 1
+                )
             else { return }
             if type == .leftMouseDown { gutter.mouseDown(with: event) } else { gutter.mouseMoved(with: event) }
         }
@@ -101,7 +121,11 @@ struct DiffGutterChangeMarkerTests {
             gutter.cacheDisplay(in: gutter.bounds, to: bitmap)
             let scale = window.backingScaleFactor
             let crop = NSRect(
-                x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale)
+                x: rect.minX * scale,
+                y: rect.minY * scale,
+                width: rect.width * scale,
+                height: rect.height * scale
+            )
             return bitmap.cgImage?.cropping(to: crop).flatMap { NSBitmapImageRep(cgImage: $0).tiffRepresentation }
         }
     }
@@ -147,7 +171,8 @@ struct DiffGutterChangeMarkerTests {
             markers.allSatisfy {
                 $0.shape.rect.minX >= gutter.changeLayerX
                     && $0.shape.rect.maxX <= gutter.changeLayerX + ChangeMarkerLayout.hitWidth
-            })
+            }
+        )
         #expect(gutter.changeLayerX + ChangeMarkerLayout.hitWidth < gutter.ribbonX)
         // A little negative space sits before the layer, so the gutter's own edge is not the marker's hit area.
         #expect(gutter.changeLayerX > 0)
@@ -172,7 +197,8 @@ struct DiffGutterChangeMarkerTests {
 
         fixture.mouse(
             .leftMouseDown,
-            at: NSPoint(x: fixture.gutter.changeLayerX + ChangeMarkerLayout.hitWidth + 2, y: bar.midY))
+            at: NSPoint(x: fixture.gutter.changeLayerX + ChangeMarkerLayout.hitWidth + 2, y: bar.midY)
+        )
 
         #expect(fixture.toggled.isEmpty)
     }
@@ -210,8 +236,11 @@ struct DiffGutterChangeMarkerTests {
         let fixture = Fixture(try #require(Self.layout()))
         let (change, shape) = try #require(fixture.markers().first)
         let area = NSRect(
-            x: fixture.gutter.changeLayerX, y: shape.rect.minY, width: ChangeMarkerLayout.hitWidth,
-            height: shape.rect.height)
+            x: fixture.gutter.changeLayerX,
+            y: shape.rect.minY,
+            width: ChangeMarkerLayout.hitWidth,
+            height: shape.rect.height
+        )
         let before = fixture.pixels(in: area)
 
         fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.changeLayerX + 2, y: shape.rect.midY))
@@ -229,11 +258,19 @@ struct DiffGutterChangeMarkerTests {
         new.insert(contentsOf: (1 ... 10).map { "let added\($0) = \($0)" }, at: 15)
         let prepared = PreparedDiff(
             FileDiffInput(
-                title: "", oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain), granularity: .word)
+                title: "",
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain
+            ),
+            granularity: .word
+        )
         let diff = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
-            layout: .changes(context: 0, expansions: [:]), withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .changes(context: 0, expansions: [:]),
+            withHeaders: false
+        )
         guard let unified = diff.unified else { return nil }
         let layout = StaticTextLayout(rendered: unified)
         layout.layOut(mode: .none, viewportWidth: 800)

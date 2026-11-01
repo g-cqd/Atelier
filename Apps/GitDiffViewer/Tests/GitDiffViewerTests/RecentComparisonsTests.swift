@@ -30,7 +30,9 @@ struct RecentComparisonsTests {
             sut.entries.first
                 == .files(
                     left: URL(filePath: "/l\(RecentComparisons.limit - 1)"),
-                    right: URL(filePath: "/r\(RecentComparisons.limit - 1)")))
+                    right: URL(filePath: "/r\(RecentComparisons.limit - 1)")
+                )
+        )
         #expect(!sut.entries.contains(.repository(repository, leftRef: "main", rightRef: nil)))
 
         let reloaded = RecentComparisons(defaults: defaults)
@@ -48,7 +50,8 @@ struct RecentComparisonsTests {
         #expect(
             sut.entries == [
                 .repository(repository, leftRef: "v2", rightRef: "v1"), .patch(URL(filePath: "/tmp/a.patch"))
-            ])
+            ]
+        )
 
         sut.remove(.patch(URL(filePath: "/tmp/a.patch")))
         #expect(sut.entries.count == 1)

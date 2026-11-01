@@ -25,7 +25,11 @@ struct PipelineHarness {
     init() {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         sut = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: Self.split, renderer: holding.renderer)
+            preparer: preparer,
+            taskProvider: taskProvider,
+            options: Self.split,
+            renderer: holding.renderer
+        )
         sut.configure(options: Self.split, context: 2, isolatesChanges: false)
         sut.onEvent = { [events] event in events.all.append(event) }
         for version in 0 ... 3 {
@@ -41,14 +45,21 @@ struct PipelineHarness {
     func pair(_ path: String, version: Int) -> FilePair {
         let name = String(path.prefix(1))
         return FilePair(
-            path: path, old: SourceEntry(relativePath: path, blobID: "\(name)0", size: 1),
-            new: SourceEntry(relativePath: path, blobID: "\(name)\(version)", size: 1))
+            path: path,
+            old: SourceEntry(relativePath: path, blobID: "\(name)0", size: 1),
+            new: SourceEntry(relativePath: path, blobID: "\(name)\(version)", size: 1)
+        )
     }
 
     func render(_ pairs: [FilePair], keepingPublished: Bool) {
         sut.render(
-            .cards(pairs), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: keepingPublished)
+            .cards(pairs),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: keepingPublished
+        )
     }
 
     /// The gap above the first hunk of the card at `index`, on its new side, or its only side when inline.
@@ -92,7 +103,9 @@ struct RenderPipelineHopTests {
     /// Publishes cards for a and b, both at version 1, then drains the four reads they made.
     private func publishFirstVersions() async throws {
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 1)], keepingPublished: false)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 1)],
+            keepingPublished: false
+        )
         try await harness.taskProvider.waitForAllTasks()
         for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
     }
@@ -107,7 +120,9 @@ struct RenderPipelineHopTests {
         let start = harness.events.all.count
 
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)],
+            keepingPublished: true
+        )
         _ = try await harness.reader.contentRequests.expectNext()
 
         #expect(harness.sut.cards.map(\.rendered.id) == before)
@@ -130,7 +145,9 @@ struct RenderPipelineHopTests {
         harness.reader.gate["b.swift"] = AsyncProbe<Void>()
 
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)],
+            keepingPublished: true
+        )
         _ = try await harness.reader.contentRequests.expectNext()
         try harness.revealAbove(3, inCard: 0)
         try harness.revealAbove(3, inCard: 1)
@@ -152,7 +169,9 @@ struct RenderPipelineHopTests {
         harness.holding.isHolding = true
 
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)],
+            keepingPublished: true
+        )
         #expect(try await harness.holding.steps.expectNext() == [1])
         try harness.revealAbove(3, inCard: 0)
         try harness.revealAbove(3, inCard: 1)
@@ -172,7 +191,9 @@ struct RenderPipelineHopTests {
         harness.reader.gate["b.swift"] = AsyncProbe<Void>()
 
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)],
+            keepingPublished: true
+        )
         _ = try await harness.reader.contentRequests.expectNext()
         harness.sut.configure(options: PipelineHarness.inline, context: 2, isolatesChanges: false)
         harness.sut.relayout(keepingScroll: false)

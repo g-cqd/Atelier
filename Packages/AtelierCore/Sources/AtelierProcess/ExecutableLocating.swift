@@ -14,7 +14,10 @@ public struct ExecutableQuery: Sendable, Equatable {
     public var homeRelativeDirectories: [String]
 
     public init(
-        names: [String], overrideVariable: String? = nil, customPath: String? = nil, searchesToolchain: Bool = false,
+        names: [String],
+        overrideVariable: String? = nil,
+        customPath: String? = nil,
+        searchesToolchain: Bool = false,
         homeRelativeDirectories: [String] = []
     ) {
         self.names = names

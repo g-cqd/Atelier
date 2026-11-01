@@ -47,7 +47,8 @@ struct SDKPlatformTests {
             inProjectDeclaring: {
                 projectRead = true
                 return []
-            }())
+            }()
+        )
 
         #expect(platform == .iOS)
         #expect(!projectRead)
@@ -82,7 +83,9 @@ private final class ScratchTree: Sendable {
     /// Creates the directory at `relativePath` and those above it.
     func makeDirectory(_ relativePath: String) throws {
         try FileManager.default.createDirectory(
-            at: root.appending(path: relativePath, directoryHint: .isDirectory), withIntermediateDirectories: true)
+            at: root.appending(path: relativePath, directoryHint: .isDirectory),
+            withIntermediateDirectories: true
+        )
     }
 
     deinit { directory.cleanup() }
@@ -114,7 +117,8 @@ struct ProjectPlatformsTests {
                 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
             };
             """
-            .utf8)
+            .utf8
+        )
         #expect(ProjectPlatforms.declared(inXcodeProject: project) == [.iOS])
     }
 
@@ -159,7 +163,8 @@ struct ProjectPlatformsTests {
         #expect(
             visited.map { $0.hasSuffix("/") ? String($0.dropLast()) : $0 } == [
                 repository + "/App/Sources", repository + "/App", repository
-            ])
+            ]
+        )
     }
 
     @Test
@@ -219,7 +224,8 @@ struct SDKLocationTests {
         #expect(
             runner.specs.map(\.arguments) == [
                 ["--sdk", "iphonesimulator", "--show-sdk-path"], ["--sdk", "iphonesimulator", "--show-sdk-version"]
-            ])
+            ]
+        )
     }
 
     @Test
@@ -243,8 +249,11 @@ struct SDKScratchConfigurationTests {
     func `the iOS scratch session compiles against the simulator SDK at its own version`() throws {
         let sdk = SDKLocation(path: "/SDKs/iPhoneSimulator.sdk", version: "26.5")
         let configuration = SDKDocumentationProvider.scratchConfiguration(
-            for: .iOS, sdk: sdk, serverExecutable: URL(filePath: "/usr/bin/true"),
-            probeDirectory: URL(filePath: "/probe", directoryHint: .isDirectory))
+            for: .iOS,
+            sdk: sdk,
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            probeDirectory: URL(filePath: "/probe", directoryHint: .isDirectory)
+        )
 
         let triple = try #require(SDKPlatform.iOS.targetTriple(sdkVersion: "26.5"))
         #expect(
@@ -255,15 +264,19 @@ struct SDKScratchConfigurationTests {
                         "sdk": .string("/SDKs/iPhoneSimulator.sdk"),
                         "swiftCompilerFlags": .array([.string("-target"), .string(triple)])
                     ])
-                ]))
+                ])
+        )
         #expect(configuration.workspaceRoot == URL(filePath: "/probe", directoryHint: .isDirectory))
     }
 
     @Test
     func `the Mac's scratch session leaves the SDK to the server`() {
         let configuration = SDKDocumentationProvider.scratchConfiguration(
-            for: .macOS, sdk: nil, serverExecutable: URL(filePath: "/usr/bin/true"),
-            probeDirectory: URL(filePath: "/probe", directoryHint: .isDirectory))
+            for: .macOS,
+            sdk: nil,
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            probeDirectory: URL(filePath: "/probe", directoryHint: .isDirectory)
+        )
 
         #expect(configuration.initializationOptions == .object(["backgroundIndexing": .bool(false)]))
     }

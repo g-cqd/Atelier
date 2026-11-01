@@ -50,7 +50,11 @@ public enum OverlayBox {
             titleRow: titleRow,
             subtitleRow: subtitleRow,
             contentRect: Rect(
-                x: boxX + 2, y: contentStartY, width: max(1, boxWidth - 4), height: contentHeight)
+                x: boxX + 2,
+                y: contentStartY,
+                width: max(1, boxWidth - 4),
+                height: contentHeight
+            )
         )
     }
 

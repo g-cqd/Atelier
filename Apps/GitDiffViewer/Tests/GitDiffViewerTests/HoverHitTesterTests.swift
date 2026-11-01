@@ -78,10 +78,12 @@ struct HoverHitTesterTests {
         // Column 14 is the '=' sign; column 3 is the space before "alphaBeta".
         #expect(
             HoverHitTester.hit(at: point(row: 0, column: 14, in: rendered), textView: textView, rendered: rendered)
-                == nil)
+                == nil
+        )
         #expect(
             HoverHitTester.hit(at: point(row: 0, column: 3, in: rendered), textView: textView, rendered: rendered)
-                == nil)
+                == nil
+        )
     }
 
     @Test
@@ -91,7 +93,8 @@ struct HoverHitTesterTests {
 
         #expect(
             HoverHitTester.hit(at: point(row: 0, column: 100, in: rendered), textView: textView, rendered: rendered)
-                == nil)
+                == nil
+        )
     }
 
     @Test
@@ -99,14 +102,19 @@ struct HoverHitTesterTests {
         let file = FileDiffInput(title: "a.swift", oldText: text, newText: text, language: .plain)
         let prepared = PreparedDiff(file, granularity: .word)
         let diff = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.new]), layout: .full, withHeaders: true)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.new]),
+            layout: .full,
+            withHeaders: true
+        )
         let rendered = try #require(diff.new)
         let textView = makeTextView(rendered: rendered)
 
         // Row 0 is the header; row 1 is "let alphaBeta = 1".
         #expect(
             HoverHitTester.hit(at: point(row: 0, column: 2, in: rendered), textView: textView, rendered: rendered)
-                == nil)
+                == nil
+        )
         let hit = HoverHitTester.hit(at: point(row: 1, column: 8, in: rendered), textView: textView, rendered: rendered)
         #expect(hit?.utf16Column == 8)
     }
@@ -118,14 +126,24 @@ struct HoverHitTesterTests {
         let old = "line1\nline2AAAA\nline3\nline4\nline5\nline6AAAA\nline7\n"
         let new = "line1\nline2BBBB\nline3\nline4\nline5\nline6BBBB\nline7\n"
         let diff = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
+            oldText: old,
+            newText: new,
+            language: .plain,
+            layout: .changes(context: 0, expansions: [:])
+        )
         let rendered = try #require(diff.new)
         let textView = makeTextView(rendered: rendered)
 
         let first = HoverHitTester.hit(
-            at: point(row: 0, column: 2, in: rendered), textView: textView, rendered: rendered)
+            at: point(row: 0, column: 2, in: rendered),
+            textView: textView,
+            rendered: rendered
+        )
         let second = HoverHitTester.hit(
-            at: point(row: 1, column: 2, in: rendered), textView: textView, rendered: rendered)
+            at: point(row: 1, column: 2, in: rendered),
+            textView: textView,
+            rendered: rendered
+        )
 
         #expect(first?.line == 1)
         #expect(second?.line == 5)
@@ -175,7 +193,8 @@ struct HoverHitTesterTests {
         // Column 14 is the '=' sign in "let alphaBeta = 1".
         #expect(
             HoverHitTester.hit(at: point(row: 0, column: 14, in: rendered), textView: textView, rendered: rendered)
-                == nil)
+                == nil
+        )
     }
 
     // MARK: identifierRange / anchorRect(for:textView:)

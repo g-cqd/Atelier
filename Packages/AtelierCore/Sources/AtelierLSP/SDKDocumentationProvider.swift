@@ -37,7 +37,7 @@ public actor SDKDocumentationProvider: HoverProvider {
     private static let logger = Logger(subsystem: "Atelier.LSP", category: "SDKDocumentationProvider")
 
     private let makeSession: SessionFactory
-    private let cacheCapacity: Int
+    let cacheCapacity: Int
     /// Whether an answer carries the symbol's page in Apple's developer documentation.
     private let resolvesDocumentationPages: Bool
 
@@ -48,13 +48,13 @@ public actor SDKDocumentationProvider: HoverProvider {
     private var directoryPlatforms: [String: Set<SDKPlatform>] = [:]
 
     /// Most recently used last in `order`; a `nil` value is a cached miss, which the server answered.
-    private var cache: [CacheKey: HoverContent?] = [:]
+    var cache: [CacheKey: HoverContent?] = [:]
     private var order: [CacheKey] = []
 
     /// Bumped per synthetic document, so concurrent probes never collide on the same URI.
     private var syntheticDocumentCounter = 0
 
-    private struct CacheKey: Hashable {
+    struct CacheKey: Hashable {
         let platform: SDKPlatform
         let chain: String
         let imports: [String]
@@ -67,7 +67,8 @@ public actor SDKDocumentationProvider: HoverProvider {
     ///   - resolvesDocumentationPages: Whether an answer carries the symbol's page in Apple's developer documentation,
     ///     which takes the probe's session one or two more requests after its hover.
     public init(
-        sessions makeSession: @escaping SessionFactory, cacheCapacity: Int = 256,
+        sessions makeSession: @escaping SessionFactory,
+        cacheCapacity: Int = 256,
         resolvesDocumentationPages: Bool = false
     ) {
         self.makeSession = makeSession
@@ -78,8 +79,10 @@ public actor SDKDocumentationProvider: HoverProvider {
     /// A provider that resolves every platform's probes through `service`.
     public init(service: LanguageServerSession, cacheCapacity: Int = 256, resolvesDocumentationPages: Bool = false) {
         self.init(
-            sessions: { _ in service }, cacheCapacity: cacheCapacity,
-            resolvesDocumentationPages: resolvesDocumentationPages)
+            sessions: { _ in service },
+            cacheCapacity: cacheCapacity,
+            resolvesDocumentationPages: resolvesDocumentationPages
+        )
     }
 
     public func hover(_ query: HoverQuery) async throws -> HoverContent? {
@@ -88,7 +91,9 @@ public actor SDKDocumentationProvider: HoverProvider {
 
         let fileImports = Self.importedModules(in: query.content)
         let wanted = SDKPlatform.forFile(
-            importing: fileImports, inProjectDeclaring: projectPlatforms(forDocumentAt: query.documentURI))
+            importing: fileImports,
+            inProjectDeclaring: projectPlatforms(forDocumentAt: query.documentURI)
+        )
         guard let (platform, service) = await session(preferring: wanted) else { return nil }
         let imports = platform.probeImports(fileImports: fileImports, limit: Self.maximumProbeImports)
         let key = CacheKey(platform: platform, chain: extraction.chain, imports: imports)
@@ -99,7 +104,11 @@ public actor SDKDocumentationProvider: HoverProvider {
         }
 
         let result = await probeWithFallback(
-            on: service, chain: extraction.chain, chainStartsUppercase: extraction.startsUppercase, imports: imports)
+            on: service,
+            chain: extraction.chain,
+            chainStartsUppercase: extraction.startsUppercase,
+            imports: imports
+        )
         if result.isSettled { store(key, result.content) }
         return result.content
     }
@@ -182,18 +191,29 @@ public actor SDKDocumentationProvider: HoverProvider {
     /// Settled only when every probe it sent was answered, since a probe that got none might have had prose. A first
     /// probe that gets no answer sends no second one: the server is not answering yet.
     private func probeWithFallback(
-        on service: LanguageServerSession, chain: String, chainStartsUppercase: Bool, imports: [String]
+        on service: LanguageServerSession,
+        chain: String,
+        chainStartsUppercase: Bool,
+        imports: [String]
     ) async -> (content: HoverContent?, isSettled: Bool) {
         let first = await probe(
-            on: service, chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports,
-            typePosition: false)
+            on: service,
+            chain: chain,
+            chainStartsUppercase: chainStartsUppercase,
+            imports: imports,
+            typePosition: false
+        )
         guard case .answered(let primary) = first else { return (nil, false) }
         if let primary, HoverContentQuality.hasProse(primary.markdown) { return (primary, true) }
         guard chainStartsUppercase else { return (primary, true) }
 
         switch await probe(
-            on: service, chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports,
-            typePosition: true)
+            on: service,
+            chain: chain,
+            chainStartsUppercase: chainStartsUppercase,
+            imports: imports,
+            typePosition: true
+        )
         {
             case .answered(let secondary?) where HoverContentQuality.hasProse(secondary.markdown):
                 return (secondary, true)
@@ -206,7 +226,10 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     /// One probe on `service`, whose document is named under the session's workspace root, its probe directory.
     private func probe(
-        on service: LanguageServerSession, chain: String, chainStartsUppercase: Bool, imports: [String],
+        on service: LanguageServerSession,
+        chain: String,
+        chainStartsUppercase: Bool,
+        imports: [String],
         typePosition: Bool
     ) async -> HoverOutcome {
         // A session reconnects on its next hover, so one that `shutdown()` ended while this query waited on its first
@@ -236,12 +259,22 @@ public actor SDKDocumentationProvider: HoverProvider {
         let column = prefix.utf16.count + Self.tailSegmentOffset(in: chain)
 
         let outcome = await service.hover(
-            uri: uri, languageID: "swift", content: content, line: probeLineIndex, utf16Column: column)
+            uri: uri,
+            languageID: "swift",
+            content: content,
+            line: probeLineIndex,
+            utf16Column: column
+        )
         guard case .answered(let hover?) = outcome else { return outcome }
         let page =
             resolvesDocumentationPages
             ? await service.documentationPage(
-                uri: uri, languageID: "swift", content: content, line: probeLineIndex, utf16Column: column) : nil
+                uri: uri,
+                languageID: "swift",
+                content: content,
+                line: probeLineIndex,
+                utf16Column: column
+            ) : nil
         return .answered(HoverContent(markdown: hover.markdown, source: .sdk, documentationPage: page))
     }
 
@@ -272,148 +305,6 @@ public actor SDKDocumentationProvider: HoverProvider {
         }
         cache[key] = value
     }
-
-    // MARK: - Identifier / chain extraction (textual, not syntactic)
-
-    struct ChainExtraction: Equatable {
-        let chain: String
-        let startsUppercase: Bool
-    }
-
-    /// The whole dotted identifier chain touching `(line, utf16Column)`, trimmed of outer dots; nil when no chain is
-    /// there or when it is a bare lowercase name, which a probe cannot resolve without its receiver.
-    static func extractChain(in content: String, line: Int, utf16Column: Int) -> ChainExtraction? {
-        guard utf16Column >= 0, let lineText = lineUnits(line, of: content), utf16Column <= lineText.count else {
-            return nil
-        }
-
-        func isChainUnit(_ unit: UInt16) -> Bool {
-            let scalar = Unicode.Scalar(unit)
-            guard let scalar else { return false }
-            return CharacterSet.alphanumerics.contains(scalar) || scalar == "_" || scalar == "$" || scalar == "."
-        }
-
-        // A hover just past the line's last character still means the token before it.
-        var probeColumn = utf16Column
-        if probeColumn == lineText.count, probeColumn > 0, isChainUnit(lineText[probeColumn - 1]) {
-            probeColumn -= 1
-        }
-        guard probeColumn < lineText.count, isChainUnit(lineText[probeColumn]) else { return nil }
-
-        var start = probeColumn
-        while start > 0, isChainUnit(lineText[start - 1]) { start -= 1 }
-        var end = probeColumn
-        while end < lineText.count, isChainUnit(lineText[end]) { end += 1 }
-
-        var chain = String(utf16CodeUnits: Array(lineText[start ..< end]), count: end - start)
-        while chain.hasPrefix(".") { chain.removeFirst() }
-        while chain.hasSuffix(".") { chain.removeLast() }
-        guard !chain.isEmpty else { return nil }
-
-        guard let firstCharacter = chain.first else { return nil }
-        let startsUppercase = firstCharacter.isUppercase
-        let isDotted = chain.contains(".")
-
-        guard isDotted || startsUppercase else { return nil }
-
-        return ChainExtraction(chain: chain, startsUppercase: startsUppercase)
-    }
-
-    /// The UTF-16 code units of line `index` of `content`, without its line break, a `\r\n` included; nil past the
-    /// last line. Walks the text's UTF-8 up to the line once, and decodes that line alone.
-    static func lineUnits(_ index: Int, of content: String) -> [UInt16]? {
-        guard index >= 0 else { return nil }
-        var text = content
-        // `withUTF8` hands a native string's own storage over, and copies a bridged one once.
-        return text.withUTF8 { bytes -> [UInt16]? in
-            var start = 0
-            for _ in 0 ..< index {
-                guard let lineBreak = bytes[start...].firstIndex(of: newline) else { return nil }
-                start = lineBreak + 1
-            }
-            var end = bytes[start...].firstIndex(of: newline) ?? bytes.count
-            if end > start, bytes[end - 1] == carriageReturn { end -= 1 }
-            return Array(String(decoding: bytes[start ..< end], as: UTF8.self).utf16)
-        }
-    }
-
-    // MARK: - Imports
-
-    /// The most modules a probe document imports.
-    static let maximumProbeImports = 12
-
-    /// The top-level module of each import declaration in `content`, in order and without repeats.
-    ///
-    /// Reads the text's UTF-8 once and makes a string for an imported module's name alone. A line declares an import
-    /// when, past its indentation, attributes (`@testable`, `@_spi(Name)`) and an access modifier (`public`), it reads
-    /// `import`; the module is the first component of the path that follows any import kind (`struct`, `func`).
-    static func importedModules(in content: String) -> [String] {
-        var text = content
-        return text.withUTF8 { bytes in
-            var modules: [String] = []
-            // A byte-order mark would read as the first line's first character, hiding that line's import.
-            var lineStart = bytes.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0
-            while lineStart < bytes.count {
-                let lineEnd = bytes[lineStart...].firstIndex(of: newline) ?? bytes.count
-                if let module = importedModule(on: bytes[lineStart ..< lineEnd]), !modules.contains(module) {
-                    modules.append(module)
-                }
-                lineStart = lineEnd + 1
-            }
-            return modules
-        }
-    }
-
-    /// A run of a string's UTF-8, borrowed for the length of a scan.
-    private typealias UTF8Bytes = Slice<UnsafeBufferPointer<UInt8>>
-
-    private static let newline = UInt8(ascii: "\n")
-    private static let carriageReturn = UInt8(ascii: "\r")
-    private static let accessModifiers = ["public", "package", "internal", "fileprivate", "private"]
-    private static let importKinds = ["typealias", "struct", "class", "enum", "protocol", "let", "var", "func"]
-
-    /// The module the import declaration on `line` names; nil when the line declares no import.
-    private static func importedModule(on line: UTF8Bytes) -> String? {
-        var rest = line.drop(while: isBlank)
-        while rest.first == UInt8(ascii: "@") {
-            rest = rest.dropFirst().drop(while: isIdentifierByte)
-            if rest.first == UInt8(ascii: "(") {
-                guard let close = rest.firstIndex(of: UInt8(ascii: ")")) else { return nil }
-                rest = rest[rest.index(after: close)...]
-            }
-            rest = rest.drop(while: isBlank)
-        }
-        rest = dropKeyword(in: rest, from: accessModifiers) ?? rest
-        guard let path = dropKeyword(in: rest, from: ["import"]) else { return nil }
-        let module = (dropKeyword(in: path, from: importKinds) ?? path).prefix(while: isIdentifierByte)
-        return module.isEmpty ? nil : String(decoding: module, as: UTF8.self)
-    }
-
-    /// `text` past its leading keyword, one of `keywords`, and the blanks after it; nil when `text` starts with none of
-    /// them followed by a blank.
-    private static func dropKeyword(in text: UTF8Bytes, from keywords: [String]) -> UTF8Bytes? {
-        for keyword in keywords where text.starts(with: keyword.utf8) {
-            let rest = text.dropFirst(keyword.utf8.count)
-            guard let next = rest.first, isBlank(next) else { continue }
-            return rest.drop(while: isBlank)
-        }
-        return nil
-    }
-
-    private static func isBlank(_ byte: UInt8) -> Bool {
-        byte == UInt8(ascii: " ") || byte == UInt8(ascii: "\t")
-    }
-
-    /// An identifier's byte: an ASCII letter, digit or underscore, or any byte of a non-ASCII character.
-    private static func isIdentifierByte(_ byte: UInt8) -> Bool {
-        switch byte {
-            case UInt8(ascii: "a") ... UInt8(ascii: "z"), UInt8(ascii: "A") ... UInt8(ascii: "Z"),
-                UInt8(ascii: "0") ... UInt8(ascii: "9"), UInt8(ascii: "_"), 0x80...:
-                true
-            default:
-                false
-        }
-    }
 }
 
 // MARK: - Scratch sessions
@@ -426,9 +317,11 @@ extension SDKDocumentationProvider {
     /// platform but the Mac, whose SDK the server finds itself; a platform whose SDK it does not find has no session.
     /// `resolvesDocumentationPages` makes each answer carry its symbol's page in Apple's developer documentation.
     public static func scratch(
-        serverExecutable: URL, probeDirectory: URL,
+        serverExecutable: URL,
+        probeDirectory: URL,
         locateSDK: @escaping @Sendable (SDKPlatform) async -> SDKLocation?,
-        idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2),
+        idleShutdown: Duration = .seconds(180),
+        requestTimeout: Duration = .seconds(2),
         resolvesDocumentationPages: Bool = false
     ) -> SDKDocumentationProvider {
         SDKDocumentationProvider(
@@ -440,17 +333,29 @@ extension SDKDocumentationProvider {
                 }
                 return LanguageServerSession(
                     configuration: scratchConfiguration(
-                        for: platform, sdk: sdk, serverExecutable: serverExecutable, probeDirectory: probeDirectory,
-                        idleShutdown: idleShutdown, requestTimeout: requestTimeout))
-            }, resolvesDocumentationPages: resolvesDocumentationPages)
+                        for: platform,
+                        sdk: sdk,
+                        serverExecutable: serverExecutable,
+                        probeDirectory: probeDirectory,
+                        idleShutdown: idleShutdown,
+                        requestTimeout: requestTimeout
+                    )
+                )
+            },
+            resolvesDocumentationPages: resolvesDocumentationPages
+        )
     }
 
     /// The configuration of `platform`'s scratch session: background indexing off, as for every hover session, and,
     /// given an `sdk`, sourcekit-lsp's fallback build settings, which a probe document gets since it belongs to no
     /// build system: that SDK, and a `-target` for it. `requestTimeout` caps the `initialize` handshake too.
     public static func scratchConfiguration(
-        for platform: SDKPlatform, sdk: SDKLocation?, serverExecutable: URL, probeDirectory: URL,
-        idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
+        for platform: SDKPlatform,
+        sdk: SDKLocation?,
+        serverExecutable: URL,
+        probeDirectory: URL,
+        idleShutdown: Duration = .seconds(180),
+        requestTimeout: Duration = .seconds(2)
     ) -> LanguageServerSession.Configuration {
         var options: [String: JSONValue] = [:]
         if case .object(let hoverOptions) = LanguageServerDescriptor.sourceKitLSP.initializationOptions {
@@ -462,8 +367,13 @@ extension SDKDocumentationProvider {
             ])
         }
         return LanguageServerSession.Configuration(
-            serverExecutable: serverExecutable, workspaceRoot: probeDirectory, idleShutdown: idleShutdown,
-            initializeTimeout: requestTimeout, requestTimeout: requestTimeout, initializationOptions: .object(options))
+            serverExecutable: serverExecutable,
+            workspaceRoot: probeDirectory,
+            idleShutdown: idleShutdown,
+            initializeTimeout: requestTimeout,
+            requestTimeout: requestTimeout,
+            initializationOptions: .object(options)
+        )
     }
 
     /// Creates a new directory under `parent` with `mkdtemp(3)`: its name is unique, and only the current user can

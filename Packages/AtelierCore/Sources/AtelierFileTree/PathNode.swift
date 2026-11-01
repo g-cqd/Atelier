@@ -59,8 +59,12 @@ public struct PathNode: Identifiable, Hashable, Sendable {
                     if !child.children.isEmpty {
                         made.append(
                             PathNode(
-                                id: child.isFile ? id + "/" : id, name: name, isDirectory: true,
-                                children: nodes(of: child, prefix: id)))
+                                id: child.isFile ? id + "/" : id,
+                                name: name,
+                                isDirectory: true,
+                                children: nodes(of: child, prefix: id)
+                            )
+                        )
                     }
                     return made
                 }

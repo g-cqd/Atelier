@@ -13,7 +13,8 @@ struct HighlightMergerOrderTests {
         #expect(
             HighlightMerger.merge(tokens, sourceByteCount: 10) == [
                 HighlightToken(byteRange: 0 ..< 10, role: .variable, layer: .semantic)
-            ])
+            ]
+        )
     }
 
     @Test
@@ -25,7 +26,8 @@ struct HighlightMergerOrderTests {
         #expect(
             HighlightMerger.merge(tokens, sourceByteCount: 4) == [
                 HighlightToken(byteRange: 0 ..< 4, role: .string, priority: 1)
-            ])
+            ]
+        )
     }
 
     @Test
@@ -39,6 +41,7 @@ struct HighlightMergerOrderTests {
                 HighlightToken(byteRange: 0 ..< 2, role: .string, priority: 3),
                 HighlightToken(byteRange: 2 ..< 4, role: .escape, priority: 0),
                 HighlightToken(byteRange: 4 ..< 6, role: .string, priority: 3)
-            ])
+            ]
+        )
     }
 }

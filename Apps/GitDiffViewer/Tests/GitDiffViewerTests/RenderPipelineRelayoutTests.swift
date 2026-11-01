@@ -18,7 +18,9 @@ struct RenderPipelineRelayoutTests {
     /// Publishes cards for a and b, both at version 1.
     private func publishFirstVersions() async throws {
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 1)], keepingPublished: false)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 1)],
+            keepingPublished: false
+        )
         try await harness.taskProvider.waitForAllTasks()
     }
 

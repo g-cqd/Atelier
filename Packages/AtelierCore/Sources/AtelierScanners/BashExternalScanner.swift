@@ -96,14 +96,17 @@ public struct BashExternalScanner: GrammarExternalScanner {
             guard index + 7 <= state.endIndex else { return }
             let length = Int(
                 UInt32(state[index + 3]) | UInt32(state[index + 4]) << 8
-                    | UInt32(state[index + 5]) << 16 | UInt32(state[index + 6]) << 24)
+                    | UInt32(state[index + 5]) << 16 | UInt32(state[index + 6]) << 24
+            )
             guard length <= state.endIndex - index - 7 else { return }
             decoded.append(
                 Heredoc(
-                    isRaw: state[index] != 0, started: state[index + 1] != 0,
+                    isRaw: state[index] != 0,
+                    started: state[index + 1] != 0,
                     allowsIndent: state[index + 2] != 0,
                     delimiter: Array(state[index + 7 ..< index + 7 + length])
-                ))
+                )
+            )
             index += 7 + length
         }
         guard index == state.endIndex else { return }

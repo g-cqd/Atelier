@@ -87,8 +87,11 @@ struct DocHoverControllerTests {
         }
         // The panel needs a real window to attach to.
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 200), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView?.addSubview(textView)
         retainedWindows.append(window)
         return textView
@@ -112,8 +115,11 @@ struct DocHoverControllerTests {
         scrollView.hasVerticalScroller = true
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 100), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 100),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView?.addSubview(scrollView)
         retainedWindows.append(window)
         return (scrollView, textView)
@@ -124,7 +130,8 @@ struct DocHoverControllerTests {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
         return NSPoint(
             x: DiffPaneMetrics.lineFragmentPadding + (CGFloat(column) + 0.5) * charWidth,
-            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight)
+            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight
+        )
     }
 
     private func makeSUT(holdingLookups: Bool = false) -> (
@@ -133,8 +140,11 @@ struct DocHoverControllerTests {
         let taskProvider = TaskProviderSpy.tolerant()
         let clock = TestClock()
         let controller = DocHoverController(
-            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300),
-            panel: HoverDocPanel(ordersWindowIn: false))
+            clock: clock,
+            taskProvider: taskProvider,
+            debounce: .milliseconds(300),
+            panel: HoverDocPanel(ordersWindowIn: false)
+        )
         let spy = ResolverSpy(holdsLookups: holdingLookups)
         controller.resolve = { hit in await spy.resolve(hit) }
         return (controller, spy, taskProvider, clock)
@@ -142,7 +152,9 @@ struct DocHoverControllerTests {
 
     /// Rests the pointer at `point` until the debounce has passed on `clock`, so its lookup starts.
     private func rest(
-        _ controller: DocHoverController, at point: NSPoint, clock: TestClock,
+        _ controller: DocHoverController,
+        at point: NSPoint,
+        clock: TestClock,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         let mark = clock.registrationMark()
@@ -291,7 +303,9 @@ struct DocHoverControllerTests {
 
         // Same origin as already reflected: a spurious notification, not a scroll.
         NotificationCenter.default.post(
-            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
 
         #expect(controller.isPanelVisible == true)
     }
@@ -346,13 +360,23 @@ struct DocHoverControllerTests {
         let clock = TestClock()
         let panel = HoverDocPanel(ordersWindowIn: false)
         let controller = DocHoverController(
-            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300), panel: panel)
+            clock: clock,
+            taskProvider: taskProvider,
+            debounce: .milliseconds(300),
+            panel: panel
+        )
         let spy = ResolverSpy(holdsLookups: false)
         controller.resolve = { hit in await spy.resolve(hit) }
         controller.attach(to: view) { rendered }
         return StayOpenSUT(
-            controller: controller, panel: panel, spy: spy, taskProvider: taskProvider, clock: clock, textView: view,
-            rendered: rendered)
+            controller: controller,
+            panel: panel,
+            spy: spy,
+            taskProvider: taskProvider,
+            clock: clock,
+            textView: view,
+            rendered: rendered
+        )
     }
 
     /// Rests on `alphaBeta` through the debounce, so its panel shows.
@@ -381,7 +405,8 @@ struct DocHoverControllerTests {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
         return NSPoint(
             x: DiffPaneMetrics.lineFragmentPadding + CGFloat(column) * charWidth,
-            y: DiffPaneMetrics.containerInset + (CGFloat(row) + fraction) * rendered.lineHeight)
+            y: DiffPaneMetrics.containerInset + (CGFloat(row) + fraction) * rendered.lineHeight
+        )
     }
 
     /// Past `alphaBeta`, over ` = 1`, on the side of its line the panel lies on: in the corridor between the symbol and
@@ -390,7 +415,10 @@ struct DocHoverControllerTests {
     private func corridorPoint(_ sut: StayOpenSUT) throws -> NSPoint {
         let anchor = try #require(
             HoverHitTester.hit(
-                at: point(row: 0, column: 8, in: sut.rendered), textView: sut.textView, rendered: sut.rendered)
+                at: point(row: 0, column: 8, in: sut.rendered),
+                textView: sut.textView,
+                rendered: sut.rendered
+            )
         )
         .anchorRect
         let frame = try #require(sut.panel.frameOnScreen)
@@ -540,8 +568,18 @@ struct DocHoverControllerTests {
         try await showPanelOnRowZero(sut)
         let escape = try #require(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
-                characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}",
+                isARepeat: false,
+                keyCode: 53
+            )
+        )
 
         #expect(sut.controller.handleLocalEvent(escape) == nil)
         #expect(!sut.controller.isPanelVisible)
@@ -553,8 +591,17 @@ struct DocHoverControllerTests {
         try await showPanelOnRowZero(sut)
         let click = try #require(
             NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                with: .leftMouseDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
+        )
 
         #expect(sut.controller.handleLocalEvent(click) === click)
         #expect(!sut.controller.isPanelVisible)
@@ -593,8 +640,11 @@ struct DocHoverControllerTests {
         let taskProvider = TaskProviderSpy.tolerant()
         let clock = TestClock()
         let controller = DocHoverController(
-            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300),
-            panel: HoverDocPanel(ordersWindowIn: false))
+            clock: clock,
+            taskProvider: taskProvider,
+            debounce: .milliseconds(300),
+            panel: HoverDocPanel(ordersWindowIn: false)
+        )
         let spy = ResolverSpy(holdsLookups: false)
         controller.resolve = { hit in await spy.resolve(hit) }
         controller.attach(to: view) { rendered }
@@ -646,8 +696,17 @@ struct DocHoverControllerTests {
         let panelWindow = try #require(sut.panel.contentViewForTests?.window)
         let click = try #require(
             NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                with: .leftMouseDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
+        )
 
         #expect(sut.controller.handleLocalEvent(click, in: panelWindow) === click)
         #expect(sut.controller.isPanelVisible)
@@ -663,7 +722,8 @@ struct HoverCorridorTests {
         let panel = NSRect(x: 30, y: 40, width: 440, height: 200)
         #expect(
             HoverCorridor.rect(anchor: anchor, panel: panel)
-                == NSRect(x: 30, y: 28, width: 440, height: 12 + HoverCorridor.slack))
+                == NSRect(x: 30, y: 28, width: 440, height: 12 + HoverCorridor.slack)
+        )
     }
 
     @Test
@@ -671,6 +731,7 @@ struct HoverCorridorTests {
         let panel = NSRect(x: 10, y: -210, width: 440, height: 200)
         #expect(
             HoverCorridor.rect(anchor: anchor, panel: panel)
-                == NSRect(x: 10, y: -10 - HoverCorridor.slack, width: 440, height: 38 + HoverCorridor.slack))
+                == NSRect(x: 10, y: -10 - HoverCorridor.slack, width: 440, height: 38 + HoverCorridor.slack)
+        )
     }
 }

@@ -50,8 +50,12 @@ package final class GrammarColorServices: Sendable {
             let registry = GrammarRegistry(cacheDirectory: cacheDirectory, bundledManifest: try corpus.manifest())
             return GrammarColorServices(
                 artifacts: SyntaxArtifactsCache(
-                    registry: registry, grammarsDirectory: corpus.grammarsDirectory, limits: limits),
-                pool: BlockingOffloadPool(width: parseWidth, qualityOfService: .utility))
+                    registry: registry,
+                    grammarsDirectory: corpus.grammarsDirectory,
+                    limits: limits
+                ),
+                pool: BlockingOffloadPool(width: parseWidth, qualityOfService: .utility)
+            )
         } catch {
             logger.fault("grammar color is off: \(String(describing: error), privacy: .public)")
             return nil
@@ -158,7 +162,9 @@ package final class ColorTierGate: Sendable {
     /// Sets what the tiers read; true when anything changed.
     @discardableResult
     package func update(
-        services: GrammarColorServices?, grammarOff: Set<Language>, refinesSwift: Bool
+        services: GrammarColorServices?,
+        grammarOff: Set<Language>,
+        refinesSwift: Bool
     ) -> Bool {
         state.withLock { state in
             let changed =
@@ -223,7 +229,9 @@ extension DiffViewerModel {
     /// server's on Swift sides while the gate refines Swift, and the grammar's on the languages the gate has grammar
     /// colour on for.
     static func tiers(
-        store: SyntaxFactsStore, semantic: SemanticColorSource, gate: ColorTierGate
+        store: SyntaxFactsStore,
+        semantic: SemanticColorSource,
+        gate: ColorTierGate
     ) -> [any AtelierHighlighting.HighlightTier] {
         // The lexer colours every language it knows whatever the settings: only the tiers above it are Swift's to gate.
         DiffDecorations.tiers(store: store).map { $0.layer == .lexical ? $0 : SwiftColorTier($0, gate: gate) }
@@ -242,7 +250,10 @@ extension DiffViewerModel {
     func followColorSettings() {
         let grammarOff = Set(settings.grammarColorOff.compactMap(Language.init(name:)))
         let changed = colorGate.update(
-            services: attachedGrammarColor, grammarOff: grammarOff, refinesSwift: settings.refinesSwiftColor)
+            services: attachedGrammarColor,
+            grammarOff: grammarOff,
+            refinesSwift: settings.refinesSwiftColor
+        )
         if changed, pipeline.refinesSwiftColor { pipeline.refinesSwiftColor = false }
         pipeline.refinesSwiftColor = settings.refinesSwiftColor || colorGate.colorsAnyGrammar
     }

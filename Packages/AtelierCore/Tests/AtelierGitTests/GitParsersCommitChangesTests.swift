@@ -14,7 +14,10 @@ struct GitParsersCommitChangesTests {
 
     /// A commit header as the ``GitParsers/commitChangesFormat`` prints it, NUL-terminated by `-z`.
     private static func header(
-        _ id: String, parents: [String], time: Int = 1_790_000_000, author: String = "Tess",
+        _ id: String,
+        parents: [String],
+        time: Int = 1_790_000_000,
+        author: String = "Tess",
         subject: String
     ) -> String {
         "\u{1e}\(id)\0\(parents.joined(separator: " "))\0\(time)\0\(author)\0\(subject)\0"
@@ -22,7 +25,10 @@ struct GitParsersCommitChangesTests {
 
     /// A raw record; the first of a commit carries the newline git puts before it.
     private static func record(
-        _ status: String, _ paths: String..., old: String = blobA, new: String = blobB,
+        _ status: String,
+        _ paths: String...,
+        old: String = blobA,
+        new: String = blobB,
         first: Bool = false
     ) -> String {
         (first ? "\n" : "") + ":100644 100644 \(old) \(new) \(status)\0" + paths.map { "\($0)\0" }.joined()
@@ -39,13 +45,18 @@ struct GitParsersCommitChangesTests {
         #expect(
             commits == [
                 GitCommitChanges(
-                    id: Self.first, parentIDs: [Self.parent], authorName: "Tess Ter",
-                    authorDate: Date(timeIntervalSince1970: 1_790_324_815), subject: "Add",
+                    id: Self.first,
+                    parentIDs: [Self.parent],
+                    authorName: "Tess Ter",
+                    authorDate: Date(timeIntervalSince1970: 1_790_324_815),
+                    subject: "Add",
                     changes: [
                         GitFileChange(status: .modified, path: "a.swift", oldBlobID: Self.blobA, newBlobID: Self.blobB),
                         GitFileChange(status: .added, path: "b.swift", newBlobID: Self.blobB)
-                    ])
-            ])
+                    ]
+                )
+            ]
+        )
     }
 
     @Test
@@ -73,10 +84,15 @@ struct GitParsersCommitChangesTests {
         #expect(
             changes == [
                 GitFileChange(
-                    status: .renamed, path: "new/a.swift", oldPath: "old/a.swift", oldBlobID: Self.blobA,
-                    newBlobID: Self.blobB),
+                    status: .renamed,
+                    path: "new/a.swift",
+                    oldPath: "old/a.swift",
+                    oldBlobID: Self.blobA,
+                    newBlobID: Self.blobB
+                ),
                 GitFileChange(status: .added, path: "copy of b.swift", newBlobID: Self.blobB)
-            ])
+            ]
+        )
     }
 
     @Test
@@ -88,7 +104,8 @@ struct GitParsersCommitChangesTests {
         #expect(
             GitParsers.commitChanges(Data(output.utf8)).first?.changes == [
                 GitFileChange(status: .deleted, path: "gone.swift", oldBlobID: Self.blobA)
-            ])
+            ]
+        )
     }
 
     @Test
@@ -154,8 +171,14 @@ struct GitParsersCommitChangesTests {
             GitParsers.rawChanges(Data(output.utf8)) == [
                 GitFileChange(status: .modified, path: "a.swift", oldBlobID: Self.blobA),
                 GitFileChange(
-                    status: .renamed, path: "c.swift", oldPath: "b.swift", oldBlobID: Self.blobA, newBlobID: Self.blobB),
+                    status: .renamed,
+                    path: "c.swift",
+                    oldPath: "b.swift",
+                    oldBlobID: Self.blobA,
+                    newBlobID: Self.blobB
+                ),
                 GitFileChange(status: .added, path: "d.swift")
-            ])
+            ]
+        )
     }
 }

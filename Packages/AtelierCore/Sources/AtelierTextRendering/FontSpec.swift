@@ -10,8 +10,11 @@ public struct FontSpec: Hashable, Sendable {
     public var fallback: [String]
 
     public init(
-        postScriptName: String? = nil, pointSize: Double, features: [FontFeature] = [],
-        variations: [FontVariation] = [], fallback: [String] = []
+        postScriptName: String? = nil,
+        pointSize: Double,
+        features: [FontFeature] = [],
+        variations: [FontVariation] = [],
+        fallback: [String] = []
     ) {
         self.postScriptName = postScriptName
         self.pointSize = pointSize

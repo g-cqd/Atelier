@@ -118,7 +118,9 @@ private func renderPromptOverlay(
     buffer.write(renderedPrompt, row: inputRow, col: inputCol, style: inputStyle)
 
     let cursorCol = min(
-        layout.contentRect.maxX - 1, inputCol + min(promptLine.count, layout.contentRect.width - 1))
+        layout.contentRect.maxX - 1,
+        inputCol + min(promptLine.count, layout.contentRect.width - 1)
+    )
     return (row: inputRow, col: cursorCol)
 }
 
@@ -177,7 +179,9 @@ private func contextMenuOverlayLayout(
         max(partial, item.title.count + (item.shortcut.isEmpty ? 0 : item.shortcut.count + 1))
     }
     let preferredWidth = min(
-        max(max(contextMenu.title.count, widestItem) + 8, 28), max(20, columns - 4))
+        max(max(contextMenu.title.count, widestItem) + 8, 28),
+        max(20, columns - 4)
+    )
     let subtitleRows = contextMenu.subtitle == nil ? 0 : 1
     let preferredHeight = min(max(contextMenu.items.count + subtitleRows + 4, 6), max(6, rows - 4))
     return OverlayBox.layout(

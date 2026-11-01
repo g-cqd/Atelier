@@ -31,7 +31,9 @@ struct PipelineBenchmark {
     @Test(
         .enabled(
             if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
-                && ProcessInfo.processInfo.environment["GDV_BENCH_PATCH"] != nil))
+                && ProcessInfo.processInfo.environment["GDV_BENCH_PATCH"] != nil
+        )
+    )
     func `pipeline phases over a patch`() async throws {
         let path = ProcessInfo.processInfo.environment["GDV_BENCH_PATCH"] ?? ""
         let text = try String(contentsOfFile: path, encoding: .utf8)
@@ -79,19 +81,25 @@ struct PipelineBenchmark {
             _ = timings.time("highlight tokens", name) {
                 (
                     DecorationFixtures.byLine(
-                        LexicalHighlightEngine().highlight(utf8: Array(old.utf8), language: language), text: old,
-                        lines: model.oldLines),
+                        LexicalHighlightEngine().highlight(utf8: Array(old.utf8), language: language),
+                        text: old,
+                        lines: model.oldLines
+                    ),
                     DecorationFixtures.byLine(
-                        LexicalHighlightEngine().highlight(utf8: Array(new.utf8), language: language), text: new,
-                        lines: model.newLines)
+                        LexicalHighlightEngine().highlight(utf8: Array(new.utf8), language: language),
+                        text: new,
+                        lines: model.newLines
+                    )
                 )
             }
             prepared.append(
                 timings.time("prepare total", name) {
                     PreparedDiff(
-                        FileDiffInput(title: name, oldText: old, newText: new, language: language), granularity: .syntax
+                        FileDiffInput(title: name, oldText: old, newText: new, language: language),
+                        granularity: .syntax
                     )
-                })
+                }
+            )
         }
         return prepared
     }
@@ -99,26 +107,48 @@ struct PipelineBenchmark {
     /// Every prepared file rendered in the three layouts a window uses; returns the split changes-only render.
     private static func render(_ prepared: [PreparedDiff], timings: inout PhaseTimings) -> [RenderedDiff] {
         let split = DiffRenderer.Options(
-            granularity: .syntax, palette: .system, lineHeightMultiple: 0, sides: [.old, .new])
+            granularity: .syntax,
+            palette: .system,
+            lineHeightMultiple: 0,
+            sides: [.old, .new]
+        )
         let inline = DiffRenderer.Options(
-            granularity: .syntax, palette: .system, lineHeightMultiple: 0, sides: [.unified])
+            granularity: .syntax,
+            palette: .system,
+            lineHeightMultiple: 0,
+            sides: [.unified]
+        )
         var rendered: [RenderedDiff] = []
         for (index, file) in prepared.enumerated() {
             _ = timings.time("render inline, changes", file.title) {
                 DiffRenderer.render(
-                    prepared: [file], options: inline, layout: .changes(context: 3, expansions: [:]),
-                    withHeaders: false, firstFileIndex: index)
+                    prepared: [file],
+                    options: inline,
+                    layout: .changes(context: 3, expansions: [:]),
+                    withHeaders: false,
+                    firstFileIndex: index
+                )
             }
             _ = timings.time("render split, full", file.title) {
                 DiffRenderer.render(
-                    prepared: [file], options: split, layout: .full, withHeaders: false, firstFileIndex: index)
+                    prepared: [file],
+                    options: split,
+                    layout: .full,
+                    withHeaders: false,
+                    firstFileIndex: index
+                )
             }
             rendered.append(
                 timings.time("render split, changes", file.title) {
                     DiffRenderer.render(
-                        prepared: [file], options: split, layout: .changes(context: 3, expansions: [:]),
-                        withHeaders: false, firstFileIndex: index)
-                })
+                        prepared: [file],
+                        options: split,
+                        layout: .changes(context: 3, expansions: [:]),
+                        withHeaders: false,
+                        firstFileIndex: index
+                    )
+                }
+            )
         }
         return rendered
     }

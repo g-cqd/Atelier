@@ -29,11 +29,17 @@ struct ToolbarItemSetTests {
         let spy = TaskProviderSpy.tolerant()
         model.settings.diagnosticsEnabled = true
         let diagnostics = DiagnosticsModel(
-            engine: OneWarningRunner(), settings: model.settings, taskProvider: spy, debounce: .milliseconds(1))
+            engine: OneWarningRunner(),
+            settings: model.settings,
+            taskProvider: spy,
+            debounce: .milliseconds(1)
+        )
         model.diagnostics = diagnostics
         diagnostics.comparisonChanged(
-            root: URL(filePath: "/repo"), files: [.init(path: "A.swift", contentHash: "a", url: nil)],
-            corpusFingerprint: "fp")
+            root: URL(filePath: "/repo"),
+            files: [.init(path: "A.swift", contentHash: "a", url: nil)],
+            corpusFingerprint: "fp"
+        )
         try await spy.waitForAllTasks()
         try #require(!diagnostics.summary.isEmpty)
         Self.draw(window)
@@ -57,15 +63,20 @@ struct ToolbarItemSetTests {
         let toolbar = try #require(window.toolbar)
         let allowed = toolbar.delegate?.toolbarAllowedItemIdentifiers?(toolbar) ?? []
         return Items(
-            shown: toolbar.items.map(\.itemIdentifier.rawValue), allowed: Set(allowed.map(\.rawValue)))
+            shown: toolbar.items.map(\.itemIdentifier.rawValue),
+            allowed: Set(allowed.map(\.rawValue))
+        )
     }
 
     /// The window's content with its toolbar bridged onto the window, which is never ordered in. The toolbar keeps
     /// no saved arrangement, so the test neither reads nor writes one.
     private static func window(showing model: DiffViewerModel) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900), styleMask: [.titled, .resizable],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         let controller = NSHostingController(rootView: ContentView(settings: model.settings, model: model))
         controller.sceneBridgingOptions = [.toolbars]
@@ -86,8 +97,19 @@ struct ToolbarItemSetTests {
 private struct OneWarningRunner: DiagnosticsRunning {
     func run(_ tool: DiagnosticTool, request: DiagnosticsEngine.Request) async throws -> DiagnosticsEngine.ToolResult {
         let finding = Finding(
-            tool: tool, ruleID: "rule", message: "message", file: "A.swift", line: 1, severity: .warning)
+            tool: tool,
+            ruleID: "rule",
+            message: "message",
+            file: "A.swift",
+            line: 1,
+            severity: .warning
+        )
         return DiagnosticsEngine.ToolResult(
-            tool: tool, findings: [finding], status: .succeeded, duration: .zero, fromCache: false)
+            tool: tool,
+            findings: [finding],
+            status: .succeeded,
+            duration: .zero,
+            fromCache: false
+        )
     }
 }

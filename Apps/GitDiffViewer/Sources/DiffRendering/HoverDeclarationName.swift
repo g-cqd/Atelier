@@ -143,7 +143,8 @@ package enum HoverDeclarationName {
 
     /// The names before each top-level parameter's colon, in the list starting after its opening parenthesis.
     private static func parameterLabels(
-        _ tokens: [String], from start: Int
+        _ tokens: [String],
+        from start: Int
     ) -> [(names: [String], hasColon: Bool)] {
         var parameters: [(names: [String], hasColon: Bool)] = []
         var names: [String] = []

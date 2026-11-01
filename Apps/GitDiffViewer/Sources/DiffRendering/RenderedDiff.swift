@@ -69,7 +69,12 @@ package struct RenderedChange: Sendable, Hashable {
     package let addedLines: Int
 
     package init(
-        key: ChangeKey, kind: Kind, rows: Range<Int>, isDisclosed: Bool, removedLines: Int, addedLines: Int
+        key: ChangeKey,
+        kind: Kind,
+        rows: Range<Int>,
+        isDisclosed: Bool,
+        removedLines: Int,
+        addedLines: Int
     ) {
         self.key = key
         self.kind = kind
@@ -134,7 +139,9 @@ package final class PreparedDiff: Sendable {
     ///   - store: Where a side with a revision finds the facts of a parse another reader made, and leaves its own
     ///     (PERF-11 step 3); nil parses a Swift side for its syntax granularity alone.
     package init(
-        _ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics(),
+        _ input: FileDiffInput,
+        granularity: IntralineGranularity,
+        heuristics: DiffHeuristics = DiffHeuristics(),
         store: SyntaxFactsStore? = nil
     ) {
         title = input.title
@@ -175,7 +182,11 @@ package struct FileDiffInput: Sendable {
     package let newRevision: SourceRevision?
 
     package init(
-        title: String, oldText: String, newText: String, language: Language, oldRevision: SourceRevision? = nil,
+        title: String,
+        oldText: String,
+        newText: String,
+        language: Language,
+        oldRevision: SourceRevision? = nil,
         newRevision: SourceRevision? = nil
     ) {
         self.title = title
@@ -214,9 +225,17 @@ package final class RenderedText: @unchecked Sendable {
     private let bandsBetweenRows: Int
 
     package init(
-        side: RenderedSide, palette: DiffPalette, attributed: NSAttributedString, rows: [RowMeta],
-        gaps: [RenderedGap], lineStarts: [Int], longestLine: Int, baselineOffset: CGFloat = 0,
-        lineHeight: CGFloat? = nil, changes: [RenderedChange] = [], folds: [RenderedFold] = []
+        side: RenderedSide,
+        palette: DiffPalette,
+        attributed: NSAttributedString,
+        rows: [RowMeta],
+        gaps: [RenderedGap],
+        lineStarts: [Int],
+        longestLine: Int,
+        baselineOffset: CGFloat = 0,
+        lineHeight: CGFloat? = nil,
+        changes: [RenderedChange] = [],
+        folds: [RenderedFold] = []
     ) {
         self.changes = changes
         self.folds = folds

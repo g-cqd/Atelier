@@ -13,7 +13,10 @@ struct DefaultsJSONCompatibilityTests {
     private let heuristics = DiffHeuristics(anchorsRareLines: true, slidesToIndentation: false, whitespace: .ignoreAll)
     private let toolLocations: [String: ToolLocation] = [
         "swiftlint": ToolLocation(
-            isEnabled: false, customPath: "/opt/homebrew/bin/swiftlint", bookmark: Data([0, 1, 0xFE, 0xFF])),
+            isEnabled: false,
+            customPath: "/opt/homebrew/bin/swiftlint",
+            bookmark: Data([0, 1, 0xFE, 0xFF])
+        ),
         "swift-format": ToolLocation(customPath: "/Users/é x/bin/swift-format")
     ]
     private let lspServerLocations = ["sourcekit-lsp": ToolLocation(isEnabled: false, customPath: "/usr/bin/lsp")]
@@ -57,7 +60,8 @@ struct DefaultsJSONCompatibilityTests {
         #expect(
             try decoder.decode([String: ToolLocation].self, from: storedTools) == [
                 "swiftlint": toolLocations["swiftlint"]
-            ])
+            ]
+        )
         #expect(try decoder.decode([String: ToolLocation].self, from: storedServers) == lspServerLocations)
     }
 
@@ -106,7 +110,9 @@ struct DefaultsJSONCompatibilityTests {
     func `a stored recent whose URL does not parse leaves the list empty`() throws {
         let defaults = scratchDefaults.defaults
         defaults.set(
-            Data(#"[{"patch":{"_0":"file:///tmp/a.patch"}},{"patch":{"_0":""}}]"#.utf8), forKey: "recentComparisons")
+            Data(#"[{"patch":{"_0":"file:///tmp/a.patch"}},{"patch":{"_0":""}}]"#.utf8),
+            forKey: "recentComparisons"
+        )
 
         #expect(RecentComparisons(defaults: defaults).entries.isEmpty)
     }

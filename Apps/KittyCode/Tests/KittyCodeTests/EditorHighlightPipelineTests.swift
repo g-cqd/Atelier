@@ -24,14 +24,22 @@ struct EditorHighlightPipelineTests {
     /// A Swift document open in a buffer and scrolled to `scrollOffset`, with a 10-row screen; `threads` records
     /// where each full pass runs.
     private func makeState(
-        lines: [String] = (0 ..< lineCount).map(line), scrollOffset: Int = 1_000
+        lines: [String] = (0 ..< lineCount).map(line),
+        scrollOffset: Int = 1_000
     ) -> (state: EditorState, tasks: TaskProviderSpy, threads: PassThreads) {
         let tasks = TaskProviderSpy(defaultTimeout: .seconds(20))
         let state = EditorState(
-            rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+            rootPath: ".",
+            config: KittyConfig(),
+            taskProvider: tasks,
+            searchPool: EditorTestPool.shared
+        )
         state.bufferManager.open(
-            filePath: "/project/large.swift", fileName: "large.swift", content: lines.joined(separator: "\n"),
-            language: "swift")
+            filePath: "/project/large.swift",
+            fileName: "large.swift",
+            content: lines.joined(separator: "\n"),
+            language: "swift"
+        )
         state.restoreStateFromActiveBuffer()
         state.lastRenderRows = Self.rows
         state.scrollOffset = scrollOffset
@@ -99,7 +107,10 @@ struct EditorHighlightPipelineTests {
         defer { state.shutdown() }
         let document = RecordingDocument(TextBuffer(lines: (0 ..< 100_000).map(Self.line)))
         let session = LanguageHighlighter.makeSession(
-            language: "swift", theme: state.syntaxTheme, preferGrammar: false)
+            language: "swift",
+            theme: state.syntaxTheme,
+            preferGrammar: false
+        )
 
         let highlights = state.highlightViewport(of: document, in: 50_000 ..< 50_030)
 
@@ -181,7 +192,8 @@ struct EditorHighlightPipelineTests {
         #expect(threads.passes == [.background])
         #expect(
             state.highlightedLines[Self.lineCount - 1]
-                == [StyledSpan(text: Self.line(Self.lineCount - 1), style: comment)])
+                == [StyledSpan(text: Self.line(Self.lineCount - 1), style: comment)]
+        )
     }
 
     @Test

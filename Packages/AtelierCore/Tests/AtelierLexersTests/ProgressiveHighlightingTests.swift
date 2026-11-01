@@ -45,13 +45,19 @@ struct ProgressiveHighlightingTests {
         let source = TextLines(Self.text)
 
         let states = await ProgressiveHighlighting.run(
-            source, lexer: Self.lexer, visibleLines: 1_500 ..< 1_560, chunkLines: 256, emit: emitted.record)
+            source,
+            lexer: Self.lexer,
+            visibleLines: 1_500 ..< 1_560,
+            chunkLines: 256,
+            emit: emitted.record
+        )
 
         #expect(
             emitted.order == [
                 1_500 ..< 1_560, 1_560 ..< 1_816, 1_816 ..< 2_000, 0 ..< 256, 256 ..< 512, 512 ..< 768, 768 ..< 1_024,
                 1_024 ..< 1_280, 1_280 ..< 1_500
-            ])
+            ]
+        )
         #expect(emitted.landed(lineCount: 2_000).map { $0 ?? [] } == Self.serial)
         #expect(states.exactLines == 2_000)
     }
@@ -61,7 +67,11 @@ struct ProgressiveHighlightingTests {
         let emitted = Emitted()
 
         _ = await ProgressiveHighlighting.run(
-            TextLines(Self.text), lexer: Self.lexer, visibleLines: 1_000 ..< 1_030, emit: emitted.record)
+            TextLines(Self.text),
+            lexer: Self.lexer,
+            visibleLines: 1_000 ..< 1_030,
+            emit: emitted.record
+        )
 
         #expect(emitted.order.prefix(2) == [1_000 ..< 1_030, 1_000 ..< 1_030])
         let landed = emitted.landed(lineCount: 2_000)
@@ -77,7 +87,12 @@ struct ProgressiveHighlightingTests {
         let emitted = Emitted()
 
         _ = await ProgressiveHighlighting.run(
-            source, lexer: Self.lexer, visibleLines: 1_000 ..< 1_030, states: states, emit: emitted.record)
+            source,
+            lexer: Self.lexer,
+            visibleLines: 1_000 ..< 1_030,
+            states: states,
+            emit: emitted.record
+        )
 
         #expect(emitted.order.filter { $0 == 1_000 ..< 1_030 }.count == 1)
         #expect(emitted.landed(lineCount: 2_000)[1_000]?.map(\.role) == [.comment])
@@ -89,7 +104,10 @@ struct ProgressiveHighlightingTests {
 
         // A child task, so cancelling the task the run is in leaves the test's own alone.
         async let run = ProgressiveHighlighting.run(
-            TextLines(Self.text), lexer: Self.lexer, visibleLines: 1_900 ..< 1_950, chunkLines: 100
+            TextLines(Self.text),
+            lexer: Self.lexer,
+            visibleLines: 1_900 ..< 1_950,
+            chunkLines: 100
         ) { lines, tokens in
             emitted.record(lines, tokens)
             withUnsafeCurrentTask { $0?.cancel() }
@@ -105,15 +123,21 @@ struct ProgressiveHighlightingTests {
         let text = LexerCorpus.text(.swift, fragments: 300)
         let lines = TextLines(text)
         let request = TierRequest(
-            revision: SourceRevision(documentID: "a.swift", language: .swift, key: .content("blob")), text: text,
-            lineRanges: lines.lineRanges, visibleLines: 40 ..< 80, unit: .utf16)
+            revision: SourceRevision(documentID: "a.swift", language: .swift, key: .content("blob")),
+            text: text,
+            lineRanges: lines.lineRanges,
+            visibleLines: 40 ..< 80,
+            unit: .utf16
+        )
         let emitted = Emitted()
 
         try await LexicalTier().run(request) { update in emitted.record(update.lines, update.tokens) }
 
         let utf8 = text.utf8Span
         let whole = request.lineTokens(
-            LexicalHighlightEngine().highlight(utf8: utf8.span, language: .swift), lines: 0 ..< lines.lineCount)
+            LexicalHighlightEngine().highlight(utf8: utf8.span, language: .swift),
+            lines: 0 ..< lines.lineCount
+        )
         #expect(emitted.landed(lineCount: lines.lineCount).map { $0 ?? [] } == whole.map(Array.init))
     }
 
@@ -127,12 +151,16 @@ struct ProgressiveHighlightingTests {
         let text = lines.joined(separator: "\n") + "\n"
 
         let (tokens, states) = try await ProgressiveHighlighting.lexAll(
-            TextLines(text), lexer: Self.lexer, parallelism: parallelism)
+            TextLines(text),
+            lexer: Self.lexer,
+            parallelism: parallelism
+        )
 
         #expect(tokens == LineLexerTests.lineScan(text, language: .swift))
         #expect(states.exactLines == 6_000)
         let serial = await ProgressiveHighlighting.run(TextLines(text), lexer: Self.lexer, visibleLines: 0 ..< 0) {
-            _, _ in
+            _,
+            _ in
         }
         #expect(states == serial)
     }

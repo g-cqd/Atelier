@@ -36,12 +36,19 @@ struct PaneStorageReplacementTests {
         let attributed = NSMutableAttributedString(string: source, attributes: [.font: palette.font])
         for row in 0 ..< rows {
             attributed.addAttribute(
-                .foregroundColor, value: row.isMultiple(of: 2) ? NSColor.systemBlue : NSColor.systemOrange,
-                range: NSRange(location: row * (length + 1), length: length))
+                .foregroundColor,
+                value: row.isMultiple(of: 2) ? NSColor.systemBlue : NSColor.systemOrange,
+                range: NSRange(location: row * (length + 1), length: length)
+            )
         }
         return RenderedText(
-            side: .unified, palette: palette, attributed: NSAttributedString(attributedString: attributed),
-            rows: (0 ..< rows).map { RowMeta(kind: .context, oldNumber: $0 + 1, newNumber: $0 + 1) }, gaps: [],
-            lineStarts: (0 ..< rows).map { $0 * (length + 1) }, longestLine: length)
+            side: .unified,
+            palette: palette,
+            attributed: NSAttributedString(attributedString: attributed),
+            rows: (0 ..< rows).map { RowMeta(kind: .context, oldNumber: $0 + 1, newNumber: $0 + 1) },
+            gaps: [],
+            lineStarts: (0 ..< rows).map { $0 * (length + 1) },
+            longestLine: length
+        )
     }
 }

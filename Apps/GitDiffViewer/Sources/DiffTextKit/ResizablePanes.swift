@@ -24,7 +24,10 @@ package struct ResizablePanes<Leading: View, Trailing: View>: View {
     ///   - leading: The old pane, on the left or at the top.
     ///   - trailing: The new pane, on the right or at the bottom.
     package init(
-        axis: Axis, ratio: Binding<Double>, covered: CGFloat = 0, @ViewBuilder leading: () -> Leading,
+        axis: Axis,
+        ratio: Binding<Double>,
+        covered: CGFloat = 0,
+        @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.axis = axis
@@ -42,7 +45,11 @@ package struct ResizablePanes<Leading: View, Trailing: View>: View {
                 leading
                 trailing
                 PaneDivider(
-                    axis: axis, onDrag: { dragged(by: $0, length: length) }, onDragEnd: endDrag, onReset: reset)
+                    axis: axis,
+                    onDrag: { dragged(by: $0, length: length) },
+                    onDragEnd: endDrag,
+                    onReset: reset
+                )
             }
         }
     }
@@ -94,12 +101,16 @@ struct PaneSplitLayout: Layout {
         switch axis {
             case .horizontal:
                 subview.place(
-                    at: CGPoint(x: bounds.minX + offset, y: bounds.minY), anchor: .topLeading,
-                    proposal: ProposedViewSize(width: length, height: bounds.height))
+                    at: CGPoint(x: bounds.minX + offset, y: bounds.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: length, height: bounds.height)
+                )
             case .vertical:
                 subview.place(
-                    at: CGPoint(x: bounds.minX, y: bounds.minY + offset), anchor: .topLeading,
-                    proposal: ProposedViewSize(width: bounds.width, height: length))
+                    at: CGPoint(x: bounds.minX, y: bounds.minY + offset),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: bounds.width, height: length)
+                )
         }
     }
 }

@@ -128,10 +128,15 @@ struct ApplicationRuntimeTests {
     /// A runtime with a fixed environment and a signal spy in place of process-wide delivery.
     @MainActor
     private func makeRuntime(
-        _ connection: MockTerminalConnection, signals: SignalSessionSpy = SignalSessionSpy()
+        _ connection: MockTerminalConnection,
+        signals: SignalSessionSpy = SignalSessionSpy()
     ) -> ApplicationRuntime {
         ApplicationRuntime(
-            connection: connection, taskProvider: TaskProviderSpy(), environment: [:], makeSignals: signals.factory)
+            connection: connection,
+            taskProvider: TaskProviderSpy(),
+            environment: [:],
+            makeSignals: signals.factory
+        )
     }
 
     struct TestApp: App {
@@ -155,23 +160,34 @@ struct PixelChromeSelectionTests {
     func `a capable terminal gets its cell size and an incapable one nothing`() {
         #expect(
             ApplicationRuntime.pixelChromeCell(environment: ["KITTY_WINDOW_ID": "1"], size: size)
-                == .init(width: 8, height: 20))
+                == .init(width: 8, height: 20)
+        )
         #expect(ApplicationRuntime.pixelChromeCell(environment: ["TERM_PROGRAM": "Apple_Terminal"], size: size) == nil)
         #expect(
             ApplicationRuntime.pixelChromeCell(
-                environment: ["KITTY_WINDOW_ID": "1"], size: TerminalSize(columns: 80, rows: 24)) == nil)
+                environment: ["KITTY_WINDOW_ID": "1"],
+                size: TerminalSize(columns: 80, rows: 24)
+            ) == nil
+        )
     }
 
     @Test
     func `the environment can force pixel chrome off or on`() {
         #expect(
             ApplicationRuntime.pixelChromeCell(
-                environment: ["KITTY_WINDOW_ID": "1", "KITTYCODE_PIXEL_CHROME": "0"], size: size) == nil)
+                environment: ["KITTY_WINDOW_ID": "1", "KITTYCODE_PIXEL_CHROME": "0"],
+                size: size
+            ) == nil
+        )
         #expect(
             ApplicationRuntime.pixelChromeCell(environment: ["KITTYCODE_PIXEL_CHROME": "1"], size: size)
-                == .init(width: 8, height: 20))
+                == .init(width: 8, height: 20)
+        )
         #expect(
             ApplicationRuntime.pixelChromeCell(
-                environment: ["KITTYCODE_PIXEL_CHROME": "1"], size: TerminalSize(columns: 80, rows: 24)) == nil)
+                environment: ["KITTYCODE_PIXEL_CHROME": "1"],
+                size: TerminalSize(columns: 80, rows: 24)
+            ) == nil
+        )
     }
 }

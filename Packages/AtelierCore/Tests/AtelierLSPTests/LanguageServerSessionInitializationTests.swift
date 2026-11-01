@@ -34,7 +34,12 @@ private func capturedInitialize(configuration: LanguageServerSession.Configurati
     }
 
     async let hover = service.hover(
-        uri: "file:///workspace/a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+        uri: "file:///workspace/a.swift",
+        languageID: "swift",
+        content: "let x = 1",
+        line: 0,
+        utf16Column: 4
+    )
     await transport.sink.waitForCount(1)
     let frames = await transport.sink.all
     let envelope = try JSONDecoder().decode(InitializeEnvelope.self, from: unframe(frames[0]))
@@ -51,8 +56,10 @@ struct LanguageServerSessionInitializationTests {
     @Test
     func `a sourcekit-lsp session's initialize request turns background indexing off`() async throws {
         let configuration = LanguageServerSession.Configuration(
-            descriptor: .sourceKitLSP, serverExecutable: URL(filePath: "/usr/bin/true"),
-            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
+            descriptor: .sourceKitLSP,
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)
+        )
 
         let envelope = try await capturedInitialize(configuration: configuration)
 
@@ -65,7 +72,8 @@ struct LanguageServerSessionInitializationTests {
     func `the initialize request lists the workspace root as the session's one folder`() async throws {
         let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/true"),
-            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
+            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)
+        )
 
         let envelope = try await capturedInitialize(configuration: configuration)
 
@@ -76,7 +84,8 @@ struct LanguageServerSessionInitializationTests {
     func `a configuration without initialization options sends none`() async throws {
         let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/true"),
-            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
+            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)
+        )
 
         let envelope = try await capturedInitialize(configuration: configuration)
 
@@ -89,18 +98,26 @@ struct LanguageServerSessionInitializationTests {
         let service = LanguageServerSession(
             configuration: LanguageServerSession.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/true"),
-                workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)),
+                workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)
+            ),
             clock: TestClock()
         ) { _ in LSPConnection(transport: transport) }
 
         async let hover = service.hover(
-            uri: "file:///workspace/a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+            uri: "file:///workspace/a.swift",
+            languageID: "swift",
+            content: "let x = 1",
+            line: 0,
+            utf16Column: 4
+        )
         await transport.sink.waitForCount(1)
         let initialize = try JSONDecoder().decode(SentRequest.self, from: unframe(await transport.sink.all[0]))
         let capabilities = nestedValue(depth: LSPConnection.maximumResultDepth + 16)
         transport.deliver(
             LSPFrameCodec.frame(
-                try JSONRPCMessage.response(id: initialize.id, result: .object(["capabilities": capabilities]))))
+                try JSONRPCMessage.response(id: initialize.id, result: .object(["capabilities": capabilities]))
+            )
+        )
 
         // `initialized`, `didOpen` and the hover itself follow only a completed handshake.
         await transport.sink.waitForCount(4)

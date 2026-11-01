@@ -33,7 +33,9 @@ package struct TextKit2RowGeometry: DiffRowGeometry {
             if frame.minY > rect.maxY { return false }
             if frame.maxY < rect.minY { return true }
             let offset = contentManager.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+                from: layoutManager.documentRange.location,
+                to: fragment.rangeInElement.location
+            )
             let firstBaseline =
                 fragment.textLineFragments.first.map { $0.typographicBounds.minY + $0.glyphOrigin.y }
                 ?? frame.height * 0.75
@@ -51,7 +53,9 @@ package struct TextKit2RowGeometry: DiffRowGeometry {
         guard let rendered, rendered.lineStarts.indices.contains(row), let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager,
             let location = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+                layoutManager.documentRange.location,
+                offsetBy: rendered.lineStarts[row]
+            )
         else { return nil }
         layoutManager.ensureLayout(for: NSTextRange(location: location))
         guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }

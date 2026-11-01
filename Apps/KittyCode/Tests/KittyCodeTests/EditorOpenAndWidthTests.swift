@@ -28,7 +28,10 @@ struct EditorOpenAndWidthTests {
     /// Opens `text` in a new buffer and waits for the full pass its restore asks for, so it starts highlighted and
     /// measured.
     private func open(
-        _ text: String = Self.text, path: String = "/project/wide.txt", in state: EditorState, tasks: TaskProviderSpy
+        _ text: String = Self.text,
+        path: String = "/project/wide.txt",
+        in state: EditorState,
+        tasks: TaskProviderSpy
     ) async throws {
         state.saveStateToActiveBuffer()
         let spawned = tasks.spawnedTaskCount
@@ -45,8 +48,13 @@ struct EditorOpenAndWidthTests {
 
     private func openRead(_ loadedFile: LoadedFile, in state: EditorState) {
         state.finishOpeningFile(
-            requestID: state.nextOpenRequestID(), path: "/project/wide.txt", name: "wide.txt",
-            loadedFile: loadedFile, language: nil, modificationDate: nil)
+            requestID: state.nextOpenRequestID(),
+            path: "/project/wide.txt",
+            name: "wide.txt",
+            loadedFile: loadedFile,
+            language: nil,
+            modificationDate: nil
+        )
     }
 
     @Test

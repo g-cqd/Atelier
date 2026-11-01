@@ -65,7 +65,8 @@ public enum HighlightMerger: Sendable {
                     modifiers: token.modifiers,
                     layer: token.layer,
                     priority: token.priority
-                ))
+                )
+            )
             pos = end
         }
 

@@ -10,11 +10,17 @@ import Testing
 /// source names them.
 struct WorkingTreeStatusTests {
     private static func entry(
-        _ path: String, originalPath: String? = nil, worktree: GitStatusCode = .modified
+        _ path: String,
+        originalPath: String? = nil,
+        worktree: GitStatusCode = .modified
     ) -> GitStatusEntry {
         GitStatusEntry(
-            path: path, originalPath: originalPath, status: .modified, indexStatus: .unmodified,
-            worktreeStatus: worktree)
+            path: path,
+            originalPath: originalPath,
+            status: .modified,
+            indexStatus: .unmodified,
+            worktreeStatus: worktree
+        )
     }
 
     @Test
@@ -51,7 +57,9 @@ struct WorkingTreeStatusTests {
     @Test
     func `a folder's prefix is found through symbolic links and nothing outside the root has one`() throws {
         let base = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-prefix-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-prefix-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         let folder = base.appending(path: "Sources/App", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: base) }
@@ -63,16 +71,21 @@ struct WorkingTreeStatusTests {
         #expect(SourceLoader.prefix(of: folder, under: root) == "Sources/App/")
         #expect(SourceLoader.prefix(of: base, under: root) == "")
         #expect(
-            SourceLoader.prefix(of: base.appending(path: "Sources", directoryHint: .isDirectory), under: folder) == nil)
+            SourceLoader.prefix(of: base.appending(path: "Sources", directoryHint: .isDirectory), under: folder) == nil
+        )
         let sibling = URL(
-            filePath: String(base.path(percentEncoded: false).dropLast()) + "-sibling", directoryHint: .isDirectory)
+            filePath: String(base.path(percentEncoded: false).dropLast()) + "-sibling",
+            directoryHint: .isDirectory
+        )
         #expect(SourceLoader.prefix(of: sibling, under: base) == nil)
     }
 
     @Test(.timeLimit(.minutes(1)))
     func `a real repository's status reaches a subfolder source in the subfolder's own paths`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-worktree-status-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-worktree-status-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         let subfolder = root.appending(path: "sub", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: subfolder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -80,7 +93,9 @@ struct WorkingTreeStatusTests {
             let spec = ProcessSpec(
                 executable: GitClient.executable,
                 arguments: ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.hooksPath=/dev/null"] + arguments,
-                currentDirectory: root, environment: .inherited(overriding: GitClient.hardeningEnvironment))
+                currentDirectory: root,
+                environment: .inherited(overriding: GitClient.hardeningEnvironment)
+            )
             let output = try await TestProcesses.runner.run(spec)
             try #require(output.succeeded, "\(output.errorText)")
         }
@@ -107,7 +122,9 @@ struct WorkingTreeStatusTests {
     @Test
     func `a ref, a patch and a folder outside every repository have no working-tree status`() async throws {
         let plain = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-plain-status-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-plain-status-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: plain) }
         let loader = TestProcesses.loader

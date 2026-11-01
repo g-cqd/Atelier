@@ -17,10 +17,14 @@ struct RootRelativePathTests {
         init() throws {
             for directory in ["My Repo/Sources", "My", "repo/Sources", "repo-other/Sources"] {
                 try FileManager.default.createDirectory(
-                    atPath: temporary.file(directory), withIntermediateDirectories: true)
+                    atPath: temporary.file(directory),
+                    withIntermediateDirectories: true
+                )
             }
             try FileManager.default.createSymbolicLink(
-                atPath: temporary.file("link"), withDestinationPath: temporary.file("My Repo"))
+                atPath: temporary.file("link"),
+                withDestinationPath: temporary.file("My Repo")
+            )
             try FileManager.default.createDirectory(atPath: slashTmp + "/Sources", withIntermediateDirectories: true)
         }
 
@@ -137,7 +141,8 @@ struct RootRelativePathTests {
         ("Sources/A.swift", "Sources/A.swift"), ("./Sources/A.swift", "Sources/A.swift"), ("././A.swift", "A.swift")
     ])
     func `a relative reference is already relative to the root, without its leading dot-slash`(
-        reported: String, expected: String
+        reported: String,
+        expected: String
     ) {
         #expect(RootRelativePath(root: URL(filePath: "/repo")).relativePath(of: reported) == expected)
     }

@@ -40,7 +40,8 @@ struct TextBackendBenchmark {
                         + "new document \(Self.summary(newDocument)); smooth-scroll frame \(Self.summary(smooth)); "
                         + "page step \(Self.summary(page)); jump \(Self.summary(jump)); gutter tile "
                         + "\(Self.summary(gutter)); laid-out rows \(pane.laidOutRows()) for "
-                        + "\(pane.visibleRowCount) visible")
+                        + "\(pane.visibleRowCount) visible"
+                )
             }
         }
     }
@@ -56,8 +57,10 @@ struct TextBackendBenchmark {
         for index in stride(from: 0, to: rows, by: 17) { new[index] += " // added" }
         for index in stride(from: 11, to: rows, by: 23) { new[index] = "" }
         let text = DiffRenderer.render(
-            oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-            language: .plain)
+            oldText: old.joined(separator: "\n") + "\n",
+            newText: new.joined(separator: "\n") + "\n",
+            language: .plain
+        )
         return try #require(text.new)
     }
 
@@ -83,8 +86,11 @@ final class BackendPane {
     init(kind: TextBackendKind, showing rendered: RenderedText, wrapping: WrapMode = .viewport) {
         pane = DiffTextBackends.backend(for: kind).makePane(gutter: .new)
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 800), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 800),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 1000, height: 800))
         contentView.wantsLayer = true
         window.contentView = contentView

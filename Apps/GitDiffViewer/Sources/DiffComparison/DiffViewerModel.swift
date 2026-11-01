@@ -47,7 +47,7 @@ package final class DiffViewerModel {
     package internal(set) var scrollRequest: ScrollRequest?
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
     /// Read once per theme change: it comes from a property list on disk.
-    package private(set) var palette: DiffPalette
+    package internal(set) var palette: DiffPalette
     /// Where each open file tab's panes were scrolled, which the panes record as they leave the screen and read back
     /// when their file shows again.
     package let scrollMemory = PaneScrollMemory()
@@ -57,7 +57,7 @@ package final class DiffViewerModel {
     let pipeline: RenderPipeline
     /// Runs gap handle drags, revealing rows through ``pipeline`` one card at a time.
     let gapDrags: GapDragController
-    private let preparer: DiffPreparer
+    let preparer: DiffPreparer
     /// What one parse of each Swift side learned, shared by the intraline diff, the colour tier and hover, so a side
     /// is parsed once for all three (PERF-11 step 3).
     let syntaxFacts = SyntaxFactsStore()
@@ -125,14 +125,22 @@ package final class DiffViewerModel {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: syntaxFacts)
         self.preparer = preparer
         let pipeline = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
+            preparer: preparer,
+            taskProvider: taskProvider,
+            options: Self.options(settings, palette: palette),
             decorator: DiffDecorator(
                 tiers: Self.tiers(store: syntaxFacts, semantic: semanticColor, gate: colorGate),
-                clock: decorationClock, store: syntaxFacts))
+                clock: decorationClock,
+                store: syntaxFacts
+            )
+        )
         self.pipeline = pipeline
         gapDrags = GapDragController(
-            taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },
-            apply: { pipeline.setExpansion($0, for: $1) })
+            taskProvider: taskProvider,
+            clock: clock,
+            expansion: { pipeline.expansion(of: $0) },
+            apply: { pipeline.setExpansion($0, for: $1) }
+        )
         left = SideState(label: "Left", reader: reader, taskProvider: taskProvider)
         right = SideState(label: "Right", reader: reader, taskProvider: taskProvider)
         left.onReload = { [weak self] in self?.timer.begin() }
@@ -144,8 +152,10 @@ package final class DiffViewerModel {
         left.onBadgeStatesChanged = { [weak self] in self?.updateUnifiedBadgeStates() }
         right.onBadgeStatesChanged = { [weak self] in self?.updateUnifiedBadgeStates() }
         pipeline.configure(
-            options: Self.options(settings, palette: palette), context: settings.contextLines,
-            isolatesChanges: settings.isolatesChanges)
+            options: Self.options(settings, palette: palette),
+            context: settings.contextLines,
+            isolatesChanges: settings.isolatesChanges
+        )
         pipeline.onEvent = { [weak self] event in self?.handle(event) }
         followColorSettings()
         semanticColor.isEnabled = settings.semanticColor
@@ -180,7 +190,10 @@ package final class DiffViewerModel {
 
     private func sections(changes: [PathNode], ignored: [PathNode]) -> [ExplorerSection] {
         let compared = ExplorerSection(
-            kind: .changes, title: settings.showsChangesOnly ? "Changes" : "Files", nodes: changes)
+            kind: .changes,
+            title: settings.showsChangesOnly ? "Changes" : "Files",
+            nodes: changes
+        )
         guard settings.showsIgnoredFiles else { return [compared] }
         return [compared, ExplorerSection(kind: .ignored, title: "Ignored Files", nodes: ignored)]
     }
@@ -290,13 +303,20 @@ package final class DiffViewerModel {
             failedLoads = []
             if let listing = loaded.leftListing {
                 left.load(
-                    loaded.left, repository: loaded.info, listing: listing)
+                    loaded.left,
+                    repository: loaded.info,
+                    listing: listing
+                )
             } else {
                 left.load(loaded.left, repository: loaded.info)
             }
             if let listing = loaded.rightListing {
                 right.load(
-                    loaded.right, repository: loaded.info, listing: listing, badgeStates: loaded.rightBadgeStates)
+                    loaded.right,
+                    repository: loaded.info,
+                    listing: listing,
+                    badgeStates: loaded.rightBadgeStates
+                )
             } else {
                 right.load(loaded.right, repository: loaded.info)
             }
@@ -341,8 +361,12 @@ package final class DiffViewerModel {
         }
         switchFailure = nil
         comparison = Comparison(
-            left: left.entries, right: right.entries, leftSource: left.source, rightSource: right.source,
-            leftIgnored: left.ignoredEntries ?? [], rightIgnored: right.ignoredEntries ?? []
+            left: left.entries,
+            right: right.entries,
+            leftSource: left.source,
+            rightSource: right.source,
+            leftIgnored: left.ignoredEntries ?? [],
+            rightIgnored: right.ignoredEntries ?? []
         )
         updateUnifiedBadgeStates()
         // No `folding.reset()`: folds are keyed by path, so they survive a reload or re-comparison; `render()` drops
@@ -407,8 +431,13 @@ package final class DiffViewerModel {
         let style = settings.treeStyle
         treesTask = taskProvider.task {
             let built = await ExplorerTrees.buildOffMain(
-                comparison: comparison, leftTree: leftTree, rightTree: rightTree,
-                showsChangesOnly: showsChangesOnly, showsIgnoredFiles: showsIgnoredFiles, style: style)
+                comparison: comparison,
+                leftTree: leftTree,
+                rightTree: rightTree,
+                showsChangesOnly: showsChangesOnly,
+                showsIgnoredFiles: showsIgnoredFiles,
+                style: style
+            )
             guard generation == treesGeneration else { return }
             trees = built
             guard settings.showsIgnoredFiles, !left.isLoading, !right.isLoading else { return }
@@ -452,7 +481,8 @@ package final class DiffViewerModel {
         FileChangeSummary(
             kind: commitScope?.file(atPath: leftPath)?.summaryKind
                 ?? comparison.summaryKind(for: leftPath, directoryStatus: trees.statuses[leftPath]),
-            addedLines: rendered?.addedLines ?? 0, removedLines: rendered?.removedLines ?? 0
+            addedLines: rendered?.addedLines ?? 0,
+            removedLines: rendered?.removedLines ?? 0
         )
     }
 
@@ -482,185 +512,5 @@ package final class DiffViewerModel {
 
     package func setAllCollapsed(_ collapsed: Bool) {
         folding.setAll(foldableFiles, collapsed: collapsed)
-    }
-
-    // MARK: Rendering
-
-    /// Reloads and re-diffs the selection; call when the diff options change.
-    package func renderSelection() {
-        timer.begin()
-        render()
-    }
-
-    /// Re-lays out the current diffs; call when only the layout, palette, or line height changed.
-    package func relayout() {
-        timer.begin()
-        configurePipeline()
-        guard !pipeline.prepared.isEmpty else { return render() }
-        navigator.reset()
-        pipeline.relayout(keepingScroll: false)
-    }
-
-    /// Feeds a gap handle's drag to ``gapDrags``; each step renders only the card it drags.
-    package func handleGapDrag(_ event: GapDragEvent) {
-        timer.abandon()
-        gapDrags.handle(event)
-    }
-
-    package func resetRevealedLines() {
-        timer.abandon()
-        pipeline.resetGaps()
-    }
-
-    package func expansion(of key: GapKey) -> GapExpansion {
-        pipeline.expansion(of: key)
-    }
-
-    /// Renders the selection. Only a selection the user makes passes `keepingPublished: false`; everything else
-    /// (a reload, a re-comparison, a new diff option) keeps what is published on screen until its replacement lands.
-    func render(keepingPublished: Bool = true) {
-        configurePipeline()
-        guard let leftSource = left.source, let rightSource = right.source else {
-            setCommitScope(nil)
-            pipeline.clear()
-            return
-        }
-        let scope = selectedPath.flatMap(selectionScope(for:))
-        setCommitScope(scope)
-        // A side still loading, or failed, renders the selection once a load lands; what is published stays until
-        // then, marked when the user asked for something else meanwhile.
-        guard !left.isLoading, !right.isLoading, failedLoads.isEmpty else {
-            if !keepingPublished { showsPreviousSelection = true }
-            return
-        }
-        // A commit's own change, or the working tree's, reads sides of its own (D39).
-        if let scope { return render(scope, keepingPublished: keepingPublished) }
-        let target: RenderPipeline.Target
-        if isShowingCombinedFiles {
-            let paths =
-                selectedPath.flatMap { commitGroupPaths(forSelection: $0, limit: Self.combinedFileLimit) }
-                ?? comparison.changedPaths(under: selectedPath, limit: Self.combinedFileLimit)
-            // A fold of a file the list no longer holds would skew the fold count the toolbar reads.
-            folding.keepOnly(Set(paths))
-            guard !paths.isEmpty else {
-                showsPreviousSelection = false
-                pipeline.clear()
-                timer.finish()
-                return
-            }
-            target = .cards(paths.map(comparison.pair(for:)))
-        } else if let selectedPath {
-            // A file under Earlier Changes is the comparison's own pair: no listed commit touched it.
-            target = .file(comparison.pair(for: ExplorerSection.path(inSelection: selectedPath) ?? selectedPath))
-        } else {
-            showsPreviousSelection = false
-            pipeline.clear()
-            timer.finish()
-            return
-        }
-        PhaseTrace.log("render \(target.pairs.count) files")
-        pipeline.render(
-            target, left: leftSource, right: rightSource, granularity: settings.granularity,
-            heuristics: settings.diffHeuristics, keepingPublished: keepingPublished)
-    }
-
-    private func configurePipeline() {
-        pipeline.configure(
-            options: Self.options(settings, palette: palette), context: settings.contextLines,
-            isolatesChanges: settings.isolatesChanges)
-    }
-
-    private static func options(_ settings: ViewerSettings, palette: DiffPalette) -> DiffRenderer.Options {
-        DiffRenderer.Options(
-            granularity: settings.granularity,
-            palette: palette,
-            lineHeightMultiple: settings.lineHeightMultiple,
-            sides: settings.mode == .inline ? [.unified] : [.old, .new],
-            compactsInline: settings.mode == .inline && settings.compactsInlineView
-        )
-    }
-
-    /// The palette of the selected Xcode theme, or the system one when none is selected or it cannot be read, with
-    /// changes in the chosen diff colours (book D18).
-    private static func palette(for settings: ViewerSettings) -> DiffPalette {
-        let theme = settings.themePath.flatMap(XcodeThemeLibrary.theme(at:)).map(DiffPalette.init(theme:)) ?? .system
-        return theme.with(diffColors: settings.diffColors)
-    }
-
-    private func handle(_ event: RenderPipeline.Event) {
-        switch event {
-            case .published(let id, let isFirst):
-                if isFirst {
-                    timer.awaitDisplay(of: id)
-                    showsPreviousSelection = false
-                }
-                if isShowingCombinedFiles {
-                    folding.applyDefaults(to: renderedFiles.map(\.path), status: shownStatus(ofPath:))
-                    // With the scroll to the first change off, the file opens at its top (DIFF-08).
-                } else if isFirst, settings.scrollsToFirstChange, let rendered, rendered.changeCount > 0,
-                    !rendered.keepsScrollPosition, !returnsToRememberedPosition
-                {
-                    navigator.focusFirst()
-                    requestScrollToCurrentChange()
-                }
-                // A Findings row opened this file: its line wins over the first change.
-                if let row = takeFindingReveal() { scrollRequest = ScrollRequest(row: row) }
-                updateHoverDocs()
-            case .decorated:
-                break
-            case .finished:
-                folding.listCompleted()
-                timer.finish()
-                prefetch()
-                updateHoverDocs()
-            case .failed:
-                timer.finish()
-        }
-    }
-
-    /// Prepares every changed file of the sources in the background, so any later selection is served from the cache.
-    private func prefetch() {
-        guard let leftSource = left.source, let rightSource = right.source, !left.isLoading, !right.isLoading else {
-            return
-        }
-        let pairs = comparison.changedPaths(under: nil, limit: Self.combinedFileLimit).map(comparison.pair(for:))
-        preparer.prefetch(
-            pairs, left: leftSource, right: rightSource, granularity: settings.granularity,
-            heuristics: settings.diffHeuristics)
-    }
-
-    // MARK: Settings
-
-    private func settingsChanged(_ change: ViewerSettings.Change) {
-        switch change {
-            case .trees:
-                rebuildTrees()
-                refreshCommitGroups(force: false)
-            case .diff: renderSelection()
-            case .layout: relayout()
-            case .palette:
-                palette = Self.palette(for: settings)
-                relayout()
-            // The explorers' placement is an appearance setting, and grouping applies to the merged sidebar only.
-            case .appearance: followAppearanceSettingsChange()
-            // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
-            case .diagnostics: break
-            case .freshness: freshness?.setEnabled(settings.autoRefresh)
-        }
-    }
-
-    // MARK: Timing
-
-    /// Records that a pane put the render with `id` on screen. Panes call this from their update pass, inside
-    /// SwiftUI's own observation tracking: touching the timer there, even to check the id, registers a mutation of
-    /// a value the same pass depends on, which SwiftUI reports as a graph cycle and then crashes on. Everything
-    /// waits for the next turn of the run loop.
-    package func noteDisplayed(_ id: RenderedDiff.ID) {
-        taskProvider.task {
-            pipeline.decorateDisplayed(id)
-            guard let elapsed = timer.displayed(id) else { return }
-            PhaseTrace.log("displayed")
-            timer.record(firstDisplay: elapsed)
-        }
     }
 }

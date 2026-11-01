@@ -74,7 +74,8 @@ struct ProductionFlattener {
             FlatSequence(
                 steps: steps + other.steps,
                 dynamicPrecedence: abs(other.dynamicPrecedence) > abs(dynamicPrecedence)
-                    ? other.dynamicPrecedence : dynamicPrecedence)
+                    ? other.dynamicPrecedence : dynamicPrecedence
+            )
         }
     }
 
@@ -105,7 +106,10 @@ struct ProductionFlattener {
         for (name, rule) in rules {
             for sequence in try flattener.expand(rule, ruleName: name, scope: Scope(), atEnd: true) {
                 let production = FlatProduction(
-                    name: name, steps: sequence.steps, dynamicPrecedence: sequence.dynamicPrecedence)
+                    name: name,
+                    steps: sequence.steps,
+                    dynamicPrecedence: sequence.dynamicPrecedence
+                )
                 try flattener.register(production)
                 productions.append(production)
             }
@@ -137,8 +141,12 @@ struct ProductionFlattener {
             case .optional(let content):
                 let expanded = try expand(content, ruleName: ruleName, scope: scope, atEnd: atEnd)
                 let alternativeCount = try checkedAlternativeCount(
-                    lhs: expanded.count, rhs: 1, operation: { $0.addingReportingOverflow($1) },
-                    construct: "Optional", ruleName: ruleName)
+                    lhs: expanded.count,
+                    rhs: 1,
+                    operation: { $0.addingReportingOverflow($1) },
+                    construct: "Optional",
+                    ruleName: ruleName
+                )
                 try ensureAlternativeCount(alternativeCount, construct: "Optional", ruleName: ruleName)
                 return [FlatSequence.empty] + expanded
             case .repeat(let content):
@@ -205,10 +213,18 @@ struct ProductionFlattener {
         var result = [FlatSequence.empty]
         for (offset, member) in members.enumerated() {
             let memberExpanded = try expand(
-                member, ruleName: ruleName, scope: scope, atEnd: atEnd && offset == members.count - 1)
+                member,
+                ruleName: ruleName,
+                scope: scope,
+                atEnd: atEnd && offset == members.count - 1
+            )
             let alternativeCount = try checkedAlternativeCount(
-                lhs: result.count, rhs: memberExpanded.count, operation: { $0.multipliedReportingOverflow(by: $1) },
-                construct: "Sequence", ruleName: ruleName)
+                lhs: result.count,
+                rhs: memberExpanded.count,
+                operation: { $0.multipliedReportingOverflow(by: $1) },
+                construct: "Sequence",
+                ruleName: ruleName
+            )
             try ensureAlternativeCount(alternativeCount, construct: "Sequence", ruleName: ruleName)
             var combined: [FlatSequence] = []
             combined.reserveCapacity(alternativeCount)
@@ -232,8 +248,12 @@ struct ProductionFlattener {
         for member in members {
             let expanded = try expand(member, ruleName: ruleName, scope: scope, atEnd: atEnd)
             let alternativeCount = try checkedAlternativeCount(
-                lhs: alternatives.count, rhs: expanded.count, operation: { $0.addingReportingOverflow($1) },
-                construct: "Choice", ruleName: ruleName)
+                lhs: alternatives.count,
+                rhs: expanded.count,
+                operation: { $0.addingReportingOverflow($1) },
+                construct: "Choice",
+                ruleName: ruleName
+            )
             try ensureAlternativeCount(alternativeCount, construct: "Choice", ruleName: ruleName)
             alternatives.append(contentsOf: expanded)
         }
@@ -249,7 +269,11 @@ struct ProductionFlattener {
         for alternative in inner {
             try appendAuxiliary(
                 FlatProduction(
-                    name: helper, steps: alternative.steps, dynamicPrecedence: alternative.dynamicPrecedence))
+                    name: helper,
+                    steps: alternative.steps,
+                    dynamicPrecedence: alternative.dynamicPrecedence
+                )
+            )
         }
         // An empty alternative would make `helper → helper`, a cycle that matches nothing new.
         for alternative in inner where !alternative.steps.isEmpty {
@@ -257,7 +281,9 @@ struct ProductionFlattener {
                 FlatProduction(
                     name: helper,
                     steps: [FlatStep(symbol: helper)] + alternative.steps,
-                    dynamicPrecedence: alternative.dynamicPrecedence))
+                    dynamicPrecedence: alternative.dynamicPrecedence
+                )
+            )
         }
         return helper
     }

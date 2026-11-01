@@ -12,7 +12,10 @@ enum BundledJSONFixture {
     static func parserAndQuery() throws -> (parser: GLRParser, query: Query) {
         let (compiled, query) = try artifacts.get()
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         return (parser, query)
     }
 
@@ -27,7 +30,8 @@ enum BundledJSONFixture {
             .appending(path: "Packages/AtelierCore/Sources/AtelierGrammarCorpus/Grammars/json")
         let grammar = try GrammarLoader.parse(Data(contentsOf: directory.appending(path: "grammar.json")))
         let query = try QueryParser.parse(
-            String(contentsOf: directory.appending(path: "highlights.scm"), encoding: .utf8))
+            String(contentsOf: directory.appending(path: "highlights.scm"), encoding: .utf8)
+        )
         return (try ParseTableCompiler.compile(grammar), query)
     }
 }

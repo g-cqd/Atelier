@@ -15,7 +15,9 @@ import TerminalKitText
 public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {
     let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
     let scrollStep = scrollLinesPerTick(
-        visibleRows: max(1, layout.contentRows), configured: state.config.editor.scrollLines)
+        visibleRows: max(1, layout.contentRows),
+        configured: state.config.editor.scrollLines
+    )
 
     let treeRect = Rect(
         x: layout.activityBarWidth,
@@ -37,7 +39,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
 
         if mouse.kind == .press, mouse.button == .left,
             let itemIndex = contextMenuItemIndex(
-                at: mouse, state: state, columns: pipeline.columns, rows: pipeline.rows)
+                at: mouse,
+                state: state,
+                columns: pipeline.columns,
+                rows: pipeline.rows
+            )
         {
             state.performContextMenuSelection(at: itemIndex)
             return
@@ -85,7 +91,8 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
         state.scrollDragState = nil
         let now = state.clock.erasedNow()
         let momentumBlockInterval = Duration.milliseconds(
-            max(0, state.config.editor.scrollMomentumBlockMilliseconds))
+            max(0, state.config.editor.scrollMomentumBlockMilliseconds)
+        )
         let isVerticalWheel = mouse.button == .scrollUp || mouse.button == .scrollDown
         let isHorizontalEditorWheel =
             mouse.col - 1 >= layout.editorStart && !state.config.editor.wrapLines
@@ -151,10 +158,16 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
             let hStep = state.config.editor.scrollHorizontalStep
             if mouse.button == .scrollUp || mouse.button == .scrollLeft {
                 state.isScrolling = scrollEditorHorizontally(
-                    state: state, editorRect: editorRect, delta: -hStep)
+                    state: state,
+                    editorRect: editorRect,
+                    delta: -hStep
+                )
             } else if mouse.button == .scrollDown || mouse.button == .scrollRight {
                 state.isScrolling = scrollEditorHorizontally(
-                    state: state, editorRect: editorRect, delta: hStep)
+                    state: state,
+                    editorRect: editorRect,
+                    delta: hStep
+                )
             }
         } else if isEditorVerticalWheel {
             let didScroll = scrollVertically(
@@ -292,7 +305,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                     state.inFileSearch?.isCaseSensitive.toggle()
                     if var search = state.inFileSearch {
                         scheduleInFileSearch(
-                            &search, state: state, pipeline: pipeline, moveCursorOnCompletion: false)
+                            &search,
+                            state: state,
+                            pipeline: pipeline,
+                            moveCursorOnCompletion: false
+                        )
                         state.inFileSearch = search
                     }
                     if state.searchTarget == .workspace {
@@ -303,7 +320,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                     state.inFileSearch?.isRegex.toggle()
                     if var search = state.inFileSearch {
                         scheduleInFileSearch(
-                            &search, state: state, pipeline: pipeline, moveCursorOnCompletion: false)
+                            &search,
+                            state: state,
+                            pipeline: pipeline,
+                            moveCursorOnCompletion: false
+                        )
                         state.inFileSearch = search
                     }
                     if state.searchTarget == .workspace {
@@ -339,7 +360,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                         + (relativeRow - resultsStartRow)
                     if let (filePath, match) = workspaceFlatResult(at: flatIdx, state: state) {
                         openWorkspaceSearchResult(
-                            filePath: filePath, match: match, state: state, pipeline: pipeline)
+                            filePath: filePath,
+                            match: match,
+                            state: state,
+                            pipeline: pipeline
+                        )
                     }
                 }
             }
@@ -349,7 +374,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
 
     if !isRightClick,
         beginScrollDragIfNeeded(
-            mouse: mouse, treeRect: treeRect, editorRect: editorRect, state: state)
+            mouse: mouse,
+            treeRect: treeRect,
+            editorRect: editorRect,
+            state: state
+        )
     {
         return
     }
@@ -370,7 +399,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
             state.showEditorContextMenu()
         } else {
             handleEditorClick(
-                mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
+                mouseRow: mouse.row,
+                mouseCol: mouse.col,
+                editorRect: editorRect,
+                state: state
+            )
         }
     } else if clickRegion == nil && contentRow >= 0 {
         // Fallback: manual rect check when FocusMap is not available
@@ -386,7 +419,11 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                 state.showEditorContextMenu()
             } else {
                 handleEditorClick(
-                    mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
+                    mouseRow: mouse.row,
+                    mouseCol: mouse.col,
+                    editorRect: editorRect,
+                    state: state
+                )
             }
         }
     }
@@ -465,7 +502,10 @@ private func scrollVertically(
     )
     guard extraLines > 0 else { return true }
     enqueueAcceleratedScroll(
-        lineDelta: direction == .scrollUp ? -extraLines : extraLines, target: target, state: state)
+        lineDelta: direction == .scrollUp ? -extraLines : extraLines,
+        target: target,
+        state: state
+    )
     return true
 }
 
@@ -611,7 +651,9 @@ private func enqueueAcceleratedScroll(
     // A detached loop that hops to the main actor only to apply a step, so it can't starve other main-actor work;
     // the interval is read once, sparing a hop per tick.
     let intervalMilliseconds = max(
-        1, state.config.editor.scrollAccelerationStepIntervalMilliseconds)
+        1,
+        state.config.editor.scrollAccelerationStepIntervalMilliseconds
+    )
     let taskProvider = state.taskProvider
     let clock = state.clock
     state.scrollAccelerationTask = taskProvider.detachedTask(role: .work) { [weak state] in
@@ -799,7 +841,10 @@ private func isWordChar(_ char: Character) -> Bool {
 
 @MainActor
 private func handleSelectionDrag(
-    mouse: MouseEvent, editorRect: Rect, layout: LayoutMetrics, state: EditorState
+    mouse: MouseEvent,
+    editorRect: Rect,
+    layout: LayoutMetrics,
+    state: EditorState
 ) {
     let contentTop = layout.contentStartRow
     let contentBottom = layout.contentStartRow + layout.contentRows
@@ -820,8 +865,11 @@ private func handleSelectionDrag(
 
     let editor = makeEditorView(state: state)
     if let pos = TextEditorLayout.textPosition(
-        for: editor, in: editorRect, row: mouse.row - 1, col: mouse.col - 1)
-    {
+        for: editor,
+        in: editorRect,
+        row: mouse.row - 1,
+        col: mouse.col - 1
+    ) {
         state.selection?.head = pos
         state.cursorRow = pos.row
         state.cursorCol = pos.col
@@ -841,7 +889,9 @@ private func beginScrollDragIfNeeded(
 
     let treeRowCount = state.cachedFlatTree.count
     if let indicatorRect = TreePanelLayout.verticalScrollIndicatorRect(
-        rowCount: treeRowCount, in: treeRect),
+        rowCount: treeRowCount,
+        in: treeRect
+    ),
         pointerCol >= indicatorRect.x,
         pointerCol < indicatorRect.maxX,
         let gripOffset = TreePanelLayout.scrollGripOffset(
@@ -866,15 +916,24 @@ private func beginScrollDragIfNeeded(
 
     let editor = makeEditorView(state: state)
     if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(
-        for: editor, in: editorRect),
+        for: editor,
+        in: editorRect
+    ),
         pointerCol >= indicatorRect.x,
         pointerCol < indicatorRect.maxX,
         let gripOffset = TextEditorLayout.scrollGripOffset(
-            for: editor, in: editorRect, pointerRow: pointerRow)
+            for: editor,
+            in: editorRect,
+            pointerRow: pointerRow
+        )
     {
         state.scrollDragState = EditorState.ScrollDragState(target: .editor, gripOffset: gripOffset)
         let pos = TextEditorLayout.scrollPosition(
-            for: editor, in: editorRect, pointerRow: pointerRow, gripOffset: gripOffset)
+            for: editor,
+            in: editorRect,
+            pointerRow: pointerRow,
+            gripOffset: gripOffset
+        )
         state.scrollOffset = pos.lineOffset
         state.wrapRowOffset = pos.wrapRowOffset
         state.mode = .editor
@@ -884,21 +943,32 @@ private func beginScrollDragIfNeeded(
 
     // Check horizontal scroll indicator drag
     if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
-        for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+        for: editor,
+        in: editorRect,
+        maxLineWidth: state.maxLineWidth
     ),
         pointerRow >= hRect.y, pointerRow < hRect.maxY,
         pointerCol >= hRect.x, pointerCol < hRect.maxX
     {
         let hMetrics = TextEditorLayout.horizontalScrollMetrics(
-            for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+            for: editor,
+            in: editorRect,
+            maxLineWidth: state.maxLineWidth
         )
         if let gripOffset = HorizontalScrollIndicatorLayout.gripOffset(
-            for: hMetrics, in: hRect, pointerCol: pointerCol
+            for: hMetrics,
+            in: hRect,
+            pointerCol: pointerCol
         ) {
             state.scrollDragState = EditorState.ScrollDragState(
-                target: .editorHorizontal, gripOffset: gripOffset)
+                target: .editorHorizontal,
+                gripOffset: gripOffset
+            )
             state.hScrollOffset = HorizontalScrollIndicatorLayout.offset(
-                for: hMetrics, in: hRect, pointerCol: pointerCol, gripOffset: gripOffset
+                for: hMetrics,
+                in: hRect,
+                pointerCol: pointerCol,
+                gripOffset: gripOffset
             )
             state.mode = .editor
             state.isScrolling = true
@@ -932,7 +1002,11 @@ private func updateScrollDrag(
         case .editor:
             let editor = makeEditorView(state: state)
             let pos = TextEditorLayout.scrollPosition(
-                for: editor, in: editorRect, pointerRow: pointerRow, gripOffset: dragState.gripOffset)
+                for: editor,
+                in: editorRect,
+                pointerRow: pointerRow,
+                gripOffset: dragState.gripOffset
+            )
             state.scrollOffset = pos.lineOffset
             state.wrapRowOffset = pos.wrapRowOffset
             state.mode = .editor
@@ -940,13 +1014,20 @@ private func updateScrollDrag(
             let editor = makeEditorView(state: state)
             let pointerCol = mouse.col - 1
             if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
-                for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+                for: editor,
+                in: editorRect,
+                maxLineWidth: state.maxLineWidth
             ) {
                 let hMetrics = TextEditorLayout.horizontalScrollMetrics(
-                    for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+                    for: editor,
+                    in: editorRect,
+                    maxLineWidth: state.maxLineWidth
                 )
                 state.hScrollOffset = HorizontalScrollIndicatorLayout.offset(
-                    for: hMetrics, in: hRect, pointerCol: pointerCol, gripOffset: dragState.gripOffset
+                    for: hMetrics,
+                    in: hRect,
+                    pointerCol: pointerCol,
+                    gripOffset: dragState.gripOffset
                 )
             }
             state.mode = .editor

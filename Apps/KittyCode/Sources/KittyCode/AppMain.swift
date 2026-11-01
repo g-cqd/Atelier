@@ -79,8 +79,12 @@ struct KittyCodeEntry {
         let processRunner = HardenedProcessRunner(pool: offloadPool, clock: clock)
 
         let state = EditorState(
-            rootPath: launchConfig.rootPath, config: config, taskProvider: taskProvider, clock: clock,
-            searchPool: offloadPool)
+            rootPath: launchConfig.rootPath,
+            config: config,
+            taskProvider: taskProvider,
+            clock: clock,
+            searchPool: offloadPool
+        )
         state.readOnly = launchConfig.readOnly
 
         await state.loadInitialTree()
@@ -91,7 +95,9 @@ struct KittyCodeEntry {
 
         if config.git.enabled,
             let repositoryRoot = await GitStatusProvider.repositoryRoot(
-                for: launchConfig.rootPath, runner: processRunner)
+                for: launchConfig.rootPath,
+                runner: processRunner
+            )
         {
             let gitProvider = GitStatusProvider(rootPath: repositoryRoot, runner: processRunner)
             state.fileStatusProvider = gitProvider
@@ -134,8 +140,12 @@ struct KittyCodeEntry {
         if config.fileWatcherEnabled {
             let watcher = FileWatcher()
             let integration = FileWatcherIntegration(
-                watcher: watcher, workspace: state.workspace, delegate: state,
-                offloadFileRead: { read in try await offloadPool.run(read) }, taskProvider: taskProvider)
+                watcher: watcher,
+                workspace: state.workspace,
+                delegate: state,
+                offloadFileRead: { read in try await offloadPool.run(read) },
+                taskProvider: taskProvider
+            )
             integration.start()
             state.fileWatcherIntegration = integration
             fileWatcherIntegration = integration
@@ -215,7 +225,10 @@ struct KittyCodeEntry {
                 },
                 onEvent: { event, pipeline in
                     let shouldContinue = handleEvent(
-                        event: event, state: state, pipeline: pipeline)
+                        event: event,
+                        state: state,
+                        pipeline: pipeline
+                    )
                     if shouldContinue {
                         renderFrame(pipeline: pipeline, state: state)
                     }
@@ -253,7 +266,8 @@ struct KittyCodeEntry {
     }
 
     private static func applyOverrides(
-        from launchConfig: CLIArguments.LaunchConfig, to config: inout KittyConfig
+        from launchConfig: CLIArguments.LaunchConfig,
+        to config: inout KittyConfig
     ) {
         if let gitEnabled = launchConfig.gitEnabled {
             config.git.enabled = gitEnabled

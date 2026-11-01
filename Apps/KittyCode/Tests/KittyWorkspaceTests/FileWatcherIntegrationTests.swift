@@ -49,14 +49,18 @@ final class WatcherDelegateSpy: FileWatcherDelegate {
     private(set) var replaced: [DocumentBuffer.ReplacedContents] = []
 
     func fileWatcherDidReloadActiveBuffer(
-        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+        buffer: DocumentBuffer,
+        content: String,
+        replaced: consuming DocumentBuffer.ReplacedContents
     ) {
         self.replaced.append(replaced)
         calls.record("reload active \(buffer.fileName)")
     }
 
     func fileWatcherDidReloadInactiveBuffer(
-        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+        buffer: DocumentBuffer,
+        content: String,
+        replaced: consuming DocumentBuffer.ReplacedContents
     ) {
         self.replaced.append(replaced)
         calls.record("reload inactive \(buffer.fileName)")
@@ -84,14 +88,27 @@ struct WatchedWorkspace {
         try Data(bytes.utf8).write(to: URL(fileURLWithPath: path))
         workspace = WorkspaceSession(rootPath: root)
         workspace.bufferManager.open(
-            filePath: path, fileName: "notes.txt", content: content, language: nil, lineEnding: lineEnding)
+            filePath: path,
+            fileName: "notes.txt",
+            content: content,
+            language: nil,
+            lineEnding: lineEnding
+        )
         workspace.bufferManager.open(
-            filePath: root + "/scratch.txt", fileName: "scratch.txt", content: "", language: nil)
+            filePath: root + "/scratch.txt",
+            fileName: "scratch.txt",
+            content: "",
+            language: nil
+        )
         notes = workspace.bufferManager.buffers[0]
         notes.lastModifiedDate = WorkspaceFileLoading.modificationDate(ofFileAt: path)
         integration = FileWatcherIntegration(
-            watcher: watcher, workspace: workspace, delegate: delegate, offloadFileRead: { read in try read() },
-            taskProvider: taskProvider)
+            watcher: watcher,
+            workspace: workspace,
+            delegate: delegate,
+            offloadFileRead: { read in try read() },
+            taskProvider: taskProvider
+        )
     }
 
     /// The path FSEvents reports for `notes.txt`: under `/private/var/...` where the buffer says `/var/...`.
@@ -102,10 +119,16 @@ struct WatchedWorkspace {
     /// Edits `notes.txt` in its buffer as typing would: a recorded undo step, a new version, dirty.
     func edit(to text: String) {
         let before = BufferEditSnapshot(
-            textBuffer: notes.textBuffer, textCursor: notes.textCursor, lineEnding: notes.lineEnding)
+            textBuffer: notes.textBuffer,
+            textCursor: notes.textCursor,
+            lineEnding: notes.lineEnding
+        )
         notes.textBuffer = TextBuffer(text)
         let after = BufferEditSnapshot(
-            textBuffer: notes.textBuffer, textCursor: notes.textCursor, lineEnding: notes.lineEnding)
+            textBuffer: notes.textBuffer,
+            textCursor: notes.textCursor,
+            lineEnding: notes.lineEnding
+        )
         notes.editHistory.recordChange(from: before, to: after, coalescingWindow: nil)
         notes.documentVersion += 1
         notes.isDirty = notes.editHistory.isDirty(current: after)
@@ -116,8 +139,14 @@ struct WatchedWorkspace {
         reportFailure: @escaping @MainActor (String) -> Void = { _ in }
     ) -> AutoSaveManager {
         AutoSaveManager(
-            workspace: workspace, fileWatcherIntegration: integration, autoSaveInterval: 1, saveActiveBuffer: {},
-            offloadDiskWrite: offloadDiskWrite, reportFailure: reportFailure, taskProvider: taskProvider)
+            workspace: workspace,
+            fileWatcherIntegration: integration,
+            autoSaveInterval: 1,
+            saveActiveBuffer: {},
+            offloadDiskWrite: offloadDiskWrite,
+            reportFailure: reportFailure,
+            taskProvider: taskProvider
+        )
     }
 
     func removeDirectory() {

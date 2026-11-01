@@ -27,9 +27,11 @@ extension HighlightMerger {
         defaultStyle: Style
     ) -> [StyledSpan] {
         resolveSpans(
-            tokens.lazy.map { (byteRange: $0.byteRange, role: $0.role, modifiers: $0.modifiers) }, utf8: utf8,
+            tokens.lazy.map { (byteRange: $0.byteRange, role: $0.role, modifiers: $0.modifiers) },
+            utf8: utf8,
             resolver: resolver,
-            defaultStyle: defaultStyle)
+            defaultStyle: defaultStyle
+        )
     }
 
     /// Resolve one line's tokens, as ``LineTokens`` holds them, to styled spans over that line's bytes.
@@ -41,9 +43,11 @@ extension HighlightMerger {
         defaultStyle: Style
     ) -> [StyledSpan] {
         resolveSpans(
-            tokens.lazy.map { (byteRange: $0.range, role: $0.role, modifiers: $0.modifiers) }, utf8: utf8,
+            tokens.lazy.map { (byteRange: $0.range, role: $0.role, modifiers: $0.modifiers) },
+            utf8: utf8,
             resolver: resolver,
-            defaultStyle: defaultStyle)
+            defaultStyle: defaultStyle
+        )
     }
 
     private static func resolveSpans(
@@ -97,8 +101,12 @@ extension HighlightMerger {
             let end = index + 1 < lineStarts.count ? lineStarts[index + 1] - 1 : utf8.count
             lines.append(
                 resolveToSpans(
-                    tokens: lineTokens[index], utf8: utf8[start ..< end], resolver: resolver,
-                    defaultStyle: defaultStyle))
+                    tokens: lineTokens[index],
+                    utf8: utf8[start ..< end],
+                    resolver: resolver,
+                    defaultStyle: defaultStyle
+                )
+            )
         }
         return lines
     }

@@ -8,7 +8,10 @@ public final class GrammarParser: Sendable {
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
         self.parser = GLRParser(
-            parseTable: parseTable, lexTable: lexTable, productions: productions)
+            parseTable: parseTable,
+            lexTable: lexTable,
+            productions: productions
+        )
     }
 
     /// Parse `source` and return the resulting ``SyntaxTree``.

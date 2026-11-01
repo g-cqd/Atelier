@@ -11,7 +11,10 @@ struct GLRParserDynamicPrecedenceTests {
     func `Of two error-free parses, the one of higher dynamic precedence wins`(first: Int, second: Int) throws {
         let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(Self.grammar(first, second).utf8)))
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("x")
 

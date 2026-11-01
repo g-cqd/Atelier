@@ -86,7 +86,8 @@ struct ScrollingSettingsTests {
 
         #expect(
             Set(overrides.map(\.label))
-                == [SettingLabel.bouncesAtEdges, SettingLabel.scrollsPastEnd, SettingLabel.scrollsToFirstChange])
+                == [SettingLabel.bouncesAtEdges, SettingLabel.scrollsPastEnd, SettingLabel.scrollsToFirstChange]
+        )
         for override in overrides { #expect(override.value != override.defaultValue) }
     }
 }

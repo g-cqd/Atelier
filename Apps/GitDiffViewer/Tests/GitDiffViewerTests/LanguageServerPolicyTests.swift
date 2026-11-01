@@ -27,7 +27,9 @@ private final class ScratchRepositories {
 
     init() throws {
         parent = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-lsp-policy-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-lsp-policy-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
     }
 
@@ -35,7 +37,9 @@ private final class ScratchRepositories {
     func repository(_ name: String) throws -> URL {
         let root = parent.appending(path: name, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(
-            at: root.appending(path: ".git", directoryHint: .isDirectory), withIntermediateDirectories: true)
+            at: root.appending(path: ".git", directoryHint: .isDirectory),
+            withIntermediateDirectories: true
+        )
         return try #require(LanguageServerRegistry.canonicalRoot(root))
     }
 
@@ -60,7 +64,9 @@ struct LanguageServerPolicyTests {
 
     /// A policy over `defaults` whose user trusts every one of `roots`, as answering their prompts does.
     private func makePolicy(
-        defaults: UserDefaults, locate: @escaping LanguageServerPolicy.Locate, trusting roots: [URL]
+        defaults: UserDefaults,
+        locate: @escaping LanguageServerPolicy.Locate,
+        trusting roots: [URL]
     ) throws -> LanguageServerPolicy {
         let trust = RepositoryTrust(defaults: defaults)
         for root in roots {
@@ -162,12 +168,14 @@ struct LanguageServerPolicyTests {
         trust.requestTrust(for: root)
         trust.answer(try #require(trust.claimNextRequest()), trusts: true)
         let policy = LanguageServerPolicy(
-            trust: trust, defaults: defaults,
+            trust: trust,
+            defaults: defaults,
             locate: { server, location in
                 asked.withLock { $0.append(server.id) }
                 return location?.customPath.map { URL(filePath: $0) } ?? LocateSpy.executable
             },
-            environment: { server, _ in server.runtimeExecutableName.map { ["PATH": "/\($0)/bin"] } })
+            environment: { server, _ in server.runtimeExecutableName.map { ["PATH": "/\($0)/bin"] } }
+        )
 
         #expect(await policy.configuration(forRoot: root, server: .gopls) == nil)
         let typeScript = try #require(await policy.configuration(forRoot: root, server: .typeScriptLanguageServer))

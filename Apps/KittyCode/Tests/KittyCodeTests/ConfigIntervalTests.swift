@@ -49,7 +49,10 @@ struct ConfigIntervalTests {
     private static func decode(_ json: String) throws -> KittyConfig {
         let decoder = JSONDecoder()
         decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-            positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+            positiveInfinity: "inf",
+            negativeInfinity: "-inf",
+            nan: "nan"
+        )
         return try decoder.decode(KittyConfig.self, from: Data(json.utf8))
     }
 
@@ -105,8 +108,13 @@ struct ConfigIntervalTests {
         let clock = TestClock()
         let counter = RefreshCounter()
         let manager = GitRefreshManager(
-            fileStatusProvider: counter, gitDecorationManager: nil, refreshInterval: config.git.refreshInterval,
-            invalidateRender: {}, taskProvider: TaskProviderSpy(), clock: clock)
+            fileStatusProvider: counter,
+            gitDecorationManager: nil,
+            refreshInterval: config.git.refreshInterval,
+            invalidateRender: {},
+            taskProvider: TaskProviderSpy(),
+            clock: clock
+        )
         manager.start()
         defer { manager.stop() }
 

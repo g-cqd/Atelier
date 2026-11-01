@@ -55,7 +55,8 @@ struct WorkingTreeHashesTests {
                 == [
                     "a.swift": Self.blobID("let a = 1\n"), "b.swift": Self.blobID("let b = 22\n"),
                     "c.swift": Self.blobID("let c = 3\n")
-                ])
+                ]
+        )
     }
 
     @Test

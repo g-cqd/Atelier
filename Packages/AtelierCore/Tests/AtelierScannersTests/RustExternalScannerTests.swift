@@ -25,7 +25,8 @@ struct RustExternalScannerTests {
                 "_raw_string_literal_end", "float_literal", "_outer_block_doc_comment_marker",
                 "_inner_block_doc_comment_marker", "_block_comment_content", "_line_doc_content",
                 "_error_sentinel"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["rust"] != nil)
     }
 

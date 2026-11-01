@@ -14,8 +14,11 @@ public struct InitializeParams: Sendable, Encodable {
     public let workspaceFolders: [WorkspaceFolder]?
 
     public init(
-        processId: Int?, rootUri: String?, capabilities: ClientCapabilities = ClientCapabilities(),
-        initializationOptions: JSONValue? = nil, workspaceFolders: [WorkspaceFolder]? = nil
+        processId: Int?,
+        rootUri: String?,
+        capabilities: ClientCapabilities = ClientCapabilities(),
+        initializationOptions: JSONValue? = nil,
+        workspaceFolders: [WorkspaceFolder]? = nil
     ) {
         self.processId = processId
         self.rootUri = rootUri
@@ -249,7 +252,10 @@ extension Hover: Decodable {
             return items.map(\.markdown).joined(separator: "\n\n")
         }
         throw DecodingError.dataCorruptedError(
-            forKey: .contents, in: container, debugDescription: "Unrecognized hover contents shape")
+            forKey: .contents,
+            in: container,
+            debugDescription: "Unrecognized hover contents shape"
+        )
     }
 }
 
@@ -403,10 +409,12 @@ enum SemanticTokensDeltaResult: Decodable, Sendable {
         if let edits = try container.decodeIfPresent([Edit].self, forKey: .edits) {
             self = .delta(
                 resultId: resultId,
-                edits: edits.map { .init(start: $0.start, deleteCount: $0.deleteCount, data: $0.data ?? []) })
+                edits: edits.map { .init(start: $0.start, deleteCount: $0.deleteCount, data: $0.data ?? []) }
+            )
         } else {
             self = .full(
-                SemanticTokensResult(resultId: resultId, data: try container.decode([UInt32].self, forKey: .data)))
+                SemanticTokensResult(resultId: resultId, data: try container.decode([UInt32].self, forKey: .data))
+            )
         }
     }
 }
@@ -468,7 +476,11 @@ struct InitializeResult: Decodable, Sendable {
         }
         semanticTokens = SemanticTokensSupport(
             legend: SemanticTokensLegend(
-                tokenTypes: provider.legend.tokenTypes, tokenModifiers: provider.legend.tokenModifiers),
-            full: provider.full?.isSupported ?? false, delta: provider.full?.delta ?? false)
+                tokenTypes: provider.legend.tokenTypes,
+                tokenModifiers: provider.legend.tokenModifiers
+            ),
+            full: provider.full?.isSupported ?? false,
+            delta: provider.full?.delta ?? false
+        )
     }
 }

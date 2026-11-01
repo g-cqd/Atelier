@@ -111,7 +111,9 @@ struct TextViewRenderingTests {
 
         StyledTextView([
             StyledTextView.StyledTextSpan(
-                text: "Longer", style: Style(fg: .rgb(r: 255, g: 0, b: 0)))
+                text: "Longer",
+                style: Style(fg: .rgb(r: 255, g: 0, b: 0))
+            )
         ])
         .render(to: &buffer, in: rect, context: context)
 

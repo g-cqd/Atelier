@@ -47,7 +47,8 @@ public enum SDKPlatform: String, Sendable, Hashable, CaseIterable {
     /// an iOS project; otherwise the Mac, whose SDK resolves platform-neutral code as well as any. `declared` is read
     /// only when the imports do not decide, since finding it reads the project's manifests.
     public static func forFile(
-        importing imports: [String], inProjectDeclaring declared: @autoclosure () -> Set<SDKPlatform>
+        importing imports: [String],
+        inProjectDeclaring declared: @autoclosure () -> Set<SDKPlatform>
     ) -> SDKPlatform {
         let named = allCases.filter { platform in imports.contains { platform.exclusiveModules.contains($0) } }
         if named.count == 1, let platform = named.first { return platform }
@@ -108,7 +109,8 @@ public struct SDKLocation: Sendable, Equatable {
             let spec = ProcessSpec(
                 executable: URL(filePath: "/usr/bin/xcrun"),
                 arguments: ["--sdk", platform.sdkName, "--show-sdk-\(property)"],
-                timeout: .seconds(30))
+                timeout: .seconds(30)
+            )
             do {
                 let output = try await runner.run(spec)
                 guard output.succeeded else {
@@ -219,7 +221,8 @@ enum ProjectPlatforms {
     /// directory's own manifests declare, ``declared(inDirectory:)`` or a memo of it, for each directory from the file's
     /// own up to the repository's root, the first directory that holds a `.git`. Empty when none declares a platform.
     static func declared(
-        forFileAt fileURL: URL, reading read: (String) -> Set<SDKPlatform> = declared(inDirectory:)
+        forFileAt fileURL: URL,
+        reading read: (String) -> Set<SDKPlatform> = declared(inDirectory:)
     ) -> Set<SDKPlatform> {
         var directory = fileURL.deletingLastPathComponent().standardizedFileURL.path(percentEncoded: false)
         while true {

@@ -16,7 +16,10 @@ struct ExternalScannerIntegrationTests {
         )
         let result = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: result.parseTable, lexTable: result.lexTable, productions: result.productions)
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
 
         let tree = try parser.parse("{}", externalScanner: BraceScanner())
 
@@ -29,12 +32,17 @@ struct ExternalScannerIntegrationTests {
     @Test
     func `a literal external takes priority over its internal token`() throws {
         let grammar = GrammarDefinition(
-            name: "literal_external", rules: [("source", .string("x"))],
-            extras: [], externals: [.string("x")])
+            name: "literal_external",
+            rules: [("source", .string("x"))],
+            extras: [],
+            externals: [.string("x")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable,
-            productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("xy", externalScanner: LongLiteralScanner())
 
@@ -52,7 +60,10 @@ struct ExternalScannerIntegrationTests {
         )
         let result = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: result.parseTable, lexTable: result.lexTable, productions: result.productions)
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
 
         let tree = try parser.parse("x", externalScanner: DecliningScanner())
 
@@ -65,10 +76,15 @@ struct ExternalScannerIntegrationTests {
         let grammar = GrammarDefinition(
             name: "scanner_backtracks",
             rules: [("source", .choice([.symbol("EXTERNAL"), .seq([.string("x"), .string("z")])]))],
-            extras: [], externals: [.symbol("EXTERNAL")])
+            extras: [],
+            externals: [.symbol("EXTERNAL")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("xz", externalScanner: AdvancingDecliningScanner())
 
@@ -79,11 +95,17 @@ struct ExternalScannerIntegrationTests {
     @Test
     func `an in-range unoffered external token enters error recovery`() throws {
         let grammar = GrammarDefinition(
-            name: "unoffered_external", rules: [("source", .seq([.symbol("A"), .string("x")]))],
-            extras: [], externals: [.symbol("A"), .symbol("B")])
+            name: "unoffered_external",
+            rules: [("source", .seq([.symbol("A"), .string("x")]))],
+            extras: [],
+            externals: [.symbol("A"), .symbol("B")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("bx", externalScanner: UnofferedScanner())
 
@@ -94,8 +116,11 @@ struct ExternalScannerIntegrationTests {
     @Test(arguments: [0, 1, 2])
     func `malformed external table dimensions throw before scanning`(damage: Int) throws {
         let grammar = GrammarDefinition(
-            name: "malformed_externals", rules: [("source", .symbol("A"))],
-            extras: [], externals: [.symbol("A")])
+            name: "malformed_externals",
+            rules: [("source", .symbol("A"))],
+            extras: [],
+            externals: [.symbol("A")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         var table = compiled.parseTable
         switch damage {
@@ -104,7 +129,10 @@ struct ExternalScannerIntegrationTests {
             default: table.externalIsExtra = []
         }
         let parser = GLRParser(
-            parseTable: table, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: table,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         #expect(throws: ParseError.parsingFailed("External scanner table is inconsistent")) {
             try parser.parse("a", externalScanner: TableScanner())
@@ -116,10 +144,15 @@ struct ExternalScannerIntegrationTests {
         let grammar = GrammarDefinition(
             name: "marked_extent",
             rules: [("source", .seq([.symbol("EXTERNAL"), .string("b")]))],
-            extras: [], externals: [.symbol("EXTERNAL")])
+            extras: [],
+            externals: [.symbol("EXTERNAL")]
+        )
         let result = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: result.parseTable, lexTable: result.lexTable, productions: result.productions)
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
 
         let tree = try parser.parse("ab", externalScanner: MarkingScanner())
 
@@ -137,7 +170,10 @@ struct ExternalScannerIntegrationTests {
         )
         let result = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: result.parseTable, lexTable: result.lexTable, productions: result.productions)
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
 
         let tree = try parser.parse("ab", externalScanner: AutomaticSemicolonScanner())
 
@@ -158,10 +194,14 @@ struct ExternalScannerIntegrationTests {
                     ])
                 )
             ],
-            externals: [.symbol("INDENT"), .symbol("DEDENT")])
+            externals: [.symbol("INDENT"), .symbol("DEDENT")]
+        )
         let result = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: result.parseTable, lexTable: result.lexTable, productions: result.productions)
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
 
         let tree = try parser.parse("a\n  b\nc", externalScanner: IndentationScanner())
 
@@ -177,7 +217,10 @@ struct ExternalScannerIntegrationTests {
         let lexTable = try ParseTableCompiler.compile(grammar).lexTable
         let terminals = ["\"a\"", "X", "Y", "Z", "$end"]
         let table = ParseTable(
-            stateCount: 5, symbols: terminals, terminals: terminals, nonTerminals: [],
+            stateCount: 5,
+            symbols: terminals,
+            terminals: terminals,
+            nonTerminals: [],
             actions: [
                 [.conflict([.shift(1), .shift(2)]), .error, .error, .error, .error],
                 [.error, .shift(3), .error, .error, .error],
@@ -186,15 +229,19 @@ struct ExternalScannerIntegrationTests {
                 [.error, .error, .error, .error, .accept]
             ],
             gotos: [[], [], [], [], []],
-            externalNames: ["X", "Y", "Z"], externalSymbols: ["X", "Y", "Z"],
+            externalNames: ["X", "Y", "Z"],
+            externalSymbols: ["X", "Y", "Z"],
             validExternals: [
                 [false, false, false], [true, false, false],
                 [false, true, false], [false, false, true], [false, false, false]
             ],
-            externalIsExtra: [false, false, false])
+            externalIsExtra: [false, false, false]
+        )
         let parser = GLRParser(
-            parseTable: table, lexTable: lexTable,
-            productions: [ProductionRule(name: "source", symbolCount: 0)])
+            parseTable: table,
+            lexTable: lexTable,
+            productions: [ProductionRule(name: "source", symbolCount: 0)]
+        )
 
         let tree = try parser.parse("ab!", externalScanner: ForkStateScanner())
 
@@ -205,11 +252,17 @@ struct ExternalScannerIntegrationTests {
     @Test
     func `error recovery offers every external symbol to the scanner`() throws {
         let grammar = GrammarDefinition(
-            name: "recovery", rules: [("source", .string("a"))],
-            extras: [], externals: [.symbol("EXTERNAL")])
+            name: "recovery",
+            rules: [("source", .string("a"))],
+            extras: [],
+            externals: [.symbol("EXTERNAL")]
+        )
         let result = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: result.parseTable, lexTable: result.lexTable, productions: result.productions)
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
         let scanner = RecoveryScanner()
 
         _ = try parser.parse("?a", externalScanner: scanner)

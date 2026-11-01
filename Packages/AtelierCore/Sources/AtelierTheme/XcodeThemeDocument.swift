@@ -49,8 +49,12 @@ public struct XcodeThemeDocument: Sendable, Hashable {
         return SyntaxTheme(
             name: name,
             plainText: ThemeStyle(foreground: colors["xcode.syntax.plain"], font: fonts["xcode.syntax.plain"]),
-            background: background, selection: selection, font: fonts["xcode.syntax.plain"],
-            lineHeightMultiple: lineHeightMultiple, roles: roles)
+            background: background,
+            selection: selection,
+            font: fonts["xcode.syntax.plain"],
+            lineHeightMultiple: lineHeightMultiple,
+            roles: roles
+        )
     }
 
     /// Xcode's syntax keys and the roles they colour. A more specific key is listed after the general one so it

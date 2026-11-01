@@ -41,8 +41,10 @@ extension DiffGutterView {
             let hoveredScope, rendered.rows.indices.contains(rows.first)
         else { return nil }
         let key = ScopeFoldKey(
-            fileIndex: rendered.rows[rows.first].fileIndex, isOld: hoveredScope.isOld,
-            firstLine: rows.scope.lines.lowerBound)
+            fileIndex: rendered.rows[rows.first].fileIndex,
+            isOld: hoveredScope.isOld,
+            firstLine: rows.scope.lines.lowerBound
+        )
         return .fold([key: rows.scope.lines.upperBound])
     }
 
@@ -86,7 +88,10 @@ extension DiffGutterView {
                 else { return nil }
                 let lines = decorations.scopes[scope.index].lines
                 let key = ScopeFoldKey(
-                    fileIndex: rendered.rows[row].fileIndex, isOld: scope.isOld, firstLine: lines.lowerBound)
+                    fileIndex: rendered.rows[row].fileIndex,
+                    isOld: scope.isOld,
+                    firstLine: lines.lowerBound
+                )
                 return .fold([key: lines.upperBound])
             case .unfoldInnermost:
                 return row.flatMap(rendered.fold(atRow:)).map { .unfold([$0.key]) }
@@ -97,7 +102,10 @@ extension DiffGutterView {
                 for scope in scopes.scopes where scope.kind == .function {
                     guard let first = rendered.rowIndex(ofLine: scope.lines.lowerBound, old: isOld) else { continue }
                     let key = ScopeFoldKey(
-                        fileIndex: rendered.rows[first].fileIndex, isOld: isOld, firstLine: scope.lines.lowerBound)
+                        fileIndex: rendered.rows[first].fileIndex,
+                        isOld: isOld,
+                        firstLine: scope.lines.lowerBound
+                    )
                     folds[key] = scope.lines.upperBound
                 }
                 return folds.isEmpty ? nil : .fold(folds)
@@ -161,7 +169,11 @@ extension DiffGutterView {
         forEachRow(in: unobscuredRect(of: visibleRect)) { frame, _, rowIndex, y, _ in
             let height = frame.height - rendered.bandSpacing(afterRow: rowIndex)
             let ribbon = NSRect(
-                x: ribbonX - Self.ribbonReach, y: y, width: bounds.width - ribbonX + Self.ribbonReach, height: height)
+                x: ribbonX - Self.ribbonReach,
+                y: y,
+                width: bounds.width - ribbonX + Self.ribbonReach,
+                height: height
+            )
             if let fold = rendered.fold(atRow: rowIndex) {
                 let area = rowIndex == fold.bandRow ? NSRect(x: 0, y: y, width: bounds.width, height: height) : ribbon
                 addCursorRect(area, cursor: .pointingHand)
@@ -176,7 +188,8 @@ extension DiffTextView {
     /// This pane with its scopes folded and unfolded through `onScopeFold`, and its ribbon shown or hidden
     /// (DIFF-03).
     package func folding(
-        showsRibbon: Bool = true, _ onScopeFold: @escaping (ScopeFoldRequest) -> Void
+        showsRibbon: Bool = true,
+        _ onScopeFold: @escaping (ScopeFoldRequest) -> Void
     ) -> DiffTextView {
         var pane = self
         pane.onScopeFold = onScopeFold
@@ -189,7 +202,8 @@ extension EmbeddedDiffTextView {
     /// This card pane with its scopes folded and unfolded through `onScopeFold`, and its ribbon shown or hidden
     /// (DIFF-03).
     package func folding(
-        showsRibbon: Bool = true, _ onScopeFold: @escaping (ScopeFoldRequest) -> Void
+        showsRibbon: Bool = true,
+        _ onScopeFold: @escaping (ScopeFoldRequest) -> Void
     ) -> EmbeddedDiffTextView {
         var pane = self
         pane.onScopeFold = onScopeFold

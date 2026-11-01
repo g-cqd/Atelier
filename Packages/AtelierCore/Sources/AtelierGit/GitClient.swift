@@ -57,7 +57,10 @@ public struct GitClient: Sendable {
     ///   - gate: Where the configuration verdict of a repository is read and cached; the shared one unless a test
     ///     wants a cache of its own.
     public init(
-        repository: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .strict,
+        repository: URL,
+        runner: any ProcessRunner,
+        timeout: Duration? = nil,
+        isolation: GitIsolation = .strict,
         gate: GitConfigGate = .shared
     ) {
         self.repository = repository
@@ -70,14 +73,22 @@ public struct GitClient: Sendable {
     /// The root of the repository `url` lies in, or nil when it lies in none, when its configuration is refused, or
     /// when git does not answer within `timeout`, a budget on the runner's clock that nil leaves open.
     public static func repositoryRoot(
-        containing url: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .strict,
+        containing url: URL,
+        runner: any ProcessRunner,
+        timeout: Duration? = nil,
+        isolation: GitIsolation = .strict,
         gate: GitConfigGate = .shared
     ) async -> URL? {
         let directory = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
         guard
             let data = try? await run(
-                ["rev-parse", "--show-toplevel"], in: directory, runner: runner, timeout: timeout,
-                isolation: isolation, gate: gate)
+                ["rev-parse", "--show-toplevel"],
+                in: directory,
+                runner: runner,
+                timeout: timeout,
+                isolation: isolation,
+                gate: gate
+            )
         else { return nil }
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : URL(filePath: path, directoryHint: .isDirectory)
@@ -101,7 +112,8 @@ public struct GitClient: Sendable {
     public func tree(at ref: String, isSupported: @Sendable (String) -> Bool) async throws -> [GitTreeEntry] {
         GitParsers.tree(
             try await run(["ls-tree", "-r", "-l", "-z", "--end-of-options", try Self.checked(ref)]),
-            isSupported: isSupported)
+            isSupported: isSupported
+        )
     }
 
     /// The branch and every path that is not clean, untracked files listed one by one, and ignored files unless
@@ -116,7 +128,8 @@ public struct GitClient: Sendable {
             try await run([
                 "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all",
                 includingIgnored ? "--ignored=matching" : "--ignored=no", "--ignore-submodules=dirty"
-            ]))
+            ])
+        )
     }
 
     /// The paths among `paths`, relative to ``repository``, that git ignores, judged by one `git check-ignore`
@@ -129,11 +142,21 @@ public struct GitClient: Sendable {
         let names = paths.filter { !$0.isEmpty && !$0.hasPrefix(":") && !$0.utf8.contains(0) }
         guard !names.isEmpty else { return [] }
         let verdict = try await Self.approvedConfiguration(
-            in: repository, runner: runner, timeout: timeout, isolation: isolation, gate: gate)
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: isolation,
+            gate: gate
+        )
         let output = try await Self.execute(
             ["check-ignore", "-z", "--stdin"],
-            input: Data((names.joined(separator: "\0") + "\0").utf8), in: repository, runner: runner, timeout: timeout,
-            isolation: isolation, extraConfiguration: Self.mitigationFlags(for: verdict, isolation: isolation))
+            input: Data((names.joined(separator: "\0") + "\0").utf8),
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: isolation,
+            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: isolation)
+        )
         // check-ignore exits with 1 when it ignores none of the paths, and with 128 when it fails.
         switch output.terminationStatus {
             case 0: return Set(GitParsers.paths(output.standardOutput))
@@ -185,12 +208,15 @@ public struct GitClient: Sendable {
                 [
                     "diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=dirty", "--name-status", "-M",
                     "-z", "--diff-filter=R", "--end-of-options", try Self.checked(from)
-                ] + (try to.map { [try Self.checked($0)] } ?? [])))
+                ] + (try to.map { [try Self.checked($0)] } ?? [])
+            )
+        )
     }
 
     private func references(pattern: String...) async throws -> [String] {
         GitParsers.references(
-            try await run(["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate"] + pattern))
+            try await run(["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate"] + pattern)
+        )
     }
 
     /// Local and remote-tracking branches, most recently committed first, without the rest of ``info()``.
@@ -207,7 +233,8 @@ public struct GitClient: Sendable {
     /// program on every commit that carries a `gpgsig` header; the pinned `gpg.program` is the second layer.
     private func recentCommits(limit: Int) async throws -> [GitCommit] {
         GitParsers.commits(
-            try await run(["log", "--no-show-signature", "--format=%H%x1f%h%x1f%s", "-n", String(limit)]))
+            try await run(["log", "--no-show-signature", "--format=%H%x1f%h%x1f%s", "-n", String(limit)])
+        )
     }
 
     /// The repository's remotes, one per name, with their `fetch` URL; a remote with only a `push` line is left
@@ -222,7 +249,8 @@ public struct GitClient: Sendable {
             try await run([
                 "rev-list", "--left-right", "--count", "--end-of-options",
                 "\(try Self.checked(local))...\(try Self.checked(upstream))"
-            ]))
+            ])
+        )
     }
 
     /// Fetches from `remote`, `refspecs` when given, pruning stale remote-tracking branches on request. Runs under
@@ -236,12 +264,20 @@ public struct GitClient: Sendable {
     /// - Throws: ``GitError/unsupportedRemoteURL(_:)`` for a remote with no URL or a URL of another scheme,
     ///   ``GitError/refusedConfiguration(_:)`` when the repository's configuration is refused.
     public func fetch(
-        remote: String = "origin", refspecs: [String] = [], prune: Bool = false, timeout: Duration = .seconds(120)
+        remote: String = "origin",
+        refspecs: [String] = [],
+        prune: Bool = false,
+        timeout: Duration = .seconds(120)
     ) async throws {
         let name = try Self.checked(remote)
         let checkedRefspecs = try refspecs.map(Self.checked)
         let verdict = try await Self.approvedConfiguration(
-            in: repository, runner: runner, timeout: timeout, isolation: .networking, gate: gate)
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: .networking,
+            gate: gate
+        )
         guard let configured = verdict.value(forKey: "remote.\(name).url") else {
             throw GitError.unsupportedRemoteURL("\(name) has no URL")
         }
@@ -258,8 +294,13 @@ public struct GitClient: Sendable {
             ["fetch"] + (prune ? ["--prune"] : []) + ["--no-recurse-submodules", "--end-of-options", url]
             + (try effective.map(Self.checked))
         _ = try await Self.spawn(
-            arguments, in: repository, runner: runner, timeout: timeout, isolation: .networking,
-            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: .networking))
+            arguments,
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: .networking,
+            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: .networking)
+        )
     }
 
     /// A ref, object id or path as git may see it on the command line: not empty, not option-shaped, and free of
@@ -274,8 +315,14 @@ public struct GitClient: Sendable {
 
     func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
         try await Self.run(
-            arguments, input: input, in: repository, runner: runner, timeout: timeout, isolation: isolation,
-            gate: gate)
+            arguments,
+            input: input,
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: isolation,
+            gate: gate
+        )
     }
 
     /// Runs git once the repository's configuration has been approved, and returns how it exited, for a command
@@ -285,10 +332,20 @@ public struct GitClient: Sendable {
     ///   not thrown.
     func runReadingStatus(_ arguments: [String]) async throws -> ProcessOutput {
         let verdict = try await Self.approvedConfiguration(
-            in: repository, runner: runner, timeout: timeout, isolation: isolation, gate: gate)
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: isolation,
+            gate: gate
+        )
         return try await Self.execute(
-            arguments, in: repository, runner: runner, timeout: timeout, isolation: isolation,
-            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: isolation))
+            arguments,
+            in: repository,
+            runner: runner,
+            timeout: timeout,
+            isolation: isolation,
+            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: isolation)
+        )
     }
 
     /// Where git lives: `GDV_GIT` when it names an executable, else the first `git` on `PATH` or in the usual
@@ -303,79 +360,6 @@ public struct GitClient: Sendable {
         excludedPaths: ["/usr/bin"]
     )
     .resolve("git")
-
-    /// Runs git once the repository's configuration has been approved, and returns its standard output.
-    /// - Throws: ``GitError/refusedConfiguration(_:)`` before git runs when the configuration is refused; otherwise
-    ///   as ``spawn(_:input:in:runner:timeout:isolation:extraConfiguration:)``.
-    private static func run(
-        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
-        timeout: Duration? = nil, isolation: GitIsolation = .strict, gate: GitConfigGate = .shared
-    ) async throws -> Data {
-        let verdict = try await approvedConfiguration(
-            in: directory, runner: runner, timeout: timeout, isolation: isolation, gate: gate)
-        return try await spawn(
-            arguments, input: input, in: directory, runner: runner, timeout: timeout, isolation: isolation,
-            extraConfiguration: mitigationFlags(for: verdict, isolation: isolation))
-    }
-
-    /// The repository's configuration verdict, read through `gate` and cached there.
-    /// - Throws: ``GitError/refusedConfiguration(_:)`` when a key falls outside ``GitConfigPolicy``'s allowlist, so
-    ///   that no command runs in that repository at all.
-    static func approvedConfiguration(
-        in directory: URL, runner: any ProcessRunner, timeout: Duration?, isolation: GitIsolation,
-        gate: GitConfigGate
-    ) async throws -> GitConfigVerdict {
-        let verdict = try await gate.verdict(in: directory, isolation: isolation) {
-            try await spawn(
-                GitConfigPolicy.listingArguments, in: directory, runner: runner, timeout: timeout,
-                isolation: isolation)
-        }
-        guard verdict.isApproved else { throw GitError.refusedConfiguration(verdict.refusedKeys) }
-        return verdict
-    }
-
-    /// The `-c` flags one repository's verdict adds to its commands: every filter driver it defines blanked, and,
-    /// for a fetch, the credential helpers defined outside the repository put back after the pins reset the list.
-    static func mitigationFlags(for verdict: GitConfigVerdict, isolation: GitIsolation) -> [String] {
-        var flags = GitConfigPolicy.filterBlankingFlags(for: verdict.filterDrivers)
-        if isolation == .networking {
-            flags += verdict.userCredentialHelpers.flatMap { ["-c", "credential.helper=\($0)"] }
-        }
-        return flags
-    }
-
-    /// Runs git and returns its standard output; a non-zero exit becomes a ``GitError`` carrying its standard error,
-    /// a runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
-    private static func spawn(
-        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
-        timeout: Duration? = nil, isolation: GitIsolation = .strict, extraConfiguration: [String] = []
-    ) async throws -> Data {
-        let output = try await execute(
-            arguments, input: input, in: directory, runner: runner, timeout: timeout, isolation: isolation,
-            extraConfiguration: extraConfiguration)
-        guard output.succeeded else { throw GitError.commandFailed(output.errorText) }
-        return output.standardOutput
-    }
-
-    /// Runs git with the isolation's flags and environment and returns how it exited, for the caller to judge; a
-    /// runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
-    private static func execute(
-        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
-        timeout: Duration? = nil, isolation: GitIsolation = .strict, extraConfiguration: [String] = []
-    ) async throws -> ProcessOutput {
-        PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
-        defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
-        let spec = ProcessSpec(
-            executable: executable, arguments: isolation.configurationFlags + extraConfiguration + arguments,
-            currentDirectory: directory, environment: isolation.environment, standardInput: input, timeout: timeout)
-        do {
-            return try await runner.run(spec)
-        } catch let cancellation as CancellationError {
-            throw cancellation
-        } catch {
-            throw GitError.commandFailed("could not run git: \(error)")
-        }
-    }
 }
 
 extension GitCommit {

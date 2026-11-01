@@ -163,7 +163,8 @@ private struct KittyCodeCommand: ParsableCommand {
 
     @Option(
         name: [.customShort("c"), .long],
-        help: ArgumentHelp("Config file path.", valueName: "path"))
+        help: ArgumentHelp("Config file path.", valueName: "path")
+    )
     public var config: String?
 
     @Option(help: ArgumentHelp("Keybinding mode: nano, vim, kittycode.", valueName: "mode"))
@@ -183,7 +184,8 @@ private struct KittyCodeCommand: ParsableCommand {
             let allowed = ["nano", "vim", "kittycode"]
             guard allowed.contains(mode) else {
                 throw ValidationError(
-                    "unknown mode '\(mode)' — expected 'nano', 'vim', or 'kittycode'")
+                    "unknown mode '\(mode)' — expected 'nano', 'vim', or 'kittycode'"
+                )
             }
         }
         if let tabSize, tabSize <= 0 {

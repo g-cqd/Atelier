@@ -75,7 +75,8 @@ struct CardListHoverScrollTests {
         card.bodyHeight = paneScrollView.frame.height
         card.stickyGap = 0
         let host = NSView(
-            frame: NSRect(x: 0, y: cardTop, width: 800, height: headerHeight + paneScrollView.frame.height))
+            frame: NSRect(x: 0, y: cardTop, width: 800, height: headerHeight + paneScrollView.frame.height)
+        )
         card.frame = host.bounds
         host.addSubview(card)
         let document = FlippedDocument(frame: NSRect(x: 0, y: 0, width: 800, height: 3000))
@@ -85,8 +86,11 @@ struct CardListHoverScrollTests {
         list.hasVerticalScroller = true
         list.documentView = document
         let window = NSWindow(
-            contentRect: NSRect(x: 200, y: 300, width: 800, height: 300), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 200, y: 300, width: 800, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView?.addSubview(list)
         retainedWindows.append(window)
         card.layoutSubtreeIfNeeded()
@@ -96,7 +100,13 @@ struct CardListHoverScrollTests {
         controller.resolve = { _ in HoverDocument(summary: NSAttributedString(string: "docs")) }
         controller.attach(to: textView) { rendered }
         return SUT(
-            list: list, textView: textView, window: window, controller: controller, panel: panel, rendered: rendered)
+            list: list,
+            textView: textView,
+            window: window,
+            controller: controller,
+            panel: panel,
+            rendered: rendered
+        )
     }
 
     /// Column 8 of `row`, inside that row's identifier, in the text view's coordinates.
@@ -104,7 +114,8 @@ struct CardListHoverScrollTests {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: sut.rendered.palette.font]).width
         return NSPoint(
             x: DiffPaneMetrics.lineFragmentPadding + 8.5 * charWidth,
-            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * sut.rendered.lineHeight)
+            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * sut.rendered.lineHeight
+        )
     }
 
     /// Rests the pointer on `row`'s identifier until the panel shows.

@@ -20,7 +20,11 @@ private func makeContext(
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
     let state = EditorState(
-        rootPath: ".", config: config, taskProvider: TaskProviderSpy(), searchPool: EditorTestPool.shared)
+        rootPath: ".",
+        config: config,
+        taskProvider: TaskProviderSpy(),
+        searchPool: EditorTestPool.shared
+    )
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(
@@ -67,7 +71,11 @@ struct WorkspaceSearchIntegrationTests {
 
         // Shift+Tab to cycle target
         let tabKey = KeyEvent(
-            keyCode: AsciiKey.tab, modifiers: .shift, eventType: .press, associatedText: "")
+            keyCode: AsciiKey.tab,
+            modifiers: .shift,
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(tabKey, state: state, pipeline: pipeline)
         #expect(state.searchTarget == .workspace)
 
@@ -84,8 +92,11 @@ struct WorkspaceSearchIntegrationTests {
         // Type to get matches
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -94,7 +105,11 @@ struct WorkspaceSearchIntegrationTests {
 
         // Tab → results
         let tabKey = KeyEvent(
-            keyCode: AsciiKey.tab, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: AsciiKey.tab,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(tabKey, state: state, pipeline: pipeline)
         #expect(state.searchPanelFocus == .resultsList)
 
@@ -115,8 +130,11 @@ struct WorkspaceSearchIntegrationTests {
         // Type to get matches
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -125,7 +143,11 @@ struct WorkspaceSearchIntegrationTests {
 
         // Tab → replace
         let tabKey = KeyEvent(
-            keyCode: AsciiKey.tab, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: AsciiKey.tab,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(tabKey, state: state, pipeline: pipeline)
         #expect(state.searchPanelFocus == .replaceField)
 
@@ -172,8 +194,11 @@ struct ReplaceIntegrationTests {
 
         for char in "world" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -188,8 +213,11 @@ struct ReplaceIntegrationTests {
         // Type search query
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -217,8 +245,11 @@ struct ReplaceIntegrationTests {
         // Type search query
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -255,8 +286,11 @@ struct ReplaceIntegrationTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 

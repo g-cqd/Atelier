@@ -40,7 +40,8 @@ struct FindingRevealTests {
         let rendered = DiffRenderer.render(oldText: old, newText: new, language: .plain)
 
         let row = try #require(
-            FindingReveal(leftPath: "a.swift", line: 2, side: .left).row(in: rendered, inline: false))
+            FindingReveal(leftPath: "a.swift", line: 2, side: .left).row(in: rendered, inline: false)
+        )
 
         #expect(rendered.old?.rows[row].oldNumber == 2)
     }
@@ -51,7 +52,11 @@ struct FindingRevealTests {
         let changed = long.replacingOccurrences(of: "line 5\n", with: "line five\n")
             .replacingOccurrences(of: "line 30\n", with: "line thirty\n")
         let rendered = DiffRenderer.render(
-            oldText: long, newText: changed, language: .plain, layout: .changes(context: 1, expansions: [:]))
+            oldText: long,
+            newText: changed,
+            language: .plain,
+            layout: .changes(context: 1, expansions: [:])
+        )
 
         let row = try #require(FindingReveal(leftPath: "a.swift", line: 12).row(in: rendered, inline: false))
 
@@ -63,7 +68,11 @@ struct FindingRevealTests {
         let long = (1 ... 30).map { "line \($0)\n" }.joined()
         let changed = long.replacingOccurrences(of: "line 30\n", with: "line thirty\n")
         let rendered = DiffRenderer.render(
-            oldText: long, newText: changed, language: .plain, layout: .changes(context: 1, expansions: [:]))
+            oldText: long,
+            newText: changed,
+            language: .plain,
+            layout: .changes(context: 1, expansions: [:])
+        )
 
         let row = try #require(FindingReveal(leftPath: "a.swift", line: 12).row(in: rendered, inline: false))
 
@@ -78,9 +87,18 @@ struct FindingRevealTests {
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
         try await harness.load(sut)
         sut.diagnostics = DiagnosticsModel(
-            engine: SilentDiagnosticsRunner(), settings: sut.settings, taskProvider: harness.taskProvider)
+            engine: SilentDiagnosticsRunner(),
+            settings: sut.settings,
+            taskProvider: harness.taskProvider
+        )
         let finding = Finding(
-            tool: .swiftlint, ruleID: "rule", message: "message", file: "a.swift", line: 1, severity: .warning)
+            tool: .swiftlint,
+            ruleID: "rule",
+            message: "message",
+            file: "a.swift",
+            line: 1,
+            severity: .warning
+        )
 
         sut.reveal(finding)
         try await harness.taskProvider.waitForAllTasks()

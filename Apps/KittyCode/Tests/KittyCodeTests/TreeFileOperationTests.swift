@@ -18,7 +18,9 @@ struct TreeFileOperationTests {
     @Test
     func `tree file create undo redo roundtrips on disk`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -39,7 +41,9 @@ struct TreeFileOperationTests {
     @Test
     func `selective invalidation preserves unrelated operations`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -69,7 +73,9 @@ struct TreeFileOperationTests {
     @Test
     func `selective invalidation removes overlapping operations`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -91,7 +97,9 @@ struct TreeFileOperationTests {
     @Test
     func `status message includes operation description`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -111,7 +119,9 @@ struct TreeFileOperationTests {
     @Test
     func `partial stack truncation preserves earlier operations`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -145,7 +155,9 @@ struct TreeFileOperationTests {
     @Test
     func `tree history maxOperationSteps prunes oldest entries`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -171,7 +183,9 @@ struct TreeFileOperationTests {
     @Test
     func `delete of large directory skips history recording`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -197,7 +211,9 @@ struct TreeFileOperationTests {
     @Test
     func `delete of small directory records history normally`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 

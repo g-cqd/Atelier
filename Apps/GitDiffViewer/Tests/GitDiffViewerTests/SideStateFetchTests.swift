@@ -13,12 +13,18 @@ import Testing
 struct SideStateFetchTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(
-        root: root, branches: ["main", "origin/develop"], tags: [], commits: [])
+        root: root,
+        branches: ["main", "origin/develop"],
+        tags: [],
+        commits: []
+    )
 
     private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy = .tolerant()) -> SideState {
         SideState(
-            label: "Right", reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
-            taskProvider: taskProvider)
+            label: "Right",
+            reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
+            taskProvider: taskProvider
+        )
     }
 
     private nonisolated static func remotesOutput(_ names: [String] = ["origin"]) -> ProcessOutput {

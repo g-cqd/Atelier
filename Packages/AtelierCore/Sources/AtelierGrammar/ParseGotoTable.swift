@@ -33,13 +33,20 @@ public struct ParseGotoTable: Sendable {
 
         init(columnCount: Int) {
             table = ParseGotoTable(
-                columnCount: columnCount, rowCount: 0, rowOfState: [], cells: [], indirectTargets: [])
+                columnCount: columnCount,
+                rowCount: 0,
+                rowOfState: [],
+                cells: [],
+                indirectTargets: []
+            )
         }
 
         /// Adds the next state, whose targets are `row`: no target past its end.
         mutating func append(_ row: [Int?]) {
             precondition(
-                row.count <= table.columnCount, "a row of \(row.count) targets in a table of \(table.columnCount)")
+                row.count <= table.columnCount,
+                "a row of \(row.count) targets in a table of \(table.columnCount)"
+            )
             var encoded = [UInt32](repeating: 0, count: table.columnCount)
             for (column, target) in row.enumerated() {
                 encoded[column] = table.cell(for: target)

@@ -36,7 +36,12 @@ package struct RenderedFold: Sendable, Hashable {
     package let marker: Range<Int>
 
     package init(
-        key: ScopeFoldKey, lastLine: Int, firstRow: Int, bandRow: Int, holdsChange: Bool, marker: Range<Int>
+        key: ScopeFoldKey,
+        lastLine: Int,
+        firstRow: Int,
+        bandRow: Int,
+        holdsChange: Bool,
+        marker: Range<Int>
     ) {
         self.key = key
         self.lastLine = lastLine

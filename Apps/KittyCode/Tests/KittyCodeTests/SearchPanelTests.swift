@@ -20,7 +20,11 @@ private func makeSearchPanelContext(
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
     let state = EditorState(
-        rootPath: ".", config: config, taskProvider: TaskProviderSpy(), searchPool: EditorTestPool.shared)
+        rootPath: ".",
+        config: config,
+        taskProvider: TaskProviderSpy(),
+        searchPool: EditorTestPool.shared
+    )
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(
@@ -58,8 +62,11 @@ struct SearchPanelTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -75,8 +82,11 @@ struct SearchPanelTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -84,7 +94,11 @@ struct SearchPanelTests {
         #expect(state.searchPanelSelectedIndex == -1)
 
         let downKey = KeyEvent(
-            keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.down.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(downKey, state: state, pipeline: pipeline)
 
         #expect(state.searchPanelSelectedIndex >= 0)
@@ -97,21 +111,32 @@ struct SearchPanelTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
         try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
-            keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.down.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(downKey, state: state, pipeline: pipeline)
         #expect(state.searchPanelSelectedIndex >= 0)
 
         // Move back up to query field
         let upKey = KeyEvent(
-            keyCode: Key.up.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.up.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(upKey, state: state, pipeline: pipeline)
         #expect(state.searchPanelSelectedIndex == -1)
     }
@@ -123,20 +148,31 @@ struct SearchPanelTests {
 
         for char in "goodbye" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
         try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
-            keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.down.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(downKey, state: state, pipeline: pipeline)
 
         // Press enter
         let enterKey = KeyEvent(
-            keyCode: Key.enter.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.enter.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(enterKey, state: state, pipeline: pipeline)
 
         #expect(state.mode == .editor)
@@ -150,7 +186,11 @@ struct SearchPanelTests {
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
         let escKey = KeyEvent(
-            keyCode: AsciiKey.escape, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: AsciiKey.escape,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(escKey, state: state, pipeline: pipeline)
 
         #expect(state.inFileSearch == nil)
@@ -164,21 +204,32 @@ struct SearchPanelTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
         try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
-            keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.down.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(downKey, state: state, pipeline: pipeline)
         #expect(state.searchPanelSelectedIndex >= 0)
 
         // Escape returns to query field
         let escKey = KeyEvent(
-            keyCode: AsciiKey.escape, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: AsciiKey.escape,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(escKey, state: state, pipeline: pipeline)
         #expect(state.searchPanelSelectedIndex == -1)
         #expect(state.mode == .searchPanel)
@@ -192,8 +243,11 @@ struct SearchPanelTests {
         // Type in the panel
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
@@ -203,8 +257,11 @@ struct SearchPanelTests {
 
         // The event handler should route to searchPanel handler, not inline search
         let aKey = KeyEvent(
-            keyCode: UInt32(Character("a").asciiValue!), modifiers: [],
-            eventType: .press, associatedText: "a")
+            keyCode: UInt32(Character("a").asciiValue!),
+            modifiers: [],
+            eventType: .press,
+            associatedText: "a"
+        )
         let event = InputEvent.key(aKey)
         _ = handleEvent(event: event, state: state, pipeline: pipeline)
 
@@ -231,15 +288,22 @@ struct SearchPanelTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
         try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
-            keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.down.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(downKey, state: state, pipeline: pipeline)
         let firstIdx = state.searchPanelSelectedIndex
 
@@ -255,15 +319,22 @@ struct SearchPanelTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
         #expect(state.inFileSearch?.query == "hello")
 
         let bsKey = KeyEvent(
-            keyCode: Key.backspace.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.backspace.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchPanelKey(bsKey, state: state, pipeline: pipeline)
 
         #expect(state.inFileSearch?.query == "hell")

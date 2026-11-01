@@ -65,7 +65,10 @@ struct DiffViewerModelDiagnosticsTests {
         try await harness.load(sut)
 
         let diagnosticsModel = DiagnosticsModel(
-            engine: StubDiagnosticsRunner(), settings: sut.settings, taskProvider: harness.taskProvider)
+            engine: StubDiagnosticsRunner(),
+            settings: sut.settings,
+            taskProvider: harness.taskProvider
+        )
         sut.diagnostics = diagnosticsModel
 
         #expect(sut.diagnosticSeverityCounts(for: "Old.swift").isEmpty)

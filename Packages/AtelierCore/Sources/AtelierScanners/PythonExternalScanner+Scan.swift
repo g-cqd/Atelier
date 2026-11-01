@@ -15,8 +15,11 @@ extension PythonExternalScanner {
         guard let whitespace = scanWhitespace(&lexer, validSymbols: validSymbols) else { return false }
         if whitespace.foundEndOfLine
             && scanLineToken(
-                &lexer, validSymbols: validSymbols, errorRecoveryMode: errorRecoveryMode,
-                withinBrackets: withinBrackets, indentLength: whitespace.indentLength,
+                &lexer,
+                validSymbols: validSymbols,
+                errorRecoveryMode: errorRecoveryMode,
+                withinBrackets: withinBrackets,
+                indentLength: whitespace.indentLength,
                 firstCommentIndentLength: whitespace.firstCommentIndentLength
             )
         {
@@ -29,7 +32,8 @@ extension PythonExternalScanner {
     }
 
     private func scanWhitespace(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool]
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool]
     ) -> (foundEndOfLine: Bool, indentLength: UInt16, firstCommentIndentLength: Int)? {
         var foundEndOfLine = false
         var indentLength: UInt16 = 0
@@ -80,8 +84,12 @@ extension PythonExternalScanner {
     }
 
     private mutating func scanLineToken(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], errorRecoveryMode: Bool,
-        withinBrackets: Bool, indentLength: UInt16, firstCommentIndentLength: Int
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        errorRecoveryMode: Bool,
+        withinBrackets: Bool,
+        indentLength: UInt16,
+        firstCommentIndentLength: Int
     ) -> Bool {
         if let currentIndentLength = indents.last {
             if validSymbols[TokenType.indent.rawValue] && indentLength > currentIndentLength {

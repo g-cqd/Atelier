@@ -87,9 +87,13 @@ struct ProjectSettingsTests {
         #expect(
             SettingOverride.list(for: projectA, over: sut) == [
                 SettingOverride(
-                    key: ViewerSettings.Key.groupsByCommit, label: SettingLabel.groupsByCommit, value: "On",
-                    defaultValue: "Off")
-            ])
+                    key: ViewerSettings.Key.groupsByCommit,
+                    label: SettingLabel.groupsByCommit,
+                    value: "On",
+                    defaultValue: "Off"
+                )
+            ]
+        )
         sut.adoptProject(projectA)
         #expect(sut.groupsByCommit)
     }

@@ -52,8 +52,11 @@ public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationP
         let root = Self.normalizePath(rootPath)
         self.rootPath = root
         client = GitClient(
-            repository: URL(filePath: root, directoryHint: .isDirectory), runner: runner, timeout: Self.gitTimeout,
-            isolation: .strict)
+            repository: URL(filePath: root, directoryHint: .isDirectory),
+            runner: runner,
+            timeout: Self.gitTimeout,
+            isolation: .strict
+        )
         lock = Mutex(State())
     }
 
@@ -86,7 +89,8 @@ public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationP
             return
         } catch {
             Self.logger.error(
-                "git status failed; the last statuses stay: \(error.localizedDescription, privacy: .private)")
+                "git status failed; the last statuses stay: \(error.localizedDescription, privacy: .private)"
+            )
             return
         }
         let root = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
@@ -125,7 +129,10 @@ public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationP
                 return Self.addedLineDecorations(for: lines, color: .added)
             case .text(_, let baseLines):
                 return Self.lineDecorations(
-                    baseLines: baseLines, currentLines: lines.map { Substring($0) }, addedColor: .added)
+                    baseLines: baseLines,
+                    currentLines: lines.map { Substring($0) },
+                    addedColor: .added
+                )
         }
     }
 
@@ -148,7 +155,10 @@ public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationP
     /// from the shared diff engine.
     static func lineDecorations(base: [String], current: [String], addedColor: FileStatusColor) -> GitLineDecorations {
         lineDecorations(
-            baseLines: base.map { Substring($0) }, currentLines: current.map { Substring($0) }, addedColor: addedColor)
+            baseLines: base.map { Substring($0) },
+            currentLines: current.map { Substring($0) },
+            addedColor: addedColor
+        )
     }
 
     static func lineDecorations(baseLines old: [Substring], currentLines new: [Substring], addedColor: FileStatusColor)
@@ -162,11 +172,17 @@ public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationP
     {
         guard let source = RopeLineSource(rope: new) else { return .empty }
         return lineDecorations(
-            baseLines: old, current: source, lineAt: { source.line(at: $0) }, addedColor: addedColor)
+            baseLines: old,
+            current: source,
+            lineAt: { source.line(at: $0) },
+            addedColor: addedColor
+        )
     }
 
     private static func lineDecorations(
-        baseLines old: [Substring], current: some DiffSource, lineAt: (Int) -> Substring,
+        baseLines old: [Substring],
+        current: some DiffSource,
+        lineAt: (Int) -> Substring,
         addedColor: FileStatusColor
     ) -> GitLineDecorations {
         guard !Task.isCancelled else { return .empty }
@@ -191,7 +207,8 @@ public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationP
                     case .deleted: .deleted
                 }
             },
-            emphasis: emphasis)
+            emphasis: emphasis
+        )
     }
 
     /// UTF-16 offset ranges of `line` as closed character ranges, the unit the terminal columns are counted in.

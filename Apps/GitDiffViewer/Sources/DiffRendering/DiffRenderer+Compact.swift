@@ -17,8 +17,13 @@ extension DiffRenderer {
         /// The change once placed, its first row at `start`.
         func rendered(from start: Int) -> RenderedChange {
             RenderedChange(
-                key: key, kind: kind, rows: start ..< start + rowCount, isDisclosed: isDisclosed,
-                removedLines: removedLines, addedLines: addedLines)
+                key: key,
+                kind: kind,
+                rows: start ..< start + rowCount,
+                isDisclosed: isDisclosed,
+                removedLines: removedLines,
+                addedLines: addedLines
+            )
         }
     }
 
@@ -35,7 +40,11 @@ extension DiffRenderer {
     /// unchanged row, so the gaps keep their keys, the rows they hide and the rows revealed around them. With no
     /// context, a folded removal keeps the row after it, or before it at the end of the file, and its marker with it.
     static func compactRows(
-        of file: PreparedDiff, fileIndex: Int, layout: RenderLayout, header: String?, disclosed: Set<ChangeKey>
+        of file: PreparedDiff,
+        fileIndex: Int,
+        layout: RenderLayout,
+        header: String?,
+        disclosed: Set<ChangeKey>
     ) -> [RenderRow] {
         var compact = compacted(file, fileIndex: fileIndex, disclosed: disclosed)
         // A file with no new line, a deleted one, would show nothing: its changes show whole.
@@ -73,7 +82,8 @@ extension DiffRenderer {
                 }
                 let fileExpansions = Dictionary(
                     uniqueKeysWithValues: expansions.filter { $0.key.fileIndex == fileIndex }
-                        .map { ($0.key.gapIndex, $0.value) })
+                        .map { ($0.key.gapIndex, $0.value) }
+                )
                 // A folded removal's context lies around its boundary, as it lies around its rows once disclosed. With
                 // no context it would have no row at all: it keeps the row after it, or before it at the end.
                 let changeRanges = compact.changes.map { change -> Range<Int> in
@@ -83,7 +93,11 @@ extension DiffRenderer {
                     return max(range.lowerBound - 1, 0) ..< range.lowerBound
                 }
                 let layout = HunkLayout.layout(
-                    changeRanges: changeRanges, rowCount: count, context: context, expansions: fileExpansions)
+                    changeRanges: changeRanges,
+                    rowCount: count,
+                    context: context,
+                    expansions: fileExpansions
+                )
                 var cursor = 0
                 // Gap keys follow the base hunks, as in the other views.
                 for hunk in layout.hunks {
@@ -92,8 +106,12 @@ extension DiffRenderer {
                             .gap(
                                 GapMarker(
                                     key: GapKey(fileIndex: fileIndex, gapIndex: hunk.firstBase),
-                                    hiddenRows: hunk.rows.lowerBound - cursor, isLeading: hunk.firstBase == 0,
-                                    isTrailing: false)))
+                                    hiddenRows: hunk.rows.lowerBound - cursor,
+                                    isLeading: hunk.firstBase == 0,
+                                    isTrailing: false
+                                )
+                            )
+                        )
                     }
                     emit(hunk.rows)
                     cursor = hunk.rows.upperBound
@@ -103,7 +121,12 @@ extension DiffRenderer {
                         .gap(
                             GapMarker(
                                 key: GapKey(fileIndex: fileIndex, gapIndex: layout.baseCount),
-                                hiddenRows: count - cursor, isLeading: layout.hunks.isEmpty, isTrailing: true)))
+                                hiddenRows: count - cursor,
+                                isLeading: layout.hunks.isEmpty,
+                                isTrailing: true
+                            )
+                        )
+                    )
                 }
         }
         return rows
@@ -136,8 +159,13 @@ extension DiffRenderer {
             }
             let kind: RenderedChange.Kind = removed == 0 ? .added : added == 0 ? .removed : .modified
             let change = PendingChange(
-                key: key, kind: kind, isDisclosed: isDisclosed, rowCount: compact.rows.count - start,
-                removedLines: removed, addedLines: added)
+                key: key,
+                kind: kind,
+                isDisclosed: isDisclosed,
+                rowCount: compact.rows.count - start,
+                removedLines: removed,
+                addedLines: added
+            )
             compact.changes.append((start ..< compact.rows.count, change))
             cursor = range.upperBound
         }

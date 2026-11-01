@@ -16,8 +16,13 @@ struct SyntaxTierModelTests {
         let newTokens = provider.tokenRangesByLine(text: new, language: .swift)
         let pipeline = DiffPipeline()
         let model = DiffModel(
-            oldText: old, newText: new, granularity: .syntax, language: .swift, pipeline: pipeline,
-            tokenRanges: provider)
+            oldText: old,
+            newText: new,
+            granularity: .syntax,
+            language: .swift,
+            pipeline: pipeline,
+            tokenRanges: provider
+        )
 
         let modified = model.splitRows.filter { $0.kind == .modified }
         #expect(!modified.isEmpty)
@@ -25,9 +30,13 @@ struct SyntaxTierModelTests {
             let oldRef = try #require(row.old)
             let newRef = try #require(row.new)
             let expected = IntralineDiff.emphasis(
-                old: model.oldLines[oldRef.index], new: model.newLines[newRef.index], granularity: .syntax,
-                oldTokens: oldTokens[oldRef.index], newTokens: newTokens[newRef.index],
-                refiners: pipeline.intralineRefiners)
+                old: model.oldLines[oldRef.index],
+                new: model.newLines[newRef.index],
+                granularity: .syntax,
+                oldTokens: oldTokens[oldRef.index],
+                newTokens: newTokens[newRef.index],
+                refiners: pipeline.intralineRefiners
+            )
             #expect(oldRef.emphasis == (expected?.old ?? []))
             #expect(newRef.emphasis == (expected?.new ?? []))
             let oldUnified = model.unifiedRows.first { $0.kind == .removed && $0.old?.index == oldRef.index }
@@ -52,7 +61,10 @@ struct SyntaxTierModelTests {
         let model = DiffModel(
             oldText: "let first = 1\nshared\nlet second = 2\n",
             newText: "let first = 3\nshared\nlet second = 4\n",
-            granularity: .syntax, language: .swift, tokenRanges: spy)
+            granularity: .syntax,
+            language: .swift,
+            tokenRanges: spy
+        )
         #expect(model.splitRows.filter { $0.kind == .modified }.count == 2)
         #expect(spy.requests.withLock { $0 } == [[0, 2], [0, 2]])
     }
@@ -119,7 +131,12 @@ struct SyntaxTierBenchmark {
             for tier in tiers {
                 let start = clock.now
                 let model = DiffModel(
-                    oldText: "", newText: added, granularity: tier, language: .swift, tokenRanges: provider)
+                    oldText: "",
+                    newText: added,
+                    granularity: tier,
+                    language: .swift,
+                    tokenRanges: provider
+                )
                 let elapsed = Self.milliseconds(clock.now - start)
                 #expect(model.newLines.count == 2_374)
                 if tier == .word { wordTimes.append(elapsed) } else { syntaxTimes.append(elapsed) }

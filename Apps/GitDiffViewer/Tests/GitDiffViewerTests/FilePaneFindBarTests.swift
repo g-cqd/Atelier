@@ -17,8 +17,11 @@ struct FilePaneFindBarTests {
         let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).unified)
         let host = NSHostingView(rootView: DiffTextView(rendered: rendered, gutter: .dual, wrapsLines: false))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         let scrollView = try #require(Self.first(NSScrollView.self, in: host))

@@ -42,7 +42,8 @@ struct StatusBarView: View {
                 if let key = model.selectedPath, let path = model.filePath(forSelection: key) {
                     let summary = model.changeSummary(for: path, rendered: rendered)
                     ChangeGlyphBadge(
-                        glyph: ChangeGlyph(summary.kind), scheme: model.settings.badgeScheme,
+                        glyph: ChangeGlyph(summary.kind),
+                        scheme: model.settings.badgeScheme,
                         state: model.shownBadgeState(ofPath: path)
                     )
                     .help(ChangeGlyph(summary.kind).title)
@@ -90,7 +91,8 @@ struct StatusBarView: View {
                 .labelStyle(.titleAndIcon)
                 .help(
                     DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates)
-                        .joined(separator: "\n"))
+                        .joined(separator: "\n")
+                )
             }
         }
     }

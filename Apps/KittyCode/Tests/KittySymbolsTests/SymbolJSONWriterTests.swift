@@ -27,9 +27,17 @@ struct SymbolJSONWriterTests {
             generatedAt: Date(timeIntervalSince1970: 1_790_000_000.75),
             records: [
                 SymbolRecord(
-                    name: "folder/badge", visibility: .publicSymbol, assetGlyphIndex: 77, codepoint: 0x10_0215,
-                    glyph: "\u{100215}", availability: "13.0", categories: ["objects"], searchTerms: ["dossier", "é"])
-            ])
+                    name: "folder/badge",
+                    visibility: .publicSymbol,
+                    assetGlyphIndex: 77,
+                    codepoint: 0x10_0215,
+                    glyph: "\u{100215}",
+                    availability: "13.0",
+                    categories: ["objects"],
+                    searchTerms: ["dossier", "é"]
+                )
+            ]
+        )
         let url = temporaryURL()
         let encoder = foundationEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -45,9 +53,17 @@ struct SymbolJSONWriterTests {
             generatedAt: Date(timeIntervalSince1970: 1_790_000_000),
             records: [
                 SymbolRecord(
-                    name: "folder", visibility: .publicSymbol, assetGlyphIndex: nil, codepoint: nil, glyph: nil,
-                    availability: nil, categories: [], searchTerms: [])
-            ])
+                    name: "folder",
+                    visibility: .publicSymbol,
+                    assetGlyphIndex: nil,
+                    codepoint: nil,
+                    glyph: nil,
+                    availability: nil,
+                    categories: [],
+                    searchTerms: []
+                )
+            ]
+        )
         let url = temporaryURL()
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

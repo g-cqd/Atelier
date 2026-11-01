@@ -19,8 +19,10 @@ package indirect enum HoverMarkdownBlock: Sendable, Equatable {
     package static func parse(_ markdown: String) -> [HoverMarkdownBlock] {
         guard !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         let options = AttributedString.MarkdownParsingOptions(
-            allowsExtendedAttributes: false, interpretedSyntax: .full,
-            failurePolicy: .returnPartiallyParsedIfPossible)
+            allowsExtendedAttributes: false,
+            interpretedSyntax: .full,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
         guard let parsed = try? AttributedString(markdown: markdown, options: options) else {
             return [.paragraph(AttributedString(markdown.trimmingCharacters(in: .whitespacesAndNewlines)))]
         }

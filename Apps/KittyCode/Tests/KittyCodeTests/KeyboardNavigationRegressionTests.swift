@@ -130,7 +130,11 @@ struct KeyboardNavigationRegressionTests {
     func `modifier-only key presses preserve editor selection and text`() {
         let sut = makeSUT(fileContent: ["hello world"])
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello world",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         let selection = TextSelection(
             anchor: TextPosition(row: 0, col: 0),

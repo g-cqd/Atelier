@@ -29,7 +29,8 @@ public enum GitIsolation: Sendable, Hashable {
                 .exactly(
                     ProcessInfo.processInfo.environment
                         .filter { !Self.repositorySelectionVariables.contains($0.key) }
-                        .merging(GitClient.hardeningEnvironment) { _, override in override })
+                        .merging(GitClient.hardeningEnvironment) { _, override in override }
+                )
             case .strict:
                 .exactly(Self.scrubbedEnvironment.merging(GitClient.hardeningEnvironment) { current, _ in current })
         }

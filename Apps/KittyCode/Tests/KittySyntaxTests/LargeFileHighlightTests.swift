@@ -26,7 +26,10 @@ struct LargeFileHighlightTests {
         _ = await LanguageHighlighter.ensureArtifacts(for: "json")
         let theme = Theme(defaultStyle: Style())
         let highlighted = LanguageHighlighter.highlightDocument(
-            source: source, language: "json", theme: theme)
+            source: source,
+            language: "json",
+            theme: theme
+        )
         #expect(!highlighted.isEmpty)
     }
 
@@ -36,7 +39,10 @@ struct LargeFileHighlightTests {
         _ = await LanguageHighlighter.ensureArtifacts(for: "json")
         let theme = Theme(defaultStyle: Style())
         let highlighted = LanguageHighlighter.highlightDocument(
-            source: source, language: "json", theme: theme)
+            source: source,
+            language: "json",
+            theme: theme
+        )
         #expect(!highlighted.isEmpty)
     }
 }

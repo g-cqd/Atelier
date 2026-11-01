@@ -14,10 +14,16 @@ struct XcodeTextParserTests {
         #expect(
             findings == [
                 Finding(
-                    tool: .swiftFormat, ruleID: "NoLeadingUnderscore", message: "avoid leading underscores",
-                    file: "Sources/A.swift", line: 12, column: 5, severity: .warning
+                    tool: .swiftFormat,
+                    ruleID: "NoLeadingUnderscore",
+                    message: "avoid leading underscores",
+                    file: "Sources/A.swift",
+                    line: 12,
+                    column: 5,
+                    severity: .warning
                 )
-            ])
+            ]
+        )
     }
 
     @Test
@@ -48,10 +54,16 @@ struct XcodeTextParserTests {
         #expect(
             findings == [
                 Finding(
-                    tool: .swiftformat, ruleID: "trailingCommas", message: "remove trailing comma",
-                    file: "Sources/A.swift", line: 12, column: 5, severity: .warning
+                    tool: .swiftformat,
+                    ruleID: "trailingCommas",
+                    message: "remove trailing comma",
+                    file: "Sources/A.swift",
+                    line: 12,
+                    column: 5,
+                    severity: .warning
                 )
-            ])
+            ]
+        )
     }
 
     @Test

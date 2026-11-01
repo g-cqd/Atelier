@@ -42,10 +42,15 @@ import Testing
     @Test func anUnrecognizedLanguageTagLexesAsPlainText() {
         let code = "let value = 1"
         let attributed = CodeAttributedBuilder.attributedString(
-            for: code, languageTag: "not-a-real-language", palette: palette)
+            for: code,
+            languageTag: "not-a-real-language",
+            palette: palette
+        )
         var colors: Set<NSColor> = []
         attributed.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: attributed.length)) {
-            value, _, _ in
+            value,
+            _,
+            _ in
             if let color = value as? NSColor { colors.insert(color) }
         }
         #expect(colors == [palette.textColor])

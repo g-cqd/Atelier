@@ -53,10 +53,15 @@ struct XcodeThemeTests {
     func `a taller line keeps its multiple and raises the text by half the extra space`() throws {
         let natural = DiffPalette.system.defaultLineHeight
         let rendered = DiffRenderer.render(
-            oldText: "a\nb\n", newText: "a\nc\n", language: .plain, lineHeightMultiple: 1.5)
+            oldText: "a\nb\n",
+            newText: "a\nc\n",
+            language: .plain,
+            lineHeightMultiple: 1.5
+        )
         let text = try #require(rendered.unified)
         let style = try #require(
-            text.attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+            text.attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
 
         #expect(style.lineHeightMultiple == 1.5)
         // TextKit puts every point of the extra space above the glyphs, so the panes raise them by half of it.
@@ -69,7 +74,8 @@ struct XcodeThemeTests {
         let rendered = DiffRenderer.render(oldText: "a\n", newText: "b\n", language: .plain)
         let text = try #require(rendered.unified)
         let style = try #require(
-            text.attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+            text.attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
 
         #expect(style.lineHeightMultiple == 1)
         #expect(text.baselineOffset == 0)

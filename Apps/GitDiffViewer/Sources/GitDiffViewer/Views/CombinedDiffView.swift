@@ -93,13 +93,19 @@ private struct FileCardFrame: View {
         FoldingCard(
             foldProgress: isCollapsed ? 1 : 0,
             card: StickyCard(
-                file: file, title: title, isFoldable: isFoldable, isCollapsed: isCollapsed,
+                file: file,
+                title: title,
+                isFoldable: isFoldable,
+                isCollapsed: isCollapsed,
                 options: PaneOptions(
                     layout: settings.mode.cardLayout,
                     wrapMode: WrapMode(wrapsLines: settings.wrapsLines, column: settings.wrapColumn),
                     showsHover: settings.showsHoverDocumentation && model.hoverDocs != nil,
-                    hoverPanelMaterial: settings.hoverPanelMaterial, bouncesAtEdges: settings.bouncesAtEdges),
-                model: model)
+                    hoverPanelMaterial: settings.hoverPanelMaterial,
+                    bouncesAtEdges: settings.bouncesAtEdges
+                ),
+                model: model
+            )
         )
         // Set here, in the list's own graph, so a fold animates wherever it starts: an animation begun in the
         // header's hosting view or in the toolbar does not reliably reach this graph.
@@ -167,7 +173,11 @@ private struct StickyCard: NSViewRepresentable {
         return CGSize(
             width: width,
             height: StickyCardGeometry.cardHeight(
-                headerHeight: heights.header, bodyHeight: heights.body, foldProgress: foldProgress))
+                headerHeight: heights.header,
+                bodyHeight: heights.body,
+                foldProgress: foldProgress
+            )
+        )
     }
 }
 
@@ -237,7 +247,10 @@ private final class CardHosts {
     var lastHeight: CGFloat? {
         measured.map {
             StickyCardGeometry.cardHeight(
-                headerHeight: $0.heights.header, bodyHeight: $0.heights.body, foldProgress: card.foldProgress)
+                headerHeight: $0.heights.header,
+                bodyHeight: $0.heights.body,
+                foldProgress: card.foldProgress
+            )
         }
     }
 
@@ -253,7 +266,10 @@ private final class CardHosts {
         if let measured, measured.key == key { return measured.heights }
         let fitting = CGSize(width: width, height: .greatestFiniteMagnitude)
         let headerHeight = accepted(
-            header.sizeThatFits(in: fitting).height, of: "header", fallback: measured?.heights.header ?? 0)
+            header.sizeThatFits(in: fitting).height,
+            of: "header",
+            fallback: measured?.heights.header ?? 0
+        )
         let bodyHeight =
             mount.mounted == nil
             ? 0 : accepted(body.sizeThatFits(in: fitting).height, of: "body", fallback: measured?.heights.body ?? 0)
@@ -295,8 +311,10 @@ private final class CardHosts {
                     layouts.flatMap { $0.renderID == rendered.id ? $0 : nil } ?? CardLayouts(rendered: rendered)
                 self.layouts = layouts
                 body.rootView = FileCardBody(
-                    content: PaneContent(layouts: layouts, rendered: rendered, model: card.model), width: width,
-                    options: card.options)
+                    content: PaneContent(layouts: layouts, rendered: rendered, model: card.model),
+                    width: width,
+                    options: card.options
+                )
             case .unmount:
                 body.rootView = FileCardBody(content: nil, width: width, options: card.options)
         }
@@ -306,9 +324,12 @@ private final class CardHosts {
         let model = card.model
         let path = card.file.path
         return FileCardHeader(
-            title: card.title, isFoldable: card.isFoldable, isCollapsed: card.isCollapsed,
+            title: card.title,
+            isFoldable: card.isFoldable,
+            isCollapsed: card.isCollapsed,
             toggle: { model.toggleCollapsed(path) },
-            open: { model.pin(path) })
+            open: { model.pin(path) }
+        )
     }
 }
 
@@ -376,7 +397,8 @@ private struct FileCardHeader: View {
         .help(
             isFoldable
                 ? "Click to fold, double-click to open \(title.label.text)"
-                : "Double-click to open \(title.label.text)")
+                : "Double-click to open \(title.label.text)"
+        )
     }
 
     /// The path, then for a renamed file an arrow and the old path, grayed as Xcode grays it.
@@ -445,13 +467,21 @@ private struct CardPane: View {
     var body: some View {
         let model = content.model
         let pane = EmbeddedDiffTextView(
-            layouts: content.layouts, side: side, gutter: gutter, width: width, wrapMode: options.wrapMode,
-            onGapDrag: content.drag, onChangeToggle: { model.toggleChange($0) }, onDisplayed: content.displayed,
+            layouts: content.layouts,
+            side: side,
+            gutter: gutter,
+            width: width,
+            wrapMode: options.wrapMode,
+            onGapDrag: content.drag,
+            onChangeToggle: { model.toggleChange($0) },
+            onDisplayed: content.displayed,
             hoverEnabled: options.showsHover,
             hoverResolver: diagnostics.hoverResolver(docs: model.hoverDocs, palette: model.palette),
-            hoverPanelMaterial: options.hoverPanelMaterial, bouncesAtEdges: options.bouncesAtEdges,
+            hoverPanelMaterial: options.hoverPanelMaterial,
+            bouncesAtEdges: options.bouncesAtEdges,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
-            diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings
+            diagnosticsVersion: diagnostics.version,
+            onDiagnosticClick: diagnostics.showFindings
         )
         .decorated(with: model.decorations(for: layout?.rendered), viewport: model.decorationViewport)
         .folding(showsRibbon: model.settings.showsScopeRibbon) { model.changeFolds($0) }

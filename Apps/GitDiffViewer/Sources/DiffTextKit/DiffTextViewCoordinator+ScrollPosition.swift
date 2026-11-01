@@ -48,7 +48,10 @@ extension DiffTextViewCoordinator {
         }
         let row = rendered.rowIndex(
             containing: contentManager.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
+                from: layoutManager.documentRange.location,
+                to: fragment.rangeInElement.location
+            )
+        )
         let rowTop = fragment.layoutFragmentFrame.minY + inset
         return PaneScrollPosition(row: row, offset: Double(top - rowTop), x: Double(clipView.bounds.minX))
     }
@@ -152,7 +155,9 @@ extension DiffTextViewCoordinator {
         guard let textView, let rendered, rendered.lineStarts.indices.contains(row),
             let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
             let location = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+                layoutManager.documentRange.location,
+                offsetBy: rendered.lineStarts[row]
+            )
         else { return nil }
         if rendered.lineStarts[row] <= RowPlacement.textLaidOutAbove || splitController?.needsRowsAboveLaidOut == true,
             let above = NSTextRange(location: layoutManager.documentRange.location, end: location)

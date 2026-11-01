@@ -52,7 +52,8 @@ struct ToolCommandTests {
         let files = ["\"", "/repo/\"A.swift"]
         #expect(
             ToolCommand.analyze(tool, files: files, root: Self.root)
-                == ["analyze", "/repo", "--only-from", "-", "--format", "sarif", "--relative-to", "/repo"])
+                == ["analyze", "/repo", "--only-from", "-", "--format", "sarif", "--relative-to", "/repo"]
+        )
         #expect(ToolCommand.standardInput(tool, files: files) == Data("\"\n/repo/\"A.swift\n".utf8))
     }
 
@@ -90,7 +91,8 @@ struct ToolCommandTests {
         (.swiftformat, Set<Int32>())
     ])
     func `only the analyzers' exit 70 counts, and only when their output parses`(
-        tool: DiagnosticTool, expected: Set<Int32>
+        tool: DiagnosticTool,
+        expected: Set<Int32>
     ) {
         #expect(ToolCommand.exitCodesAcceptedWithParsableOutput(tool) == expected)
     }
@@ -104,7 +106,8 @@ struct ToolCommandTests {
         (.deadwood, .seconds(300))
     ])
     func `a tool that reads the whole root gets five minutes, and swift-format one`(
-        tool: DiagnosticTool, expected: Duration
+        tool: DiagnosticTool,
+        expected: Duration
     ) {
         #expect(ToolCommand.timeout(tool) == expected)
     }

@@ -28,21 +28,36 @@ import Testing
         buffer?.documentVersion += 1
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 1)
         let oldRequest = InFileSearchRequest(
-            query: SearchQuery(text: "a"), bufferID: buffer.map(ObjectIdentifier.init),
-            documentVersion: oldVersion, contentHash: oldHash)
+            query: SearchQuery(text: "a"),
+            bufferID: buffer.map(ObjectIdentifier.init),
+            documentVersion: oldVersion,
+            contentHash: oldHash
+        )
         #expect(
             !applyInFileSearchResult(
-                state: state, request: oldRequest, pattern: .literal(text: "a", caseSensitive: false),
-                scan: SearchScanResult(matches: [match], isComplete: true, didHitLimit: false), pipeline: nil))
+                state: state,
+                request: oldRequest,
+                pattern: .literal(text: "a", caseSensitive: false),
+                scan: SearchScanResult(matches: [match], isComplete: true, didHitLimit: false),
+                pipeline: nil
+            )
+        )
         #expect(state.inFileSearch?.matches.isEmpty == true)
         let currentRequest = InFileSearchRequest(
-            query: SearchQuery(text: "a"), bufferID: buffer.map(ObjectIdentifier.init),
-            documentVersion: buffer?.documentVersion ?? 0, contentHash: oldHash)
+            query: SearchQuery(text: "a"),
+            bufferID: buffer.map(ObjectIdentifier.init),
+            documentVersion: buffer?.documentVersion ?? 0,
+            contentHash: oldHash
+        )
         #expect(
             applyInFileSearchResult(
-                state: state, request: currentRequest,
+                state: state,
+                request: currentRequest,
                 pattern: .literal(text: "a", caseSensitive: false),
-                scan: SearchScanResult(matches: [match], isComplete: true, didHitLimit: false), pipeline: nil))
+                scan: SearchScanResult(matches: [match], isComplete: true, didHitLimit: false),
+                pipeline: nil
+            )
+        )
         #expect(state.inFileSearch?.matches == [match])
     }
 
@@ -54,8 +69,11 @@ import Testing
         #expect(state.workspace.cachedFileLines == nil)
         #expect(state.textBuffer._testSnapshotCachesAreEmpty)
         _ = renderSearchPanel(
-            pipeline: pipeline, state: state, rect: Rect(x: 0, y: 0, width: 30, height: 12),
-            colorScheme: state.colorScheme)
+            pipeline: pipeline,
+            state: state,
+            rect: Rect(x: 0, y: 0, width: 30, height: 12),
+            colorScheme: state.colorScheme
+        )
         #expect(state.workspace.cachedFileLines == nil)
         #expect(state.textBuffer._testSnapshotCachesAreEmpty)
     }
@@ -73,7 +91,9 @@ import Testing
         let (state, _) = EditorTestHarness.make()
         state.config.statusBar.leftItems = [.status]
         state.inFileSearch = makeSearch(
-            query: "id", matches: [SearchMatch(row: 0, colStart: 0, colEnd: 2)])
+            query: "id",
+            matches: [SearchMatch(row: 0, colStart: 0, colEnd: 2)]
+        )
         state.inFileSearch?.didHitLimit = true
         #expect(inFileSearchSummary(state.inFileSearch) == "1+ matches (limit)")
         #expect(state.statusBarSegments(columns: 80, rows: 24).left.contains("1+ matches (limit)"))
@@ -81,7 +101,9 @@ import Testing
 
     @Test func `clicking a search toggle keeps the editor cursor where it was`() {
         let (state, pipeline) = EditorTestHarness.make(
-            fileContent: ["id0", "none", "ID2"], mode: .searchPanel)
+            fileContent: ["id0", "none", "ID2"],
+            mode: .searchPanel
+        )
         state.activeSidebarPanel = .search
         state.inFileSearch = makeSearch(query: "id")
         state.cursorRow = 1
@@ -89,19 +111,31 @@ import Testing
         let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
         handleMouse(
             MouseEvent(
-                button: .left, row: layout.contentStartRow + 3,
-                col: layout.activityBarWidth + 3, kind: .press),
-            state: state, pipeline: pipeline)
+                button: .left,
+                row: layout.contentStartRow + 3,
+                col: layout.activityBarWidth + 3,
+                kind: .press
+            ),
+            state: state,
+            pipeline: pipeline
+        )
         #expect(state.inFileSearch?.isCaseSensitive == true)
         cancelInFileSearch(state: state)
         let request = currentRequest(for: state)
         #expect(
             applyInFileSearchResult(
-                state: state, request: request, pattern: compilePattern(request.query),
+                state: state,
+                request: request,
+                pattern: compilePattern(request.query),
                 scan: SearchScanResult(
-                    matches: [SearchMatch(row: 0, colStart: 0, colEnd: 2)], isComplete: true,
-                    didHitLimit: false),
-                pipeline: pipeline, moveCursorOnCompletion: false))
+                    matches: [SearchMatch(row: 0, colStart: 0, colEnd: 2)],
+                    isComplete: true,
+                    didHitLimit: false
+                ),
+                pipeline: pipeline,
+                moveCursorOnCompletion: false
+            )
+        )
         #expect(state.cursorRow == 1)
         #expect(state.cursorCol == 2)
     }
@@ -133,10 +167,19 @@ import Testing
         state.inFileSearch?.replaceText = "x"
         let request = currentRequest(for: state)
         let scan = SearchScanResult(
-            matches: [SearchMatch(row: 0, colStart: 0, colEnd: 3)], isComplete: false, didHitLimit: false)
+            matches: [SearchMatch(row: 0, colStart: 0, colEnd: 3)],
+            isComplete: false,
+            didHitLimit: false
+        )
         #expect(
             applyInFileSearchResult(
-                state: state, request: request, pattern: compilePattern(request.query), scan: scan, pipeline: nil))
+                state: state,
+                request: request,
+                pattern: compilePattern(request.query),
+                scan: scan,
+                pipeline: nil
+            )
+        )
 
         replaceAllInFile(state: state, pipeline: pipeline)
 
@@ -152,10 +195,19 @@ import Testing
         state.inFileSearch?.replaceText = "x"
         let request = currentRequest(for: state)
         let scan = SearchScanResult(
-            matches: [SearchMatch(row: 0, colStart: 0, colEnd: 2)], isComplete: true, didHitLimit: false)
+            matches: [SearchMatch(row: 0, colStart: 0, colEnd: 2)],
+            isComplete: true,
+            didHitLimit: false
+        )
         #expect(
             applyInFileSearchResult(
-                state: state, request: request, pattern: compilePattern(request.query), scan: scan, pipeline: nil))
+                state: state,
+                request: request,
+                pattern: compilePattern(request.query),
+                scan: scan,
+                pipeline: nil
+            )
+        )
         state.bufferManager.activeBuffer?.documentVersion += 1
 
         replaceAllInFile(state: state, pipeline: pipeline)
@@ -190,18 +242,28 @@ import Testing
 
     private func makeSearch(query: String, matches: [SearchMatch] = []) -> EditorState.InFileSearch {
         EditorState.InFileSearch(
-            query: query, pattern: nil, matches: matches, activeMatchIndex: -1, isCaseSensitive: false,
-            isRegex: false, isWholeWord: false)
+            query: query,
+            pattern: nil,
+            matches: matches,
+            activeMatchIndex: -1,
+            isCaseSensitive: false,
+            isRegex: false,
+            isWholeWord: false
+        )
     }
 
     private func currentRequest(for state: EditorState) -> InFileSearchRequest {
         let search = state.inFileSearch
         return InFileSearchRequest(
             query: SearchQuery(
-                text: search?.query ?? "", isCaseSensitive: search?.isCaseSensitive ?? false,
-                isRegex: search?.isRegex ?? false, wholeWord: search?.isWholeWord ?? false),
+                text: search?.query ?? "",
+                isCaseSensitive: search?.isCaseSensitive ?? false,
+                isRegex: search?.isRegex ?? false,
+                wholeWord: search?.isWholeWord ?? false
+            ),
             bufferID: state.bufferManager.activeBuffer.map(ObjectIdentifier.init),
             documentVersion: state.bufferManager.activeBuffer?.documentVersion ?? 0,
-            contentHash: state.textBuffer.contentHash)
+            contentHash: state.textBuffer.contentHash
+        )
     }
 }

@@ -29,7 +29,8 @@ struct StyledFrameBenchmark {
             samples.append(
                 clock.measure {
                     renderFrame(pipeline: sut.pipeline, state: sut.state)
-                })
+                }
+            )
         }
         samples.sort()
         print("BENCH full styled frame median: \(samples[3]); samples: \(samples)")

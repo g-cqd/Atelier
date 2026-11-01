@@ -16,7 +16,8 @@ struct ListViewTests {
         var buffer = makeSUT()
         let list = ListView(
             items: [],
-            style: ListView.ListViewStyle(normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100))))
+            style: ListView.ListViewStyle(normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100)))
+        )
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
         #expect(buffer[0, 0].character == " ")
         #expect(buffer[0, 0].style.fg == .rgb(r: 100, g: 100, b: 100))
@@ -54,7 +55,10 @@ struct ListViewTests {
         var buffer = makeSUT(columns: 30)
         let items = [
             ListView.Item(
-                label: "file.txt", suffix: "M", suffixStyle: Style(fg: .rgb(r: 255, g: 0, b: 0)))
+                label: "file.txt",
+                suffix: "M",
+                suffixStyle: Style(fg: .rgb(r: 255, g: 0, b: 0))
+            )
         ]
         let list = ListView(items: items, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 30, height: 5))
@@ -70,7 +74,11 @@ struct ListViewTests {
         var buffer = makeSUT(rows: 2)
         let items = (0 ..< 5).map { ListView.Item(label: "item\($0)") }
         let list = ListView(
-            items: items, selectedIndex: 3, scrollOffset: 2, style: ListView.ListViewStyle())
+            items: items,
+            selectedIndex: 3,
+            scrollOffset: 2,
+            style: ListView.ListViewStyle()
+        )
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 2))
         let row0Chars = (0 ..< 20).map { buffer[0, $0].character }
         let row0Text = String(row0Chars).trimmingCharacters(in: .whitespaces)

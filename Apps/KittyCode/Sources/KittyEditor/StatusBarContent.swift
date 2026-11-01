@@ -38,7 +38,9 @@ extension EditorState {
                 return currentLanguage ?? "plain text"
             case .size:
                 return ByteCountFormatter.string(
-                    fromByteCount: Int64(serializedByteCount), countStyle: .file)
+                    fromByteCount: Int64(serializedByteCount),
+                    countStyle: .file
+                )
             case .lineEnding:
                 return currentLineEnding.label
             case .git:

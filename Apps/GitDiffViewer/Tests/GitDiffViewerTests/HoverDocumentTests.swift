@@ -16,12 +16,15 @@ import Testing
 
                 A value type describing how a capture session should be configured.
                 """,
-            source: .docIndex)
+            source: .docIndex
+        )
         let document = HoverDocument.build(from: content, palette: .system)
         let summary = try #require(document.summary)
         var sawUnset = false
         summary.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: summary.length)) {
-            value, _, _ in
+            value,
+            _,
+            _ in
             if value == nil { sawUnset = true }
         }
         #expect(!sawUnset)
@@ -38,12 +41,14 @@ import Testing
 
                 A value type describing how a capture session should be configured.
                 """,
-            source: .docIndex)
+            source: .docIndex
+        )
         let palette = DiffPalette.system
         let document = HoverDocument.build(from: content, palette: palette)
         let chipBackground = try #require(document.chipBackground)
         #expect(
-            chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
+            chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB)
+        )
     }
 
     @Test
@@ -55,12 +60,21 @@ import Testing
         let returns = NSAttributedString(string: "Nothing.")
         let parameter = HoverDocument.Field(name: "speed", text: NSAttributedString(string: "How fast."))
         let candidate = HoverDocument.Candidate(
-            declaration: NSAttributedString(string: "func run(fast: Bool)"), summary: nil)
+            declaration: NSAttributedString(string: "func run(fast: Bool)"),
+            summary: nil
+        )
         let document = HoverDocument(
-            title: "run()", declaration: declaration, summary: summary, discussion: blocks, parameters: [parameter],
-            returns: returns, provenance: .docIndex, extraCandidates: [candidate],
+            title: "run()",
+            declaration: declaration,
+            summary: summary,
+            discussion: blocks,
+            parameters: [parameter],
+            returns: returns,
+            provenance: .docIndex,
+            extraCandidates: [candidate],
             diagnostics: [HoverDocument.DiagnosticEntry(severity: .note, message: "first", tool: "swiftlint")],
-            chipBackground: .textBackgroundColor)
+            chipBackground: .textBackgroundColor
+        )
 
         let joined = document.adding(diagnostics: [
             HoverDocument.DiagnosticEntry(severity: .warning, message: "second", tool: "periphery")
@@ -86,7 +100,9 @@ import Testing
     @Test
     func `a declaration joined by a row's findings keeps the pane's chip background`() throws {
         let content = HoverContent(
-            markdown: "```swift\nstruct CameraConfiguration\n```\n\nA configuration.", source: .docIndex)
+            markdown: "```swift\nstruct CameraConfiguration\n```\n\nA configuration.",
+            source: .docIndex
+        )
         let palette = DiffPalette.system
         let finding = HoverDocument.DiagnosticEntry(severity: .warning, message: "unused", tool: "periphery")
 
@@ -94,7 +110,8 @@ import Testing
 
         let chipBackground = try #require(document.chipBackground)
         #expect(
-            chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
+            chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB)
+        )
     }
 
     /// A fontless run would draw in Helvetica 12; bold and italic runs also carry the matching symbolic trait.
@@ -107,7 +124,8 @@ import Testing
 
                 A **strongly emphasized** value and an *emphasized* one, plus `inline code`.
                 """,
-            source: .docIndex)
+            source: .docIndex
+        )
         let document = HoverDocument.build(from: content, palette: .system)
         let summary = try #require(document.summary)
 
@@ -157,7 +175,8 @@ import Testing
 
                 A property wrapper.
                 """,
-            source: .languageServer)
+            source: .languageServer
+        )
         let document = HoverDocument.build(from: content, palette: .system)
         let declaration = try #require(document.declaration)
         #expect(!declaration.string.contains("_originallyDefinedIn"))

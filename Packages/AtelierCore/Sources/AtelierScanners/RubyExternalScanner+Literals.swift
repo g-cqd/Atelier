@@ -12,7 +12,9 @@ private func isLower(_ value: UInt32) -> Bool {
 
 extension RubyExternalScanner {
     func scanOpenDelimiter(
-        _ lexer: inout some ScannerLexer, literal: inout Literal, validSymbols: [Bool]
+        _ lexer: inout some ScannerLexer,
+        literal: inout Literal,
+        validSymbols: [Bool]
     ) -> Bool {
         switch lexer.lookahead {
             case c("\""):
@@ -66,7 +68,9 @@ extension RubyExternalScanner {
     }
 
     private func scanPercentDelimiter(
-        _ lexer: inout some ScannerLexer, literal: inout Literal, validSymbols: [Bool]
+        _ lexer: inout some ScannerLexer,
+        literal: inout Literal,
+        validSymbols: [Bool]
     ) -> Bool {
         lexer.advance(skip: false)
         guard scanPercentType(&lexer, literal: &literal, validSymbols: validSymbols),
@@ -77,7 +81,9 @@ extension RubyExternalScanner {
     }
 
     private func scanPercentType(
-        _ lexer: inout some ScannerLexer, literal: inout Literal, validSymbols: [Bool]
+        _ lexer: inout some ScannerLexer,
+        literal: inout Literal,
+        validSymbols: [Bool]
     ) -> Bool {
         switch lexer.lookahead {
             case c("s"):
@@ -124,7 +130,9 @@ extension RubyExternalScanner {
     }
 
     private func scanPercentClosingDelimiter(
-        _ lexer: inout some ScannerLexer, literal: inout Literal, validSymbols: [Bool]
+        _ lexer: inout some ScannerLexer,
+        literal: inout Literal,
+        validSymbols: [Bool]
     ) -> Bool {
         switch lexer.lookahead {
             case c("("):
@@ -201,7 +209,9 @@ extension RubyExternalScanner {
                 }
             } else if lexer.lookahead == c("\\") {
                 if let result = Self.scanLiteralEscape(
-                    &lexer, allowsInterpolation: literal.allowsInterpolation, hasContent: hasContent
+                    &lexer,
+                    allowsInterpolation: literal.allowsInterpolation,
+                    hasContent: hasContent
                 ) {
                     literalStack[last] = literal
                     return result
@@ -219,7 +229,8 @@ extension RubyExternalScanner {
     }
 
     private static func scanLiteralInterpolation(
-        _ lexer: inout some ScannerLexer, hasContent: Bool
+        _ lexer: inout some ScannerLexer,
+        hasContent: Bool
     ) -> Bool? {
         lexer.markEnd()
         lexer.advance(skip: false)
@@ -234,7 +245,9 @@ extension RubyExternalScanner {
     }
 
     private static func scanLiteralEscape(
-        _ lexer: inout some ScannerLexer, allowsInterpolation: Bool, hasContent: Bool
+        _ lexer: inout some ScannerLexer,
+        allowsInterpolation: Bool,
+        hasContent: Bool
     ) -> Bool? {
         if allowsInterpolation {
             if hasContent {

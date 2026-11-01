@@ -34,14 +34,17 @@ public struct StatusBar: View, Sendable {
     private func renderEdgeAligned(width: Int) -> String {
         let rightPart = suffixFitting(right, width: width)
         let leftPart = prefixFitting(
-            left, width: max(0, width - UnicodeWidth.displayWidth(of: rightPart)))
+            left,
+            width: max(0, width - UnicodeWidth.displayWidth(of: rightPart))
+        )
         return leftPart
             + String(
                 repeating: " ",
                 count: max(
                     0,
                     width - UnicodeWidth.displayWidth(of: leftPart)
-                        - UnicodeWidth.displayWidth(of: rightPart))
+                        - UnicodeWidth.displayWidth(of: rightPart)
+                )
             )
             + rightPart
     }
@@ -58,8 +61,10 @@ public struct StatusBar: View, Sendable {
         write(leftPart, into: &result, at: 0)
         write(rightPart, into: &result, at: max(0, width - rightPart.count))
         write(
-            centerPart, into: &result,
-            at: centerStart + max(0, (availableCenterWidth - centerPart.count) / 2))
+            centerPart,
+            into: &result,
+            at: centerStart + max(0, (availableCenterWidth - centerPart.count) / 2)
+        )
         return String(result)
     }
 

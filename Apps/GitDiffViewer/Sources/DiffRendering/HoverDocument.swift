@@ -95,10 +95,18 @@ package struct HoverDocument: @unchecked Sendable {
     package let chipBackground: NSColor?
 
     package init(
-        title: String? = nil, declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
-        discussion: [Block] = [], parameters: [Field] = [], returns: NSAttributedString? = nil,
-        provenance: Provenance = .unknown, extraCandidates: [Candidate] = [], diagnostics: [DiagnosticEntry] = [],
-        relationships: [HoverRelationship] = [], documentationURL: URL? = nil, chipBackground: NSColor? = nil
+        title: String? = nil,
+        declaration: NSAttributedString? = nil,
+        summary: NSAttributedString? = nil,
+        discussion: [Block] = [],
+        parameters: [Field] = [],
+        returns: NSAttributedString? = nil,
+        provenance: Provenance = .unknown,
+        extraCandidates: [Candidate] = [],
+        diagnostics: [DiagnosticEntry] = [],
+        relationships: [HoverRelationship] = [],
+        documentationURL: URL? = nil,
+        chipBackground: NSColor? = nil
     ) {
         self.title = title
         self.declaration = declaration
@@ -118,10 +126,19 @@ package struct HoverDocument: @unchecked Sendable {
     /// so a row with findings shows its declaration on the same chip as any other row.
     package func adding(diagnostics: [DiagnosticEntry]) -> HoverDocument {
         HoverDocument(
-            title: title, declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
-            returns: returns, provenance: provenance, extraCandidates: extraCandidates,
-            diagnostics: self.diagnostics + diagnostics, relationships: relationships,
-            documentationURL: documentationURL, chipBackground: chipBackground)
+            title: title,
+            declaration: declaration,
+            summary: summary,
+            discussion: discussion,
+            parameters: parameters,
+            returns: returns,
+            provenance: provenance,
+            extraCandidates: extraCandidates,
+            diagnostics: self.diagnostics + diagnostics,
+            relationships: relationships,
+            documentationURL: documentationURL,
+            chipBackground: chipBackground
+        )
     }
 
     /// Structures and styles `content` for the hover panel: declarations colored with the hovered pane's `palette`,
@@ -131,7 +148,9 @@ package struct HoverDocument: @unchecked Sendable {
         func declaration(_ text: String?) -> NSAttributedString? {
             text.map {
                 CodeAttributedBuilder.attributedString(
-                    for: HoverDeclarationName.withAttributesOnTheirOwnLines($0), palette: palette)
+                    for: HoverDeclarationName.withAttributesOnTheirOwnLines($0),
+                    palette: palette
+                )
             }
         }
         func prose(_ text: String?) -> NSAttributedString? {
@@ -187,7 +206,10 @@ package struct HoverDocument: @unchecked Sendable {
     /// ``openableURL(forLink:)`` refuses loses its link and keeps its text.
     private static func renderProse(_ text: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(
-            allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
+            allowsExtendedAttributes: false,
+            interpretedSyntax: .full,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
         let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
         return styledInline(parsed, size: HoverTypography.bodySize, weight: .regular)
     }

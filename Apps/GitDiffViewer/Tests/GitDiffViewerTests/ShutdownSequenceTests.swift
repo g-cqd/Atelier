@@ -97,9 +97,13 @@ struct ShutdownSequenceTests {
     func `diagnostics are interrupted first, then git work, and both before anything drains or shuts down`() async {
         let log = StepLog()
         let sequence = ShutdownSequence(
-            interruptDiagnostics: { log.record("diagnostics") }, interruptGitWork: { log.record("git") },
-            drainLanguageServers: { log.record("language servers") }, shutdownPools: { log.record("pools") },
-            clock: TestClock(), taskProvider: TaskProviderSpy.tolerant())
+            interruptDiagnostics: { log.record("diagnostics") },
+            interruptGitWork: { log.record("git") },
+            drainLanguageServers: { log.record("language servers") },
+            shutdownPools: { log.record("pools") },
+            clock: TestClock(),
+            taskProvider: TaskProviderSpy.tolerant()
+        )
 
         let outcome = await sequence.run()
 
@@ -123,8 +127,14 @@ struct ShutdownSequenceTests {
         let result = try await stuck.whileStuck { job in
             let pool = stuck.pool
             let sequence = ShutdownSequence(
-                interruptDiagnostics: {}, interruptGitWork: {}, drainLanguageServers: {},
-                shutdownPools: { pool.shutdown() }, limit: .seconds(2), clock: clock, taskProvider: tasks)
+                interruptDiagnostics: {},
+                interruptGitWork: {},
+                drainLanguageServers: {},
+                shutdownPools: { pool.shutdown() },
+                limit: .seconds(2),
+                clock: clock,
+                taskProvider: tasks
+            )
 
             let mark = clock.registrationMark()
             let outcome = Task { await sequence.run() }
@@ -222,7 +232,9 @@ struct InterruptibleProcessRunnerTests {
     @Test
     func `an interrupted run waiting for a pool thread never starts, even when the pool shuts down`() async throws {
         let scratch = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-interrupt-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-interrupt-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: scratch) }
         let marker = scratch.appending(path: "marker")

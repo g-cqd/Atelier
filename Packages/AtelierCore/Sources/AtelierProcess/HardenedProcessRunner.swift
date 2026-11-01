@@ -47,7 +47,9 @@ public struct HardenedProcessRunner: ProcessRunner {
 
     /// Runs `job`, terminating the child and throwing ``ProcessError/timedOut(_:)`` if `timeout` elapses first.
     private func withTimeout(
-        _ timeout: Duration?, running: LaunchedProcess, _ job: @escaping @Sendable () async throws -> ProcessOutput
+        _ timeout: Duration?,
+        running: LaunchedProcess,
+        _ job: @escaping @Sendable () async throws -> ProcessOutput
     ) async throws -> ProcessOutput {
         guard let timeout else { return try await job() }
         let clock = clock
@@ -79,7 +81,9 @@ public struct HardenedProcessRunner: ProcessRunner {
 
     /// Starts the child and reads its two outputs until it exits, then waits for it. Blocks: runs on the pool.
     private static func launch(
-        _ spec: ProcessSpec, input: PrivateInput?, tracking running: LaunchedProcess
+        _ spec: ProcessSpec,
+        input: PrivateInput?,
+        tracking running: LaunchedProcess
     ) throws -> ProcessOutput {
         let process = Process()
         process.executableURL = spec.executable
@@ -105,7 +109,10 @@ public struct HardenedProcessRunner: ProcessRunner {
         }
         var streams = [
             OutputReader.Stream(
-                .standardOutput, handle: outputPipe.fileHandleForReading, limit: spec.standardOutputLimit),
+                .standardOutput,
+                handle: outputPipe.fileHandleForReading,
+                limit: spec.standardOutputLimit
+            ),
             OutputReader.Stream(.standardError, handle: errorPipe.fileHandleForReading, limit: spec.standardErrorLimit)
         ]
         let overflow: OutputReader.Stream?
@@ -125,8 +132,10 @@ public struct HardenedProcessRunner: ProcessRunner {
         }
         process.waitUntilExit()
         return ProcessOutput(
-            terminationStatus: process.terminationStatus, standardOutput: streams[0].data,
-            standardError: streams[1].data)
+            terminationStatus: process.terminationStatus,
+            standardOutput: streams[0].data,
+            standardError: streams[1].data
+        )
     }
 }
 
@@ -315,7 +324,13 @@ private final class OutputReader: Sendable {
     /// A kqueue change or event record; `kevent` also names the call, which keeps the bare initializer ambiguous.
     private static func event(_ identifier: UInt, filter: Int32, flags: Int32, fflags: Int32 = 0) -> kevent {
         kevent(
-            ident: identifier, filter: Int16(filter), flags: UInt16(flags), fflags: UInt32(fflags), data: 0, udata: nil)
+            ident: identifier,
+            filter: Int16(filter),
+            flags: UInt16(flags),
+            fflags: UInt32(fflags),
+            data: 0,
+            udata: nil
+        )
     }
 
     private static func failure(_ call: String) -> ProcessError {

@@ -19,7 +19,11 @@ struct BufferManagerTests {
     func `open creates a new buffer`() {
         let manager = BufferManager()
         let idx = manager.open(
-            filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+            filePath: "/a.swift",
+            fileName: "a.swift",
+            content: "hello",
+            language: "swift"
+        )
         #expect(idx == 0)
         #expect(manager.count == 1)
         #expect(manager.activeIndex == 0)
@@ -30,9 +34,17 @@ struct BufferManagerTests {
     func `open same file twice returns existing index`() {
         let manager = BufferManager()
         let idx1 = manager.open(
-            filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+            filePath: "/a.swift",
+            fileName: "a.swift",
+            content: "hello",
+            language: "swift"
+        )
         let idx2 = manager.open(
-            filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+            filePath: "/a.swift",
+            fileName: "a.swift",
+            content: "hello",
+            language: "swift"
+        )
         #expect(idx1 == idx2)
         #expect(manager.count == 1)
     }

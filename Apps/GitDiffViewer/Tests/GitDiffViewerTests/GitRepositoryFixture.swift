@@ -15,7 +15,9 @@ struct GitRepositoryFixture: Sendable {
 
     private init() throws {
         root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-history-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-history-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try git("init", "-q", "-b", "main")
     }

@@ -36,8 +36,10 @@ struct SourceToolbarControl: NSViewRepresentable {
     func updateNSView(_ button: NSPopUpButton, context: Context) {
         context.coordinator.trust = trust
         let snapshot = Snapshot(
-            side: side, position: position,
-            allowsFetch: trust?.allowsFetch(in: side.repository?.root) ?? false)
+            side: side,
+            position: position,
+            allowsFetch: trust?.allowsFetch(in: side.repository?.root) ?? false
+        )
         guard context.coordinator.snapshot != snapshot else { return }
         context.coordinator.snapshot = snapshot
         button.menu = context.coordinator.menu(for: snapshot)
@@ -137,10 +139,14 @@ struct SourceToolbarControl: NSViewRepresentable {
             let menu = NSMenu()
             menu.autoenablesItems = false
             let heading = NSMenuItem(
-                title: snapshot.isLoading ? snapshot.title + " (loading…)" : snapshot.title, action: nil,
-                keyEquivalent: "")
+                title: snapshot.isLoading ? snapshot.title + " (loading…)" : snapshot.title,
+                action: nil,
+                keyEquivalent: ""
+            )
             heading.image = NSImage(
-                systemSymbolName: snapshot.isLoading ? "hourglass" : snapshot.symbol, accessibilityDescription: nil)
+                systemSymbolName: snapshot.isLoading ? "hourglass" : snapshot.symbol,
+                accessibilityDescription: nil
+            )
             menu.addItem(heading)
             if let fileCount = snapshot.fileCount {
                 let info = snapshot.errorMessage ?? "\(fileCount.formatted()) files"
@@ -152,8 +158,11 @@ struct SourceToolbarControl: NSViewRepresentable {
             if let repository = snapshot.repository, !snapshot.isSingleFile {
                 menu.addItem(
                     check(
-                        "Working tree", snapshot.hasSource && snapshot.refChoice == .workingTree,
-                        #selector(chooseWorkingTree)))
+                        "Working tree",
+                        snapshot.hasSource && snapshot.refChoice == .workingTree,
+                        #selector(chooseWorkingTree)
+                    )
+                )
                 if case .ref(let ref) = snapshot.refChoice, !repository.branches.contains(ref),
                     !repository.tags.contains(ref), !repository.commits.contains(where: { $0.hash == ref })
                 {
@@ -163,8 +172,11 @@ struct SourceToolbarControl: NSViewRepresentable {
                 if !repository.tags.isEmpty { menu.addItem(refs("Tags", repository.tags, current: snapshot.refChoice)) }
                 menu.addItem(
                     refs(
-                        "Recent commits", repository.commits.map(\.hash),
-                        titles: repository.commits.map { "\($0.shortHash) \($0.subject)" }, current: snapshot.refChoice)
+                        "Recent commits",
+                        repository.commits.map(\.hash),
+                        titles: repository.commits.map { "\($0.shortHash) \($0.subject)" },
+                        current: snapshot.refChoice
+                    )
                 )
                 menu.addItem(item("Commit or ref…", #selector(enterRef)))
                 menu.addItem(.separator())
@@ -200,7 +212,8 @@ struct SourceToolbarControl: NSViewRepresentable {
             let submenu = NSMenu(title: title)
             for (index, ref) in refs.enumerated() {
                 submenu.addItem(
-                    check(titles?[index] ?? ref, current == .ref(ref), #selector(chooseRef(_:)), represented: ref))
+                    check(titles?[index] ?? ref, current == .ref(ref), #selector(chooseRef(_:)), represented: ref)
+                )
             }
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             item.submenu = submenu
@@ -212,7 +225,9 @@ struct SourceToolbarControl: NSViewRepresentable {
         /// instead, and a disabled line naming the last failure, if any.
         private func addFetchItems(to menu: NSMenu, snapshot: Snapshot) {
             let state = RepositoryFetch.MenuItem(
-                remoteName: snapshot.primaryRemoteName, isFetching: snapshot.isFetching, lastError: snapshot.fetchError
+                remoteName: snapshot.primaryRemoteName,
+                isFetching: snapshot.isFetching,
+                lastError: snapshot.fetchError
             )
             let fetchItem = NSMenuItem(title: state.title, action: #selector(fetch), keyEquivalent: "")
             fetchItem.target = self

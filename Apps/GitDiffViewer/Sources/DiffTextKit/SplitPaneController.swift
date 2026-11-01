@@ -63,7 +63,9 @@ package final class SplitPaneController: NSObject {
 
     /// Keeps `textView`'s pane in step with the other; `didAlign` is called each time an alignment pass changes its rows.
     package func register(
-        _ scrollView: NSScrollView?, textView: NSTextView, didAlign: (@MainActor () -> Void)? = nil
+        _ scrollView: NSScrollView?,
+        textView: NSTextView,
+        didAlign: (@MainActor () -> Void)? = nil
     ) {
         guard !members.contains(where: { $0.textView === textView }) else { return }
         members.append(Member(scrollView: scrollView, textView: textView, rendered: nil, didAlign: didAlign))
@@ -81,7 +83,10 @@ package final class SplitPaneController: NSObject {
     package func unregister(textView: NSTextView) {
         if let scrollView = members.first(where: { $0.textView === textView })?.scrollView {
             NotificationCenter.default.removeObserver(
-                self, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+                self,
+                name: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView
+            )
         }
         members.removeAll { $0.textView === textView }
     }
@@ -204,7 +209,10 @@ package final class SplitPaneController: NSObject {
         guard let fragment else { return nil }
         let row = rendered.rowIndex(
             containing: contentManager.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
+                from: layoutManager.documentRange.location,
+                to: fragment.rangeInElement.location
+            )
+        )
         return RowAnchor(row: row, offset: top() - (fragment.layoutFragmentFrame.minY + inset))
     }
 
@@ -213,7 +221,9 @@ package final class SplitPaneController: NSObject {
         guard let textView = member.textView, let rendered = member.rendered, rendered.lineStarts.indices.contains(row),
             let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
             let location = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+                layoutManager.documentRange.location,
+                offsetBy: rendered.lineStarts[row]
+            )
         else { return nil }
         layoutManager.ensureLayout(for: NSTextRange(location: location))
         guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }

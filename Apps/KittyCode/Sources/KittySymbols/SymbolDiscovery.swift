@@ -14,9 +14,13 @@ public struct SymbolDiscovery {
         let frameworkURL = try locateFramework()
 
         let publicBundle = frameworkURL.appending(
-            path: "CoreGlyphs.bundle", directoryHint: .isDirectory)
+            path: "CoreGlyphs.bundle",
+            directoryHint: .isDirectory
+        )
         let privateBundle = frameworkURL.appending(
-            path: "CoreGlyphsPrivate.bundle", directoryHint: .isDirectory)
+            path: "CoreGlyphsPrivate.bundle",
+            directoryHint: .isDirectory
+        )
 
         let publicNames = try loadSymbolOrder(from: publicBundle)
         let publicMetadata = try metadataLoader.loadFrameworkMetadata(from: publicBundle)
@@ -134,7 +138,8 @@ public struct SymbolDiscovery {
                 volume
                 .appending(
                     path: "Library/Developer/CoreSimulator/Profiles/Runtimes",
-                    directoryHint: .isDirectory)
+                    directoryHint: .isDirectory
+                )
 
             guard
                 let runtimeDirs = try? fileManager.contentsOfDirectory(
@@ -151,7 +156,8 @@ public struct SymbolDiscovery {
                     .appending(
                         path:
                             "Contents/Resources/RuntimeRoot/System/Library/PrivateFrameworks/SFSymbols.framework",
-                        directoryHint: .isDirectory)
+                        directoryHint: .isDirectory
+                    )
                 let orderPlist = framework.appending(path: "CoreGlyphs.bundle/symbol_order.plist")
 
                 if fileManager.fileExists(atPath: orderPlist.path) {

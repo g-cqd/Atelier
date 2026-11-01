@@ -89,7 +89,9 @@ package enum BidiControls {
 
         /// Whether `bytes` hold `lead` with the two bytes after it, zero past the end, accepted by `continues`.
         private static func holds(
-            _ lead: UInt8, in bytes: UnsafeBufferPointer<UInt8>, followedBy continues: (UInt8, UInt8) -> Bool
+            _ lead: UInt8,
+            in bytes: UnsafeBufferPointer<UInt8>,
+            followedBy continues: (UInt8, UInt8) -> Bool
         ) -> Bool {
             guard let start = bytes.baseAddress.map(UnsafeRawPointer.init) else { return false }
             var index = 0

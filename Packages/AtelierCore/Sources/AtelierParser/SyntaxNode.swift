@@ -388,7 +388,9 @@ private struct RewriteFrame {
     /// The storage of the rewritten nodes, and its inline height.
     var rebuilt: (Storage, UInt8) {
         SyntaxNode.storage(
-            children: lists[0], fields: Dictionary(uniqueKeysWithValues: zip(names, lists.dropFirst())))
+            children: lists[0],
+            fields: Dictionary(uniqueKeysWithValues: zip(names, lists.dropFirst()))
+        )
     }
 
     /// Replaces the current node with `node`, rewritten but for the subtrees below it, which a frame above rebuilds.

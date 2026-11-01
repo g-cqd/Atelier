@@ -16,8 +16,12 @@ struct FileTreeNavigatorTests {
         isExpanded: Bool = false
     ) -> FileNode {
         FileNode(
-            name: name, path: path + "/\(name)", isDirectory: true, children: children,
-            isExpanded: isExpanded)
+            name: name,
+            path: path + "/\(name)",
+            isDirectory: true,
+            children: children,
+            isExpanded: isExpanded
+        )
     }
 
     // MARK: flatten
@@ -132,7 +136,11 @@ struct FileTreeNavigatorTests {
 
     @Test func `toggleExpand recurses into nested directories`() {
         let inner = FileNode(
-            name: "inner", path: "/r/outer/inner", isDirectory: true, isExpanded: false)
+            name: "inner",
+            path: "/r/outer/inner",
+            isDirectory: true,
+            isExpanded: false
+        )
         var nodes: [FileNode] = [
             FileNode(
                 name: "outer",

@@ -22,7 +22,8 @@ struct NamedPrecedenceTests {
                 ("identifier", .pattern("[a-z]+"))
             ],
             extras: [.pattern(#"\s"#)],
-            precedences: [[.literal("times"), .literal("plus")]])
+            precedences: [[.literal("times"), .literal("plus")]]
+        )
 
         let tree = try Self.parser(grammar).parse("i + j * k")
 
@@ -42,7 +43,8 @@ struct NamedPrecedenceTests {
                 ("statement_block", .precRight(0, .seq([.string("{"), .string("}")])))
             ],
             extras: [.pattern(#"\s"#)],
-            precedences: [[.symbol("statement_block"), .literal("object")]])
+            precedences: [[.symbol("statement_block"), .literal("object")]]
+        )
 
         let tree = try Self.parser(grammar).parse("{}")
 
@@ -67,7 +69,8 @@ struct NamedPrecedenceTests {
                 )
             ],
             extras: [.pattern(#"\s"#)],
-            precedences: [[.symbol("statement_block"), .literal("object")]])
+            precedences: [[.symbol("statement_block"), .literal("object")]]
+        )
 
         let tree = try Self.parser(grammar).parse("{}")
 
@@ -77,7 +80,10 @@ struct NamedPrecedenceTests {
     private static func parser(_ grammar: GrammarDefinition) throws -> GLRParser {
         let compiled = try ParseTableCompiler.compile(grammar)
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 
     /// The tree's named, visible nodes as an S-expression.

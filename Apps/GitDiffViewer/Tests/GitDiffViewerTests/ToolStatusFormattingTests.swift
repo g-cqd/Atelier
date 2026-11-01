@@ -23,7 +23,8 @@ struct ToolStatusFormattingTests {
             let status = ToolStatus(tool: .swiftlint, url: Self.url, origin: origin, version: "0.59.1")
             #expect(
                 toolStatusDescription(status, pinned: false)
-                    == "swiftlint 0.59.1 — /opt/homebrew/bin (\(name))")
+                    == "swiftlint 0.59.1 — /opt/homebrew/bin (\(name))"
+            )
         }
     }
 

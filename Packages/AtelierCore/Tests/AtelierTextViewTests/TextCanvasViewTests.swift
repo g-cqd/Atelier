@@ -22,7 +22,10 @@ struct TextCanvasViewTests {
         let canvas = TextCanvasView(configuration: LayoutConfiguration(wrap: .none, lineHeight: 16))
         canvas.setFrameSize(NSSize(width: 400, height: 200))
         let text = StyledText.plain(
-            rows: (0 ..< 10).map { "row \($0)" }, font: Self.font, plainStyle: Self.plainStyle)
+            rows: (0 ..< 10).map { "row \($0)" },
+            font: Self.font,
+            plainStyle: Self.plainStyle
+        )
         canvas.show(text, keepingAnchor: false)
         var rows: [Int] = []
         canvas.forEachRow(in: CGRect(x: 0, y: 16, width: 400, height: 32)) { row, _, _ in rows.append(row.index) }

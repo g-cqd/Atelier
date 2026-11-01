@@ -30,7 +30,8 @@ struct LSPTypesTests {
     @Test
     func `Hover contents as an array of marked strings`() throws {
         let payload = Data(
-            #"{"contents":["plain text",{"language":"swift","value":"func f()"}]}"#.utf8)
+            #"{"contents":["plain text",{"language":"swift","value":"func f()"}]}"#.utf8
+        )
         let hover = try JSONDecoder().decode(Hover.self, from: payload)
         #expect(hover.markdown == "plain text\n\n```swift\nfunc f()\n```")
     }
@@ -38,7 +39,8 @@ struct LSPTypesTests {
     @Test
     func `Hover decodes an optional range`() throws {
         let payload = Data(
-            #"{"contents":"x","range":{"start":{"line":1,"character":2},"end":{"line":1,"character":5}}}"#.utf8)
+            #"{"contents":"x","range":{"start":{"line":1,"character":2},"end":{"line":1,"character":5}}}"#.utf8
+        )
         let hover = try JSONDecoder().decode(Hover.self, from: payload)
         #expect(hover.range == HoverRange(start: Position(line: 1, character: 2), end: Position(line: 1, character: 5)))
     }
@@ -46,7 +48,8 @@ struct LSPTypesTests {
     @Test
     func `Realistic sourcekit-lsp hover response decodes`() throws {
         let payload = Data(
-            ##"{"contents":{"kind":"markdown","value":"```swift\nfunc f()\n```\n\ndocs"}}"##.utf8)
+            ##"{"contents":{"kind":"markdown","value":"```swift\nfunc f()\n```\n\ndocs"}}"##.utf8
+        )
         let hover = try JSONDecoder().decode(Hover.self, from: payload)
         #expect(hover.markdown == "```swift\nfunc f()\n```\n\ndocs")
     }
@@ -72,8 +75,11 @@ struct LSPTypesTests {
     @Test
     func `InitializeParams encodes its options and workspace folders when given`() throws {
         let params = InitializeParams(
-            processId: nil, rootUri: "file:///repo/", initializationOptions: .object(["a": .bool(true)]),
-            workspaceFolders: [WorkspaceFolder(uri: "file:///repo/", name: "repo")])
+            processId: nil,
+            rootUri: "file:///repo/",
+            initializationOptions: .object(["a": .bool(true)]),
+            workspaceFolders: [WorkspaceFolder(uri: "file:///repo/", name: "repo")]
+        )
         let data = try JSONEncoder().encode(params)
         let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
 

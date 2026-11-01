@@ -37,7 +37,10 @@ struct SyntaxArtifactsCacheTests {
         registry.register(GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "tiny"))
         registry.register(GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "other"))
         let cache = SyntaxArtifactsCache(
-            registry: registry, grammarsDirectory: fixture.grammarsDirectory, onQueued: { queued.record($0) })
+            registry: registry,
+            grammarsDirectory: fixture.grammarsDirectory,
+            onQueued: { queued.record($0) }
+        )
 
         async let json: Void = cache.loadIfNeeded(for: "json")
         async let python: Void = cache.loadIfNeeded(for: "python")
@@ -61,8 +64,10 @@ struct SyntaxArtifactsCacheTests {
         let compiles = Counter()
         let limits = SyntaxArtifactsCache.Limits(maxTableBytes: 1, budgetBytes: 1 << 20)
         let first = SyntaxArtifactsCache(
-            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory,
-            limits: limits)
+            registry: fixture.registry(counting: compiles),
+            grammarsDirectory: fixture.grammarsDirectory,
+            limits: limits
+        )
 
         #expect(await first.pin("json") == nil)
         #expect(first.isOversized("json"))
@@ -70,8 +75,10 @@ struct SyntaxArtifactsCacheTests {
         #expect(compiles.value == 1)
 
         let later = SyntaxArtifactsCache(
-            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory,
-            limits: limits)
+            registry: fixture.registry(counting: compiles),
+            grammarsDirectory: fixture.grammarsDirectory,
+            limits: limits
+        )
         await later.loadIfNeeded(for: "json")
 
         #expect(later.isOversized("json"))
@@ -85,16 +92,20 @@ struct SyntaxArtifactsCacheTests {
         let compiles = Counter()
         let limits = SyntaxArtifactsCache.Limits(maxTableBytes: 1, budgetBytes: 1 << 20)
         let first = SyntaxArtifactsCache(
-            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory,
-            limits: limits)
+            registry: fixture.registry(counting: compiles),
+            grammarsDirectory: fixture.grammarsDirectory,
+            limits: limits
+        )
         // Nothing stored yet: only a compile can tell.
         #expect(first.admits("json"))
         #expect(await first.pin("json") == nil)
         #expect(!first.admits("json"))
 
         let later = SyntaxArtifactsCache(
-            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory,
-            limits: limits)
+            registry: fixture.registry(counting: compiles),
+            grammarsDirectory: fixture.grammarsDirectory,
+            limits: limits
+        )
 
         #expect(!later.admits("json"))
         #expect(later.isOversized("json"))
@@ -115,14 +126,17 @@ struct SyntaxArtifactsCacheTests {
         // Every table once, to measure one: the three grammars differ only by a keyword of the same length.
         let measuring = SyntaxArtifactsCache(
             registry: fixture.registry(counting: compiles, paths: paths),
-            grammarsDirectory: fixture.grammarsDirectory, limits: .init(maxTableBytes: 1 << 20, budgetBytes: 1 << 30))
+            grammarsDirectory: fixture.grammarsDirectory,
+            limits: .init(maxTableBytes: 1 << 20, budgetBytes: 1 << 30)
+        )
         for language in languages.keys { await measuring.loadIfNeeded(for: language) }
         let table = measuring.loadedTableBytes / 3
         try #require(table > 0)
         let cache = SyntaxArtifactsCache(
             registry: fixture.registry(counting: compiles, paths: paths),
             grammarsDirectory: fixture.grammarsDirectory,
-            limits: .init(maxTableBytes: 1 << 20, budgetBytes: 2 * table + table / 2))
+            limits: .init(maxTableBytes: 1 << 20, budgetBytes: 2 * table + table / 2)
+        )
 
         #expect(await cache.pin("json") != nil)
         await cache.loadIfNeeded(for: "python")

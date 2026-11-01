@@ -22,7 +22,8 @@ struct GrammarQualityGateTests {
         #expect(grammar.highlightDocument(source: source) == lexical.highlightDocument(source: source))
         #expect(
             grammar.highlightViewport(source: source, visibleLineRange: 0 ..< 1)
-                == lexical.highlightViewport(source: source, visibleLineRange: 0 ..< 1))
+                == lexical.highlightViewport(source: source, visibleLineRange: 0 ..< 1)
+        )
         #expect(grammar.highlightDocumentTokens(source: source).isEmpty)
         #expect(!grammar.isGrammarBacked)
     }

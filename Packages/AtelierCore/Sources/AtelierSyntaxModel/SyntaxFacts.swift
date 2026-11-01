@@ -73,8 +73,11 @@ public struct SyntaxFacts: Sendable {
     public let scopes: [SyntaxScope]
 
     public init(
-        tokenBoundaries: [[Range<Int>]], declarations: [SyntaxDeclaration], highlights: [HighlightToken]?,
-        unexpectedShare: Double, scopes: [SyntaxScope] = []
+        tokenBoundaries: [[Range<Int>]],
+        declarations: [SyntaxDeclaration],
+        highlights: [HighlightToken]?,
+        unexpectedShare: Double,
+        scopes: [SyntaxScope] = []
     ) {
         self.tokenBoundaries = tokenBoundaries
         self.declarations = declarations

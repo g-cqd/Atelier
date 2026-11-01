@@ -33,7 +33,9 @@ struct SemanticTierMergeTests {
     {
         LanguageServerSession(
             configuration: LanguageServerSession.Configuration(
-                serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: URL(filePath: "/repo")),
+                serverExecutable: URL(filePath: "/usr/bin/true"),
+                workspaceRoot: URL(filePath: "/repo")
+            ),
             clock: clock
         ) { _ in await factory.make() }
     }
@@ -46,10 +48,15 @@ struct SemanticTierMergeTests {
 
     /// The first line's merged tokens once `tiers` ran on the text; `whileRunning` runs beside the job.
     private func merged(
-        _ tiers: [any AtelierHighlighting.HighlightTier], whileRunning: @Sendable () async throws -> Void = {}
+        _ tiers: [any AtelierHighlighting.HighlightTier],
+        whileRunning: @Sendable () async throws -> Void = {}
     ) async throws -> [LineToken] {
         let request = TierRequest(
-            revision: Self.revision, text: Self.text, lineRanges: [0 ..< Self.text.utf8.count], visibleLines: 0 ..< 1)
+            revision: Self.revision,
+            text: Self.text,
+            lineRanges: [0 ..< Self.text.utf8.count],
+            visibleLines: 0 ..< 1
+        )
         let (events, run) = HighlightTiers.events(request, tiers: tiers, clock: TestClock())
         async let running: Void = run()
         try await whileRunning()

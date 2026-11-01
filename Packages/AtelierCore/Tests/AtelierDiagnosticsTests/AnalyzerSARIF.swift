@@ -33,15 +33,19 @@ enum AnalyzerSARIF {
                     tool: Tool(driver: Driver(name: tool, version: "0.9.0", informationUri: "https://example.com")),
                     results: results.map { result in
                         EncodedResult(
-                            ruleId: result.ruleID, level: result.level, message: Text(text: result.message),
+                            ruleId: result.ruleID,
+                            level: result.level,
+                            message: Text(text: result.message),
                             locations: [EncodedLocation(result.location)],
                             relatedLocations: result.related.isEmpty
                                 ? nil
                                 : result.related.map {
                                     EncodedLocation($0, message: result.relatedMessage.map(Text.init(text:)))
                                 },
-                            partialFingerprints: ["\(tool)/v1": "\(result.ruleID)-\(result.location.line)"])
-                    })
+                            partialFingerprints: ["\(tool)/v1": "\(result.ruleID)-\(result.location.line)"]
+                        )
+                    }
+                )
             ])
         return String(decoding: try encoder.encode(log), as: UTF8.self)
     }
@@ -93,7 +97,8 @@ enum AnalyzerSARIF {
         init(_ location: Location, message: Text? = nil) {
             physicalLocation = PhysicalLocation(
                 artifactLocation: ArtifactLocation(uri: location.path),
-                region: Region(startLine: location.line, startColumn: location.column))
+                region: Region(startLine: location.line, startColumn: location.column)
+            )
             self.message = message
         }
     }
@@ -126,11 +131,15 @@ struct AnalyzerRepository {
         for file in files {
             let url = URL(filePath: temporary.file("My Repo/\(file)"))
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try Data().write(to: url)
         }
         try FileManager.default.createSymbolicLink(
-            atPath: temporary.file("link"), withDestinationPath: temporary.file("My Repo"))
+            atPath: temporary.file("link"),
+            withDestinationPath: temporary.file("My Repo")
+        )
     }
 
     func cleanup() {

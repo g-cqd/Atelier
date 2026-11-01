@@ -18,7 +18,9 @@ struct TerminalPaletteTests {
         ansi[5] = magenta
         return TerminalPalette(
             foreground: ThemeColor(byteRed: 230, green: 230, blue: 230),
-            background: ThemeColor(byteRed: 20, green: 20, blue: 20), ansi: ansi)
+            background: ThemeColor(byteRed: 20, green: 20, blue: 20),
+            ansi: ansi
+        )
     }
 
     @Test

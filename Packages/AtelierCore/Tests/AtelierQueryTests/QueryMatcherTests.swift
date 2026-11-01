@@ -100,7 +100,8 @@ struct QueryMatcherTests {
         let tree = SyntaxTree(root: root, source: "require")
 
         let unlessLocal = try QueryParser.parse(
-            "((identifier) @function.builtin (#eq? @function.builtin \"require\") (#is-not? local))")
+            "((identifier) @function.builtin (#eq? @function.builtin \"require\") (#is-not? local))"
+        )
         let onlyLocal = try QueryParser.parse("((identifier) @variable (#is? @variable local))")
 
         #expect(QueryMatcher.execute(query: unlessLocal, tree: tree).map(\.captures.first?.node) == [require])
@@ -161,13 +162,16 @@ struct QueryMatcherTests {
 
         let optional = QueryMatcher.execute(query: try QueryParser.parse("(list (item)? @maybe)"), tree: tree)
         let thenOne = QueryMatcher.execute(
-            query: try QueryParser.parse("(list (item)? @maybe (item) @last)"), tree: tree)
+            query: try QueryParser.parse("(list (item)? @maybe (item) @last)"),
+            tree: tree
+        )
 
         // As tree-sitter gives them: `(item)?` takes either item, and after it `(item)` the other one or both.
         #expect(optional.map { $0.captures.map(\.node) } == [[first], [second]])
         #expect(
             thenOne.map { $0.captures.map { "\($0.name) \($0.node.byteRange)" } }
-                == [["last 0..<1"], ["maybe 0..<1", "last 1..<2"]])
+                == [["last 0..<1"], ["maybe 0..<1", "last 1..<2"]]
+        )
     }
 
     @Test
@@ -206,12 +210,17 @@ struct QueryMatcherTests {
         let first = SyntaxNode(type: "word", byteRange: 3 ..< 4)
         let second = SyntaxNode(type: "word", byteRange: 5 ..< 6)
         let command = SyntaxNode(
-            type: "command", children: [name, first, second], byteRange: 0 ..< 6,
-            fields: ["argument": [first, second]])
+            type: "command",
+            children: [name, first, second],
+            byteRange: 0 ..< 6,
+            fields: ["argument": [first, second]]
+        )
         let tree = SyntaxTree(root: command, source: "ls a b")
 
         let matches = QueryMatcher.execute(
-            query: try QueryParser.parse("(command argument: (word) @argument)"), tree: tree)
+            query: try QueryParser.parse("(command argument: (word) @argument)"),
+            tree: tree
+        )
 
         #expect(matches.map { $0.captures.map(\.node) } == [[first], [second]])
     }
@@ -260,11 +269,14 @@ struct QueryMatcherTests {
                 punctuation("[", at: 0), one, punctuation(",", at: 2), a, punctuation(",", at: 7), two,
                 punctuation(",", at: 10), b, punctuation("]", at: 15)
             ],
-            byteRange: 0 ..< 16)
+            byteRange: 0 ..< 16
+        )
         let tree = SyntaxTree(root: array, source: #"[1, "a", 2, "b"]"#)
 
         let matches = QueryMatcher.execute(
-            query: try QueryParser.parse("(array (number)* @number (string) @string)"), tree: tree)
+            query: try QueryParser.parse("(array (number)* @number (string) @string)"),
+            tree: tree
+        )
 
         #expect(matches.map { $0.captures.map(\.node) } == [[one, a], [one, b], [two, b]])
     }
@@ -283,12 +295,14 @@ struct QueryMatcherTests {
 
         let equal = try QueryParser.parse("((assignment (identifier) @left (identifier) @right) (#eq? @left @right))")
         let unequal = try QueryParser.parse(
-            "((assignment (identifier) @left (identifier) @right) (#not-eq? @left @right))")
+            "((assignment (identifier) @left (identifier) @right) (#not-eq? @left @right))"
+        )
 
         #expect(QueryMatcher.execute(query: equal, tree: tree).map { $0.captures.map(\.node) } == [[left, right]])
         #expect(
             QueryMatcher.execute(query: unequal, tree: tree).map { $0.captures.map(\.node) }
-                == [[otherLeft, otherRight]])
+                == [[otherLeft, otherRight]]
+        )
     }
 
     @Test
@@ -296,9 +310,15 @@ struct QueryMatcherTests {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
         let number = SyntaxNode(type: "number", byteRange: 1 ..< 2)
         let matchingCall = SyntaxNode(
-            type: "call", children: [identifier, number], byteRange: 0 ..< 2)
+            type: "call",
+            children: [identifier, number],
+            byteRange: 0 ..< 2
+        )
         let reversedCall = SyntaxNode(
-            type: "call", children: [number, identifier], byteRange: 0 ..< 2)
+            type: "call",
+            children: [number, identifier],
+            byteRange: 0 ..< 2
+        )
 
         let query = Query(patterns: [
             .nodeMatch(
@@ -355,7 +375,9 @@ struct QueryMatcherTests {
                 type: "list",
                 children: [
                     .quantified(
-                        pattern: .nodeMatch(type: "identifier", children: [], capture: "item"), quantifier: .oneOrMore)
+                        pattern: .nodeMatch(type: "identifier", children: [], capture: "item"),
+                        quantifier: .oneOrMore
+                    )
                 ],
                 capture: nil
             )
@@ -376,7 +398,9 @@ struct QueryMatcherTests {
                 type: "list",
                 children: [
                     .quantified(
-                        pattern: .nodeMatch(type: "identifier", children: [], capture: "item"), quantifier: .oneOrMore)
+                        pattern: .nodeMatch(type: "identifier", children: [], capture: "item"),
+                        quantifier: .oneOrMore
+                    )
                 ],
                 capture: nil
             )
@@ -395,7 +419,9 @@ struct QueryMatcherTests {
                 type: "list",
                 children: [
                     .quantified(
-                        pattern: .nodeMatch(type: "identifier", children: [], capture: "item"), quantifier: .zeroOrMore)
+                        pattern: .nodeMatch(type: "identifier", children: [], capture: "item"),
+                        quantifier: .zeroOrMore
+                    )
                 ],
                 capture: nil
             )
@@ -437,20 +463,35 @@ struct QueryMatcherTests {
     @Test
     func `A point range skips the nodes outside it with their descendants`() {
         let before = SyntaxNode(
-            type: "identifier", byteRange: 0 ..< 1, pointRange: Point(row: 0, column: 0) ..< Point(row: 0, column: 1))
+            type: "identifier",
+            byteRange: 0 ..< 1,
+            pointRange: Point(row: 0, column: 0) ..< Point(row: 0, column: 1)
+        )
         let hidden = SyntaxNode(
-            type: "identifier", byteRange: 2 ..< 3, pointRange: Point(row: 1, column: 0) ..< Point(row: 1, column: 1))
+            type: "identifier",
+            byteRange: 2 ..< 3,
+            pointRange: Point(row: 1, column: 0) ..< Point(row: 1, column: 1)
+        )
         let block = SyntaxNode(
-            type: "block", children: [hidden], byteRange: 2 ..< 3,
-            pointRange: Point(row: 1, column: 0) ..< Point(row: 1, column: 1))
+            type: "block",
+            children: [hidden],
+            byteRange: 2 ..< 3,
+            pointRange: Point(row: 1, column: 0) ..< Point(row: 1, column: 1)
+        )
         let root = SyntaxNode(
-            type: "source", children: [before, block], byteRange: 0 ..< 3,
-            pointRange: Point(row: 0, column: 0) ..< Point(row: 1, column: 1))
+            type: "source",
+            children: [before, block],
+            byteRange: 0 ..< 3,
+            pointRange: Point(row: 0, column: 0) ..< Point(row: 1, column: 1)
+        )
         let tree = SyntaxTree(root: root, source: "a\nb")
         let query = Query(patterns: [.nodeMatch(type: "identifier", children: [], capture: "id")])
 
         let matches = QueryMatcher.execute(
-            query: query, tree: tree, pointRange: Point(row: 0, column: 0) ..< Point(row: 0, column: 5))
+            query: query,
+            tree: tree,
+            pointRange: Point(row: 0, column: 0) ..< Point(row: 0, column: 5)
+        )
 
         #expect(matches.compactMap { $0.captures.first?.node.byteRange } == [0 ..< 1])
     }

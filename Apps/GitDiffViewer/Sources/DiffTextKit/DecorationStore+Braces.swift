@@ -26,7 +26,9 @@ extension DecorationStore {
 
     /// Lights the braces lying in `span`, the UTF-16 offsets of a fragment being validated that starts at `anchor`.
     func paintLitBraces(
-        in span: Range<Int>, anchor: (location: any NSTextLocation, offset: Int), layoutManager: NSTextLayoutManager
+        in span: Range<Int>,
+        anchor: (location: any NSTextLocation, offset: Int),
+        layoutManager: NSTextLayoutManager
     ) {
         guard let contentManager = layoutManager.textContentManager else { return }
         for offset in litBraces where span.contains(offset) {

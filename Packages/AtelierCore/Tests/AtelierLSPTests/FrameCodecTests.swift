@@ -51,7 +51,8 @@ struct FrameCodecTests {
         let payload = Data(#"{"a":1}"#.utf8)
         var chunk = Data(
             "Content-Length: \(payload.count)\r\nContent-Type: application/vscode-jsonrpc; charset=utf-8\r\n\r\n"
-                .utf8)
+                .utf8
+        )
         chunk.append(payload)
 
         var codec = LSPFrameCodec()
@@ -110,7 +111,9 @@ struct FrameCodecTests {
         let lengthLine = "Content-Length: \(payload.count)\r\n"
         let paddingName = "X-Padding: "
         let padding = String(
-            repeating: "p", count: LSPFrameCodec.maximumHeaderSize - lengthLine.utf8.count - paddingName.utf8.count)
+            repeating: "p",
+            count: LSPFrameCodec.maximumHeaderSize - lengthLine.utf8.count - paddingName.utf8.count
+        )
         var framed = Data((lengthLine + paddingName + padding + "\r\n\r\n").utf8)
         framed.append(payload)
         // Everything but the terminator's last byte: the codec must keep waiting rather than refuse the header.

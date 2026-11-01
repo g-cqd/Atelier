@@ -134,7 +134,12 @@ public struct ParseActionTable: Sendable {
 
         init(columnCount: Int) {
             table = ParseActionTable(
-                columnCount: columnCount, rowCount: 0, rowOfState: [], cells: [], indirectActions: [])
+                columnCount: columnCount,
+                rowCount: 0,
+                rowOfState: [],
+                cells: [],
+                indirectActions: []
+            )
         }
 
         var columnCount: Int { table.columnCount }

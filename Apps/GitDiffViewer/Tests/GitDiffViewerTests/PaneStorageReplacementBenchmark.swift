@@ -34,7 +34,8 @@ struct PaneStorageReplacementBenchmark {
             }
             print(
                 "BENCH new document, \(rows) rows: replaced in place \(Self.summary(replaced)); "
-                    + "emptied first \(Self.summary(emptied))")
+                    + "emptied first \(Self.summary(emptied))"
+            )
             #expect(emptied.sorted()[runs / 2] < replaced.sorted()[runs / 2])
         }
     }
@@ -62,12 +63,20 @@ final class NewDocumentPane {
         textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
         textView.textLayoutManager?.delegate = coordinator.fragmentProvider
         DiffTextViewCoordinator.configureWrapping(
-            false, column: 0, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+            false,
+            column: 0,
+            font: rendered.palette.font,
+            textView: textView,
+            scrollView: scrollView
+        )
         coordinator.textView = textView
         coordinator.wrapsLines = false
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         let contentView = try #require(window.contentView)
         contentView.wantsLayer = true
         scrollView.frame = contentView.bounds

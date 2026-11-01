@@ -25,7 +25,8 @@ public enum GrammarLoader: Sendable {
             fileSize > maxGrammarFileSize
         {
             throw .invalidJSON(
-                "Grammar file too large (\(fileSize) bytes, limit \(maxGrammarFileSize))")
+                "Grammar file too large (\(fileSize) bytes, limit \(maxGrammarFileSize))"
+            )
         }
         do {
             return try Data(contentsOf: URL(fileURLWithPath: path))

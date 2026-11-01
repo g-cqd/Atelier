@@ -24,8 +24,11 @@ struct VimCommandLineTests {
         state.mode = .editor
         state.vimMode = .normal
         state.bufferManager.open(
-            filePath: "/test.txt", fileName: "test.txt",
-            content: "hello world\nsecond line", language: nil)
+            filePath: "/test.txt",
+            fileName: "test.txt",
+            content: "hello world\nsecond line",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),
@@ -49,14 +52,19 @@ struct VimCommandLineTests {
     }
 
     private func keyEvent(
-        _ keyCode: UInt32, modifiers: KeyModifiers = [], eventType: KeyEventType = .press
+        _ keyCode: UInt32,
+        modifiers: KeyModifiers = [],
+        eventType: KeyEventType = .press
     ) -> InputEvent {
         .key(KeyEvent(keyCode: keyCode, modifiers: modifiers, eventType: eventType))
     }
 
     private func enterCommandLine(_ sut: (state: EditorState, pipeline: RenderPipeline)) {
         _ = handleEvent(
-            event: keyEvent(AsciiKey.colon), state: sut.state, pipeline: sut.pipeline)
+            event: keyEvent(AsciiKey.colon),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
     }
 
     // MARK: - Entering command-line mode
@@ -74,7 +82,10 @@ struct VimCommandLineTests {
         let sut = makeSUT()
         sut.state.vimMode = .insert
         _ = handleEvent(
-            event: keyEvent(AsciiKey.colon), state: sut.state, pipeline: sut.pipeline)
+            event: keyEvent(AsciiKey.colon),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
         #expect(sut.state.vimCommandLine == nil)
     }
 
@@ -86,7 +97,8 @@ struct VimCommandLineTests {
         enterCommandLine(sut)
 
         _ = sut.state.handleVimCommandLineKey(
-            KeyEvent(keyCode: AsciiKey.w))
+            KeyEvent(keyCode: AsciiKey.w)
+        )
 
         #expect(sut.state.vimCommandLine?.buffer == "w")
         #expect(sut.state.statusMessage == ":w")
@@ -217,7 +229,8 @@ struct VimCommandLineTests {
         _ = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: AsciiKey.q))
         // Type '!'
         _ = sut.state.handleVimCommandLineKey(
-            KeyEvent(keyCode: 0x21))  // '!' = 0x21
+            KeyEvent(keyCode: 0x21)
+        )  // '!' = 0x21
 
         let result = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: Key.enter.rawValue))
 
@@ -279,7 +292,10 @@ struct VimCommandLineTests {
         enterCommandLine(sut)
 
         _ = handleEvent(
-            event: keyEvent(Key.down.rawValue), state: sut.state, pipeline: sut.pipeline)
+            event: keyEvent(Key.down.rawValue),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
 
         // Cursor should NOT have moved — down key is consumed by command-line handler
         #expect(sut.state.cursorRow == 0)

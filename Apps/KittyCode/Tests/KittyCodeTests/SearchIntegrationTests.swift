@@ -19,7 +19,11 @@ private func makeSearchContext(
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
     let state = EditorState(
-        rootPath: ".", config: config, taskProvider: TaskProviderSpy(), searchPool: EditorTestPool.shared)
+        rootPath: ".",
+        config: config,
+        taskProvider: TaskProviderSpy(),
+        searchPool: EditorTestPool.shared
+    )
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(
@@ -56,8 +60,11 @@ struct SearchIntegrationTests {
         // Simulate typing "hello"
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
@@ -74,8 +81,11 @@ struct SearchIntegrationTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
@@ -102,7 +112,11 @@ struct SearchIntegrationTests {
         #expect(state.inFileSearch != nil)
 
         let escKey = KeyEvent(
-            keyCode: AsciiKey.escape, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: AsciiKey.escape,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchKey(escKey, state: state, pipeline: pipeline)
 
         #expect(state.inFileSearch == nil)
@@ -113,9 +127,12 @@ struct SearchIntegrationTests {
         let (state, _) = makeSearchContext()
         // Need an active buffer for selection to be stored
         _ = state.bufferManager.open(
-            filePath: "test.txt", fileName: "test.txt",
+            filePath: "test.txt",
+            fileName: "test.txt",
             content: "hello world\nhello there\ngoodbye world",
-            language: nil, maxUndoSteps: 10)
+            language: nil,
+            maxUndoSteps: 10
+        )
         state.restoreStateFromActiveBuffer()
         state.selection = TextSelection(
             anchor: TextPosition(row: 0, col: 0),
@@ -146,8 +163,11 @@ struct SearchIntegrationTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
@@ -171,8 +191,11 @@ struct SearchIntegrationTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
@@ -188,8 +211,11 @@ struct SearchIntegrationTests {
 
         for char in "zzz" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
@@ -206,8 +232,11 @@ struct SearchIntegrationTests {
         // Type "helloo" (typo)
         for char in "helloo" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
         try await settleSearch(state)
@@ -215,7 +244,11 @@ struct SearchIntegrationTests {
 
         // Backspace to fix
         let bsKey = KeyEvent(
-            keyCode: Key.backspace.rawValue, modifiers: [], eventType: .press, associatedText: "")
+            keyCode: Key.backspace.rawValue,
+            modifiers: [],
+            eventType: .press,
+            associatedText: ""
+        )
         _ = handleSearchKey(bsKey, state: state, pipeline: pipeline)
 
         try await settleSearch(state)
@@ -239,8 +272,11 @@ struct SearchIntegrationTests {
 
         for char in "test" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
@@ -257,8 +293,11 @@ struct SearchIntegrationTests {
 
         for char in "hello" {
             let key = KeyEvent(
-                keyCode: UInt32(char.asciiValue!), modifiers: [],
-                eventType: .press, associatedText: String(char))
+                keyCode: UInt32(char.asciiValue!),
+                modifiers: [],
+                eventType: .press,
+                associatedText: String(char)
+            )
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 

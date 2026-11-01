@@ -109,7 +109,8 @@ extension NSAttributedString {
             // One unit for one: the runs after this one keep their offsets.
             text.replaceCharacters(
                 in: NSRange(location: run.location - range.location, length: run.length),
-                with: String(repeating: control, count: run.length))
+                with: String(repeating: control, count: run.length)
+            )
         }
         return text as String
     }

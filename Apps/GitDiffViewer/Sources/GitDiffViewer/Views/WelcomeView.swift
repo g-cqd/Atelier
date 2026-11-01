@@ -51,7 +51,8 @@ struct WelcomeView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 10) {
             WelcomeAction(
-                "Open Repository…", symbol: "arrow.triangle.branch",
+                "Open Repository…",
+                symbol: "arrow.triangle.branch",
                 detail: "Compare two branches, tags or commits, or one with the working tree"
             ) { openRepository() }
             WelcomeAction("Compare Folders…", symbol: "folder", detail: "Two folders, file by file") {
@@ -69,7 +70,10 @@ struct WelcomeView: View {
     @ViewBuilder private var recentList: some View {
         if recents.entries.isEmpty {
             ContentUnavailableView(
-                "No Recent Comparisons", systemImage: "clock", description: Text("Comparisons you open appear here."))
+                "No Recent Comparisons",
+                systemImage: "clock",
+                description: Text("Comparisons you open appear here.")
+            )
         } else {
             List(recents.entries, id: \.self) { entry in
                 RecentRow(entry: entry)

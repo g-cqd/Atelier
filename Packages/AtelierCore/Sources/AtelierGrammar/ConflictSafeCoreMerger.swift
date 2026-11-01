@@ -52,8 +52,12 @@ enum ConflictSafeCoreMerger {
                 var groups: [Group] = []
                 for edge in incoming[state] {
                     let reductions = try reductions(
-                        from: propagated.states[edge.source], through: edge.symbol,
-                        targetCore: cores[state], inputs: inputs, suffixFirsts: &suffixFirsts)
+                        from: propagated.states[edge.source],
+                        through: edge.symbol,
+                        targetCore: cores[state],
+                        inputs: inputs,
+                        suffixFirsts: &suffixFirsts
+                    )
                     if let index = groups.firstIndex(where: { !introducesConflict($0.reductions, reductions) }) {
                         groups[index].incoming.append(edge)
                         for (lookahead, rules) in reductions {
@@ -89,8 +93,13 @@ enum ConflictSafeCoreMerger {
             onPhase?("split round \(round) grouping")
             guard split else { return (propagated, transitions) }
             propagated = try CoreItemSetBuilder.propagateLookaheads(
-                through: cores, transitions: transitions, productions: inputs.productions,
-                firstSets: inputs.firstSets, rulesByNonTerminal: inputs.rulesByNonTerminal, limits: inputs.limits)
+                through: cores,
+                transitions: transitions,
+                productions: inputs.productions,
+                firstSets: inputs.firstSets,
+                rulesByNonTerminal: inputs.rulesByNonTerminal,
+                limits: inputs.limits
+            )
             onPhase?("split round \(round) propagation")
         }
     }
@@ -98,9 +107,11 @@ enum ConflictSafeCoreMerger {
     /// The rules the items `source` moves on `symbol` into a state of `targetCore` complete there, by lookahead
     /// number: the kernel's completed items, and, when the core holds empty productions, those of the kernel's closure.
     private static func reductions(
-        from source: LookaheadItemSet, through symbol: String,
+        from source: LookaheadItemSet,
+        through symbol: String,
         targetCore: Set<CoreItemSetBuilder.CoreItem>,
-        inputs: Inputs, suffixFirsts: inout SuffixFirsts
+        inputs: Inputs,
+        suffixFirsts: inout SuffixFirsts
     ) throws(GrammarError) -> [Int: Set<Int>] {
         typealias CoreItem = CoreItemSetBuilder.CoreItem
         let wordCount = source.wordCount
@@ -131,8 +142,10 @@ enum ConflictSafeCoreMerger {
     /// introduces it, and that item's lookaheads where that can be empty, as an LR(1) closure does.
     /// - Throws: `GrammarError.resourceLimitExceeded` past `maxLookaheadItems` item and lookahead pairs.
     private static func close(
-        _ lookaheads: inout [CoreItemSetBuilder.CoreItem: [UInt64]], inputs: Inputs,
-        suffixFirsts: inout SuffixFirsts, wordCount: Int
+        _ lookaheads: inout [CoreItemSetBuilder.CoreItem: [UInt64]],
+        inputs: Inputs,
+        suffixFirsts: inout SuffixFirsts,
+        wordCount: Int
     ) throws(GrammarError) {
         var pairCount = lookaheads.values.reduce(0) { total, words in
             total + words.reduce(0) { $0 + $1.nonzeroBitCount }
@@ -170,7 +183,8 @@ enum ConflictSafeCoreMerger {
     }
 
     private static func introducesConflict(
-        _ existing: [Int: Set<Int>], _ added: [Int: Set<Int>]
+        _ existing: [Int: Set<Int>],
+        _ added: [Int: Set<Int>]
     ) -> Bool {
         for (lookahead, rules) in added {
             guard let prior = existing[lookahead] else { continue }

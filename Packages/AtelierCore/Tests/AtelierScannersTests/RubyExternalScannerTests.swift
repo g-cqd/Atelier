@@ -25,9 +25,17 @@ private let directCases: [RubyTokenCase] = [
     .init("_subshell_start", "`date`", rejecting: "date", offered: ["_string_start", "_subshell_start"]),
     .init("_regex_start", "/ruby/", rejecting: "ruby", offered: ["_string_start", "_regex_start"]),
     .init(
-        "_string_array_start", "%w[one two]", rejecting: "%j[one]", offered: ["_string_start", "_string_array_start"]),
+        "_string_array_start",
+        "%w[one two]",
+        rejecting: "%j[one]",
+        offered: ["_string_start", "_string_array_start"]
+    ),
     .init(
-        "_symbol_array_start", "%i(one two)", rejecting: "%j(one)", offered: ["_string_start", "_symbol_array_start"]),
+        "_symbol_array_start",
+        "%i(one two)",
+        rejecting: "%j(one)",
+        offered: ["_string_start", "_symbol_array_start"]
+    ),
     .init("heredoc_beginning", "<<ID", rejecting: "<<", offered: ["_string_start", "heredoc_beginning"]),
     .init("_block_ampersand", "&block", rejecting: "&&block"),
     .init("_splat_star", " *args", rejecting: " *=value"),
@@ -46,7 +54,10 @@ private let directCases: [RubyTokenCase] = [
 
 struct RubyExternalScannerTests {
     private func scan(
-        _ input: String, at offset: Int = 0, offering names: [String], scanner: inout RubyExternalScanner
+        _ input: String,
+        at offset: Int = 0,
+        offering names: [String],
+        scanner: inout RubyExternalScanner
     ) -> (name: String?, lexer: StringScannerLexer) {
         var lexer = StringScannerLexer(input, at: offset)
         let valid = RubyExternalScanner.externalNames.map { names.contains($0) }
@@ -66,7 +77,8 @@ struct RubyExternalScannerTests {
                 "_singleton_class_left_angle_left_langle", "hash_key_symbol", "_identifier_suffix",
                 "_constant_suffix", "_hash_splat_star_star", "_binary_star_star",
                 "_element_reference_bracket", "_short_interpolation"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["ruby"] != nil)
     }
 
@@ -159,13 +171,16 @@ struct RubyExternalScannerTests {
         #expect(scan("#{value}", offering: ["string_content", "_string_end"], scanner: &scanner).name == nil)
         #expect(
             scan("#@ivar", offering: ["string_content", "_string_end", "_short_interpolation"], scanner: &scanner).name
-                == "_short_interpolation")
+                == "_short_interpolation"
+        )
         #expect(
             scan("#@1", offering: ["string_content", "_string_end", "_short_interpolation"], scanner: &scanner).name
-                != "_short_interpolation")
+                != "_short_interpolation"
+        )
         #expect(
             scan("#$name", offering: ["string_content", "_string_end", "_short_interpolation"], scanner: &scanner).name
-                == "_short_interpolation")
+                == "_short_interpolation"
+        )
     }
 
     @Test
@@ -174,7 +189,8 @@ struct RubyExternalScannerTests {
         #expect(scan("'", offering: ["_string_start"], scanner: &scanner).name == "_string_start")
         #expect(
             scan("#@ivar'", offering: ["string_content", "_string_end", "_short_interpolation"], scanner: &scanner).name
-                == "string_content")
+                == "string_content"
+        )
     }
 
     @Test(arguments: ["<<ID", "<<-ID", "<<~ID", "<<'ID'", "<<\"ID\"", "<<`ID`"])
@@ -182,7 +198,8 @@ struct RubyExternalScannerTests {
         var scanner = RubyExternalScanner()
         #expect(
             scan(opening, offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         #expect(scanner.openHeredocs.first?.word == Array("ID".utf8))
     }
 
@@ -192,9 +209,11 @@ struct RubyExternalScannerTests {
         #expect(scan("\nbody\nID\n", offering: ["_heredoc_body_start"], scanner: &scanner).name == nil)
         #expect(
             scan("<<ID", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         #expect(
-            scan("\nbody\nID\n", offering: ["_heredoc_body_start"], scanner: &scanner).name == "_heredoc_body_start")
+            scan("\nbody\nID\n", offering: ["_heredoc_body_start"], scanner: &scanner).name == "_heredoc_body_start"
+        )
         let content = scan("\nbody\nID\n", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner)
         #expect(content.name == "heredoc_content")
         #expect(content.lexer.tokenEnd == "\nbody\n".utf8.count)
@@ -207,10 +226,12 @@ struct RubyExternalScannerTests {
         var scanner = RubyExternalScanner()
         #expect(
             scan("<<ID", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         #expect(
             scan("OTHER\nID\n", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner).name
-                == "heredoc_content")
+                == "heredoc_content"
+        )
         #expect(scan("ID\n", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner).name == "heredoc_end")
     }
 
@@ -236,14 +257,17 @@ struct RubyExternalScannerTests {
         var scanner = RubyExternalScanner()
         #expect(
             scan("<<ID", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         #expect(
             scan("hello #{name}", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner).name
-                == "heredoc_content")
+                == "heredoc_content"
+        )
         #expect(scan("#{name}", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner).name == nil)
         #expect(
             scan("#@ivar", offering: ["heredoc_content", "heredoc_end", "_short_interpolation"], scanner: &scanner).name
-                == "_short_interpolation")
+                == "_short_interpolation"
+        )
     }
 
     @Test
@@ -251,13 +275,16 @@ struct RubyExternalScannerTests {
         var scanner = RubyExternalScanner()
         #expect(
             scan("<<'ID'", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         #expect(
             scan(
-                "#{value}\nID\n", offering: ["heredoc_content", "heredoc_end", "_short_interpolation"],
+                "#{value}\nID\n",
+                offering: ["heredoc_content", "heredoc_end", "_short_interpolation"],
                 scanner: &scanner
             )
-            .name == "heredoc_content")
+            .name == "heredoc_content"
+        )
         #expect(scan("ID\n", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner).name == "heredoc_end")
     }
 
@@ -322,13 +349,15 @@ struct RubyExternalScannerTests {
         var scanner = RubyExternalScanner()
         #expect(
             scan("[0]", offering: ["_element_reference_bracket", "_string_start"], scanner: &scanner).name
-                == "_element_reference_bracket")
+                == "_element_reference_bracket"
+        )
         scanner = RubyExternalScanner()
         #expect(scan(" [0]", offering: ["_element_reference_bracket", "_string_start"], scanner: &scanner).name == nil)
         scanner = RubyExternalScanner()
         #expect(
             scan(" [0]", offering: ["_element_reference_bracket"], scanner: &scanner).name
-                == "_element_reference_bracket")
+                == "_element_reference_bracket"
+        )
     }
 
     @Test
@@ -336,14 +365,16 @@ struct RubyExternalScannerTests {
         var scanner = RubyExternalScanner()
         #expect(
             scan("<<ID", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         let unindented = scan("\n  ID\n", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner)
         #expect(unindented.name == "heredoc_content")
         #expect(unindented.lexer.tokenEnd == "\n  ID\n".utf8.count)
         scanner = RubyExternalScanner()
         #expect(
             scan("<<~ID", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         let indented = scan("\n  ID\n", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner)
         #expect(indented.name == "heredoc_content")
         #expect(indented.lexer.tokenEnd == "\n  ".utf8.count)
@@ -374,7 +405,8 @@ struct RubyExternalScannerTests {
         )
         #expect(
             scan("<<-B", offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                == "heredoc_beginning")
+                == "heredoc_beginning"
+        )
         var state: [UInt8] = []
         scanner.serialize(into: &state)
         #expect(!state.isEmpty)
@@ -398,7 +430,8 @@ struct RubyExternalScannerTests {
         for _ in 0 ..< 4 {
             #expect(
                 scan("<<" + word, offering: ["_string_start", "heredoc_beginning"], scanner: &scanner).name
-                    == "heredoc_beginning")
+                    == "heredoc_beginning"
+            )
         }
         var state: [UInt8] = []
         scanner.serialize(into: &state)

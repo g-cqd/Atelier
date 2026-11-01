@@ -100,8 +100,11 @@ struct ToolsSettings: View {
                 Section("Tools") {
                     ForEach(DiagnosticTool.allCases) { tool in
                         toolDisclosure(
-                            key: tool.rawValue, title: tool.displayName, executableName: tool.executableName,
-                            isEnabled: toolEnabledBinding(tool), customPath: toolCustomPathBinding(tool),
+                            key: tool.rawValue,
+                            title: tool.displayName,
+                            executableName: tool.executableName,
+                            isEnabled: toolEnabledBinding(tool),
+                            customPath: toolCustomPathBinding(tool),
                             footnote: tool.requiredConfigurationFile.map {
                                 "Runs only in projects that carry a \($0) file."
                             }
@@ -113,9 +116,11 @@ struct ToolsSettings: View {
                 Section("Language Servers") {
                     ForEach(ToolStatusBoard.languageServers) { server in
                         toolDisclosure(
-                            key: server.id, title: server.displayName,
+                            key: server.id,
+                            title: server.displayName,
                             executableName: server.executableNames.first ?? server.id,
-                            isEnabled: lspEnabledBinding(server.id), customPath: lspCustomPathBinding(server.id),
+                            isEnabled: lspEnabledBinding(server.id),
+                            customPath: lspCustomPathBinding(server.id),
                             footnote: ToolStatusBoard.footnote(for: server)
                         )
                     }
@@ -135,7 +140,11 @@ struct ToolsSettings: View {
     /// the pinned path is broken.
     @ViewBuilder
     private func toolDisclosure(
-        key: String, title: String, executableName: String, isEnabled: Binding<Bool>, customPath: Binding<String?>,
+        key: String,
+        title: String,
+        executableName: String,
+        isEnabled: Binding<Bool>,
+        customPath: Binding<String?>,
         footnote: String?
     ) -> some View {
         let row = row(for: key, pinned: customPath.wrappedValue != nil, isEnabled: isEnabled.wrappedValue)

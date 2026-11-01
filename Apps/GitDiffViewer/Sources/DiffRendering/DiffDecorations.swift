@@ -38,7 +38,11 @@ package struct DiffDecorations: Sendable {
     package var markVersion = 0
 
     package init(
-        old: Side = Side(), new: Side = Side(), moved: MovedLines? = nil, colorVersion: Int = 0, markVersion: Int = 0
+        old: Side = Side(),
+        new: Side = Side(),
+        moved: MovedLines? = nil,
+        colorVersion: Int = 0,
+        markVersion: Int = 0
     ) {
         self.old = old
         self.new = new
@@ -127,7 +131,10 @@ extension DiffDecorations {
     /// - Complexity: O(bytes), and the parse when no tier made it yet.
     @concurrent
     package static func scopes(
-        of text: String, lineRanges: [Range<Int>], language: Language, revision: SourceRevision,
+        of text: String,
+        lineRanges: [Range<Int>],
+        language: Language,
+        revision: SourceRevision,
         store: SyntaxFactsStore?
     ) async -> ScopeLines? {
         let found: [SyntaxScope]
@@ -138,7 +145,9 @@ extension DiffDecorations {
             let utf8 = text.utf8Span
             let span = utf8.span
             found = SyntaxScope.braces(
-                in: span, skipping: LexicalHighlightEngine().highlight(utf8: span, language: language))
+                in: span,
+                skipping: LexicalHighlightEngine().highlight(utf8: span, language: language)
+            )
         }
         guard !Task.isCancelled else { return nil }
         return ScopeLines(found, text: text, lineRanges: lineRanges)

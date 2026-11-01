@@ -94,12 +94,21 @@ public struct TabRibbon: View, Sendable {
             var tabStyle = isActive ? style.activeStyle : style.inactiveStyle
             if tab.isPreview {
                 tabStyle = Style(
-                    fg: tabStyle.fg, bg: tabStyle.bg, bold: tabStyle.bold, italic: true)
+                    fg: tabStyle.fg,
+                    bg: tabStyle.bg,
+                    bold: tabStyle.bold,
+                    italic: true
+                )
             }
 
             col = renderLabelPrefix(
-                for: tab, into: &buffer, row: rect.y, col: col, maxCol: rightBound,
-                tabStyle: tabStyle)
+                for: tab,
+                into: &buffer,
+                row: rect.y,
+                col: col,
+                maxCol: rightBound,
+                tabStyle: tabStyle
+            )
 
             // Write separator
             if col < rightBound {
@@ -207,12 +216,23 @@ public struct TabRibbon: View, Sendable {
         var currentCol = col
 
         currentCol = render(
-            " \(tab.name)", style: tabStyle, into: &buffer, row: row, col: currentCol,
-            maxCol: maxCol)
+            " \(tab.name)",
+            style: tabStyle,
+            into: &buffer,
+            row: row,
+            col: currentCol,
+            maxCol: maxCol
+        )
 
         if let statusIndicator = tab.statusIndicator {
             currentCol = render(
-                " ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+                " ",
+                style: tabStyle,
+                into: &buffer,
+                row: row,
+                col: currentCol,
+                maxCol: maxCol
+            )
             currentCol = render(
                 statusIndicator,
                 style: tab.statusStyle ?? tabStyle,
@@ -235,7 +255,13 @@ public struct TabRibbon: View, Sendable {
         }
 
         return render(
-            " ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+            " ",
+            style: tabStyle,
+            into: &buffer,
+            row: row,
+            col: currentCol,
+            maxCol: maxCol
+        )
     }
 
     private func render(

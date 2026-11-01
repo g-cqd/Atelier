@@ -60,7 +60,10 @@ public struct Lexer: Sendable {
         public var isExtra: Bool
 
         public init(
-            type: String, byteRange: Range<Int>, pointRange: Range<Point>, text: String,
+            type: String,
+            byteRange: Range<Int>,
+            pointRange: Range<Point>,
+            text: String,
             isExtra: Bool = false
         ) {
             self.type = type
@@ -129,7 +132,8 @@ public struct Lexer: Sendable {
                         pointRange: startPoint ..< point,
                         text: "",
                         isExtra: true
-                    ))
+                    )
+                )
                 continue
             }
 
@@ -149,7 +153,8 @@ public struct Lexer: Sendable {
                     byteRange: (pos - 1) ..< pos,
                     pointRange: startPoint ..< point,
                     text: text
-                ))
+                )
+            )
         }
 
         return tokens
@@ -172,8 +177,12 @@ public struct Lexer: Sendable {
                     let text = Self.text(of: UnsafeBufferPointer(rebasing: utf8[pos ..< end])) ?? ""
                     let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
                     return Token(
-                        type: "comment", byteRange: pos ..< end, pointRange: point ..< endPoint, text: text,
-                        isExtra: true)
+                        type: "comment",
+                        byteRange: pos ..< end,
+                        pointRange: point ..< endPoint,
+                        text: text,
+                        isExtra: true
+                    )
 
                 case .block(let openBytes, let closeBytes):
                     guard pos + openBytes.count <= utf8.count else { continue }
@@ -201,8 +210,12 @@ public struct Lexer: Sendable {
                     let text = Self.text(of: UnsafeBufferPointer(rebasing: utf8[pos ..< end])) ?? ""
                     let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
                     return Token(
-                        type: "comment", byteRange: pos ..< end, pointRange: point ..< endPoint, text: text,
-                        isExtra: true)
+                        type: "comment",
+                        byteRange: pos ..< end,
+                        pointRange: point ..< endPoint,
+                        text: text,
+                        isExtra: true
+                    )
             }
         }
         return nil
@@ -266,7 +279,10 @@ public struct Lexer: Sendable {
     }
 
     private func advancePoint(
-        _ point: Point, over utf8: UnsafeBufferPointer<UInt8>, from: Int, to: Int
+        _ point: Point,
+        over utf8: UnsafeBufferPointer<UInt8>,
+        from: Int,
+        to: Int
     ) -> Point {
         var p = point
         for i in from ..< min(to, utf8.count) {

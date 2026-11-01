@@ -18,7 +18,8 @@ struct TOMLExternalScannerTests {
             TOMLExternalScanner.externalNames == [
                 "_line_ending_or_eof", "_multiline_basic_string_content", "_multiline_basic_string_end",
                 "_multiline_literal_string_content", "_multiline_literal_string_end"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["toml"] != nil)
     }
 
@@ -37,7 +38,9 @@ struct TOMLExternalScannerTests {
         ("'", "_multiline_literal_string_content", "_multiline_literal_string_end")
     ])
     func `one or two quotes are content and three quotes end a multiline string`(
-        _ quote: String, _ contentName: String, _ endName: String
+        _ quote: String,
+        _ contentName: String,
+        _ endName: String
     ) {
         for count in 1 ... 2 {
             let input = String(repeating: quote, count: count) + "x"

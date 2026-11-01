@@ -23,7 +23,9 @@ struct OffMainExecutionTests {
 
     private static func makeExecutable(at url: URL) throws {
         try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try "#!/bin/sh\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
@@ -45,17 +47,26 @@ struct OffMainExecutionTests {
             return .success(sarif)
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: [:])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: [:]
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         #expect(isOnMainThread())
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "hash-1",
+            url: root.appending(path: "A.swift")
+        )
         let request = DiagnosticsEngine.Request(
-            root: root, files: [file], corpusFingerprint: "fp-1",
-            tools: [.swiftlint: ToolLocation(customPath: executable.path)])
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tools: [.swiftlint: ToolLocation(customPath: executable.path)]
+        )
 
         let result = try await engine.run(.swiftlint, request: request)
 

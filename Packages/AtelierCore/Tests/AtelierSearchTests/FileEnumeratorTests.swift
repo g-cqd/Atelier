@@ -28,7 +28,9 @@ struct FileEnumeratorTests {
         try writeFile(tmp + "/a.swift", content: "let x = 1")
         try writeFile(tmp + "/b.txt", content: "hello")
         try FileManager.default.createDirectory(
-            atPath: tmp + "/sub", withIntermediateDirectories: true)
+            atPath: tmp + "/sub",
+            withIntermediateDirectories: true
+        )
         try writeFile(tmp + "/sub/c.swift", content: "let y = 2")
 
         let files = enumerateSearchableFiles(rootPath: tmp)
@@ -97,7 +99,9 @@ struct FileEnumeratorTests {
         defer { cleanup(tmp) }
         try writeFile(tmp + "/keep.swift", content: "hello")
         try FileManager.default.createDirectory(
-            atPath: tmp + "/Generated/Deep", withIntermediateDirectories: true)
+            atPath: tmp + "/Generated/Deep",
+            withIntermediateDirectories: true
+        )
         try writeFile(tmp + "/Generated/a.swift", content: "hello")
         try writeFile(tmp + "/Generated/Deep/b.swift", content: "hello")
 
@@ -113,7 +117,9 @@ struct FileEnumeratorTests {
 
         try writeFile(tmp + "/keep.txt", content: "hello")
         try FileManager.default.createDirectory(
-            atPath: tmp + "/.git", withIntermediateDirectories: true)
+            atPath: tmp + "/.git",
+            withIntermediateDirectories: true
+        )
         try writeFile(tmp + "/.git/config", content: "git config")
 
         let files = enumerateSearchableFiles(rootPath: tmp, includeHidden: true)

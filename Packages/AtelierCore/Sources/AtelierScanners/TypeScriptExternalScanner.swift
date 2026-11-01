@@ -88,7 +88,8 @@ public struct TypeScriptExternalScanner: GrammarExternalScanner {
     }
 
     private static func scanWhitespaceAndComments(
-        _ lexer: inout some ScannerLexer, scannedComment: inout Bool
+        _ lexer: inout some ScannerLexer,
+        scannedComment: inout Bool
     ) -> Bool {
         while true {
             while isSpace(lexer.lookahead) { lexer.advance(skip: true) }
@@ -122,7 +123,9 @@ public struct TypeScriptExternalScanner: GrammarExternalScanner {
     }
 
     private static func scanAutomaticSemicolon(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], scannedComment: inout Bool
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        scannedComment: inout Bool
     ) -> Bool {
         lexer.resultSymbol = TokenType.automaticSemicolon.rawValue
         lexer.markEnd()
@@ -283,7 +286,9 @@ public struct TypeScriptExternalScanner: GrammarExternalScanner {
         {
             var scannedComment = false
             let result = Self.scanAutomaticSemicolon(
-                &lexer, validSymbols: validSymbols, scannedComment: &scannedComment
+                &lexer,
+                validSymbols: validSymbols,
+                scannedComment: &scannedComment
             )
             if !result && !scannedComment && validSymbols[TokenType.ternaryQmark.rawValue]
                 && lexer.lookahead == 0x3F

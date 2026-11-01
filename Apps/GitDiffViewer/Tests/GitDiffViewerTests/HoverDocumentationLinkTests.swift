@@ -19,7 +19,9 @@ struct HoverDocumentationLinkTests {
 
     private static func document(page: HoverContent.DocumentationPage?, markdown: String) -> HoverDocument {
         HoverDocument.build(
-            from: HoverContent(markdown: markdown, source: .sdk, documentationPage: page), palette: .system)
+            from: HoverContent(markdown: markdown, source: .sdk, documentationPage: page),
+            palette: .system
+        )
     }
 
     /// The panel's text views that show "Open in Developer Documentation", with no hidden ancestor.
@@ -53,7 +55,8 @@ struct HoverDocumentationLinkTests {
         )
     ])
     func `a page's address is its module and path, lowercased, under Apple's documentation`(
-        page: HoverContent.DocumentationPage, address: String
+        page: HoverContent.DocumentationPage,
+        address: String
     ) {
         #expect(HoverDocument.documentationURL(for: page)?.absoluteString == address)
     }
@@ -64,7 +67,8 @@ struct HoverDocumentationLinkTests {
         let panel = HoverDocPanel(openLink: { opened.record($0) }, ordersWindowIn: false)
         let document = Self.document(
             page: HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager", "default"]),
-            markdown: HoverFixtures.sdkUndocumentedProperty)
+            markdown: HoverFixtures.sdkUndocumentedProperty
+        )
         panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
 
         let linkView = try #require(try Self.linkViews(of: panel).first)
@@ -74,7 +78,8 @@ struct HoverDocumentationLinkTests {
         #expect(
             opened.urls.map(\.absoluteString) == [
                 "https://developer.apple.com/documentation/foundation/filemanager/default"
-            ])
+            ]
+        )
     }
 
     @Test
@@ -82,7 +87,8 @@ struct HoverDocumentationLinkTests {
         let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(
             document: Self.document(page: nil, markdown: HoverFixtures.sdkBool),
-            appearance: try #require(NSAppearance(named: .aqua)))
+            appearance: try #require(NSAppearance(named: .aqua))
+        )
 
         #expect(try Self.linkViews(of: panel).isEmpty)
     }
@@ -90,7 +96,9 @@ struct HoverDocumentationLinkTests {
     @Test
     func `a row's findings keep the page of the documentation they join`() {
         let document = Self.document(
-            page: HoverContent.DocumentationPage(module: "Swift", path: ["Bool"]), markdown: HoverFixtures.sdkBool)
+            page: HoverContent.DocumentationPage(module: "Swift", path: ["Bool"]),
+            markdown: HoverFixtures.sdkBool
+        )
         let joined = document.adding(diagnostics: [.init(severity: .warning, message: "Unused", tool: "swiftlint")])
         #expect(joined.documentationURL == document.documentationURL)
         #expect(joined.relationships == document.relationships)

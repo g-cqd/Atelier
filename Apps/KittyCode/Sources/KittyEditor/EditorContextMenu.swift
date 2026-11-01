@@ -57,40 +57,37 @@ extension EditorState {
         if entry.isDirectory {
             let toggleTitle = entry.isExpanded ? "Collapse Folder" : "Expand Folder"
             items = [
+                ContextMenuItem(title: toggleTitle, shortcut: "Enter", action: .toggleSelectedDirectory),
+                ContextMenuItem(title: "New File…", shortcut: "", action: .beginCreateFile(inDirectory: entry.path)),
                 ContextMenuItem(
-                    title: toggleTitle, shortcut: "Enter", action: .toggleSelectedDirectory),
-                ContextMenuItem(
-                    title: "New File…", shortcut: "",
-                    action: .beginCreateFile(inDirectory: entry.path)),
-                ContextMenuItem(
-                    title: "New Folder…", shortcut: "",
-                    action: .beginCreateDirectory(inDirectory: entry.path)),
-                ContextMenuItem(
-                    title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
-                ContextMenuItem(
-                    title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
+                    title: "New Folder…",
+                    shortcut: "",
+                    action: .beginCreateDirectory(inDirectory: entry.path)
+                ),
+                ContextMenuItem(title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
+                ContextMenuItem(title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
                 ContextMenuItem(title: "Move…", shortcut: "", action: .beginMove(path: entry.path)),
+                ContextMenuItem(title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(
-                    title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
-                ContextMenuItem(
-                    title: "Save Here…", shortcut: saveLabel,
-                    action: .beginSavePrompt(inDirectory: entry.path))
+                    title: "Save Here…",
+                    shortcut: saveLabel,
+                    action: .beginSavePrompt(inDirectory: entry.path)
+                )
             ]
         } else {
             let directory = URL(fileURLWithPath: entry.path).deletingLastPathComponent().path
             items = [
                 ContextMenuItem(title: "Open", shortcut: "Enter", action: .openSelected),
                 ContextMenuItem(title: "Open and Pin", shortcut: "", action: .openSelectedPinned),
-                ContextMenuItem(
-                    title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
-                ContextMenuItem(
-                    title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
+                ContextMenuItem(title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
+                ContextMenuItem(title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
                 ContextMenuItem(title: "Move…", shortcut: "", action: .beginMove(path: entry.path)),
+                ContextMenuItem(title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(
-                    title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
-                ContextMenuItem(
-                    title: "Save Here…", shortcut: saveLabel,
-                    action: .beginSavePrompt(inDirectory: directory))
+                    title: "Save Here…",
+                    shortcut: saveLabel,
+                    action: .beginSavePrompt(inDirectory: directory)
+                )
             ]
         }
 
@@ -109,28 +106,42 @@ extension EditorState {
         if bufferManager.activeBuffer?.editHistory.hasUndo == true {
             items.append(
                 ContextMenuItem(
-                    title: "Undo", shortcut: resolver.shortcutLabel(for: .undo) ?? "",
-                    action: .undo))
+                    title: "Undo",
+                    shortcut: resolver.shortcutLabel(for: .undo) ?? "",
+                    action: .undo
+                )
+            )
         }
         if bufferManager.activeBuffer?.editHistory.hasRedo == true {
             items.append(
                 ContextMenuItem(
-                    title: "Redo", shortcut: resolver.shortcutLabel(for: .redo) ?? "",
-                    action: .redo))
+                    title: "Redo",
+                    shortcut: resolver.shortcutLabel(for: .redo) ?? "",
+                    action: .redo
+                )
+            )
         }
         items += [
             ContextMenuItem(
-                title: "Save", shortcut: resolver.shortcutLabel(for: .saveFile) ?? "",
-                action: .saveFile),
+                title: "Save",
+                shortcut: resolver.shortcutLabel(for: .saveFile) ?? "",
+                action: .saveFile
+            ),
             ContextMenuItem(
-                title: "Save As…", shortcut: "",
-                action: .beginSavePrompt(inDirectory: saveDirectory)),
+                title: "Save As…",
+                shortcut: "",
+                action: .beginSavePrompt(inDirectory: saveDirectory)
+            ),
             ContextMenuItem(
                 title: "Focus Explorer",
-                shortcut: resolver.shortcutLabel(for: .escapeEditor) ?? "", action: .focusTree),
+                shortcut: resolver.shortcutLabel(for: .escapeEditor) ?? "",
+                action: .focusTree
+            ),
             ContextMenuItem(
-                title: "Close Tab", shortcut: resolver.shortcutLabel(for: .closeTab) ?? "",
-                action: .closeTab)
+                title: "Close Tab",
+                shortcut: resolver.shortcutLabel(for: .closeTab) ?? "",
+                action: .closeTab
+            )
         ]
         contextMenu = ContextMenuState(
             title: activeFileDisplayName,
@@ -150,7 +161,9 @@ extension EditorState {
                 return true
             case Key.down.rawValue:
                 contextMenu.selectedIndex = min(
-                    contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
+                    contextMenu.items.count - 1,
+                    contextMenu.selectedIndex + 1
+                )
                 self.contextMenu = contextMenu
                 return true
             case Key.enter.rawValue, Key.enterAlt.rawValue:

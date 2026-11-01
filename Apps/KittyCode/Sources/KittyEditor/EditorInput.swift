@@ -5,7 +5,10 @@ import TerminalKitText
 
 @MainActor
 public func handleEditorKey(
-    _ key: KeyEvent, state: EditorState, contentRows: Int, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    contentRows: Int,
+    pipeline: RenderPipeline
 ) -> Bool {
     // In vim normal mode, unresolved keys should not insert text
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
@@ -17,7 +20,10 @@ public func handleEditorKey(
         if state.hasActiveSelection, let selection = state.selection {
             let previousSnapshot = state.activeBufferSnapshot()
             let mutation = TextOperations.deleteRange(
-                in: &state.textBuffer, at: &state.textCursor, selection: selection)
+                in: &state.textBuffer,
+                at: &state.textCursor,
+                selection: selection
+            )
             state.textDidChange(mutation, previousSnapshot: previousSnapshot)
             state.clearSelection()
         }

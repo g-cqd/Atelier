@@ -36,7 +36,10 @@ public struct GrammarEngine: Sendable {
     public init?(_ artifacts: SyntaxArtifacts) {
         guard !artifacts.needsExternalScanner else { return nil }
         parser = GrammarParser(
-            parseTable: artifacts.parseTable, lexTable: artifacts.lexTable, productions: artifacts.productions)
+            parseTable: artifacts.parseTable,
+            lexTable: artifacts.lexTable,
+            productions: artifacts.productions
+        )
         query = artifacts.query
         roles = artifacts.roles
         scannerType = artifacts.scannerType
@@ -51,7 +54,8 @@ public struct GrammarEngine: Sendable {
     /// Parses `source` whole, honouring the calling task's cancellation (``GrammarParser/parse(_:externalScanner:)``).
     /// - Throws: The parser's `ParseError`, `.cancelled` among them.
     public func parse(
-        _ source: String, externalScanner: (any GrammarExternalScanner)?
+        _ source: String,
+        externalScanner: (any GrammarExternalScanner)?
     ) throws(ParseError) -> SyntaxTree {
         try parser.parse(source, externalScanner: externalScanner)
     }
@@ -59,7 +63,9 @@ public struct GrammarEngine: Sendable {
     /// Parses `source` whole, stopping at the first of the parser's checks where `isCancelled` answers true.
     /// - Throws: The parser's `ParseError`, `.cancelled` when `isCancelled` stopped it.
     public func parse(
-        _ source: String, externalScanner: (any GrammarExternalScanner)?, isCancelled: () -> Bool
+        _ source: String,
+        externalScanner: (any GrammarExternalScanner)?,
+        isCancelled: () -> Bool
     ) throws(ParseError) -> SyntaxTree {
         try parser.parse(source, externalScanner: externalScanner, isCancelled: isCancelled)
     }
@@ -91,7 +97,9 @@ public struct GrammarEngine: Sendable {
     /// The query's tokens over `tree`, overlapping as the captures do, or only those of nodes that overlap
     /// `byteRange` when one is given (``tokens(matches:roles:layer:)``).
     public func tokens(
-        in tree: SyntaxTree, byteRange: Range<Int>? = nil, layer: HighlightLayer = .structural
+        in tree: SyntaxTree,
+        byteRange: Range<Int>? = nil,
+        layer: HighlightLayer = .structural
     ) -> [HighlightToken] {
         let matches =
             byteRange.map { QueryMatcher.execute(query: query, tree: tree, byteRange: $0) }
@@ -103,7 +111,9 @@ public struct GrammarEngine: Sendable {
     /// capture's index; an earlier query pattern gets a higher priority, so it wins on identical ranges.
     /// - Returns: The tokens in match order, ranges in the source's bytes.
     public static func tokens(
-        matches: [QueryMatch], roles: CaptureRoles, layer: HighlightLayer = .structural
+        matches: [QueryMatch],
+        roles: CaptureRoles,
+        layer: HighlightLayer = .structural
     ) -> [HighlightToken] {
         let maxPatternIndex = matches.map(\.patternIndex).max() ?? 0
         var tokens: [HighlightToken] = []
@@ -113,8 +123,13 @@ public struct GrammarEngine: Sendable {
                 guard let resolved = roles[capture.index] else { continue }
                 tokens.append(
                     HighlightToken(
-                        byteRange: capture.node.byteRange, role: resolved.role, modifiers: resolved.modifiers,
-                        layer: layer, priority: maxPatternIndex - match.patternIndex))
+                        byteRange: capture.node.byteRange,
+                        role: resolved.role,
+                        modifiers: resolved.modifiers,
+                        layer: layer,
+                        priority: maxPatternIndex - match.patternIndex
+                    )
+                )
             }
         }
         return tokens

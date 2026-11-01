@@ -81,7 +81,8 @@ public struct KeymapResolver: Sendable {
         vimNormalBindings[KeyStroke(keyCode: UInt32(UInt8(ascii: "0")))] =
             .vimMoveLineStart
         vimNormalBindings[
-            KeyStroke(keyCode: UInt32(UInt8(ascii: "$")), modifiers: .shift)] =
+            KeyStroke(keyCode: UInt32(UInt8(ascii: "$")), modifiers: .shift)
+        ] =
             .vimMoveLineEnd
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.p)] = .vimPaste
         vimNormalBindings[KeyStroke(keyCode: UInt32(UInt8(ascii: "/")))] =
@@ -100,7 +101,8 @@ public struct KeymapResolver: Sendable {
         vimVisualBindings[KeyStroke(keyCode: UInt32(UInt8(ascii: "0")))] =
             .vimMoveLineStart
         vimVisualBindings[
-            KeyStroke(keyCode: UInt32(UInt8(ascii: "$")), modifiers: .shift)] =
+            KeyStroke(keyCode: UInt32(UInt8(ascii: "$")), modifiers: .shift)
+        ] =
             .vimMoveLineEnd
         context[.editorVimVisual] = vimVisualBindings
 
@@ -202,7 +204,8 @@ public struct KeymapResolver: Sendable {
 
     /// Pick the best keystroke for a command, preferring .super > .meta > .ctrl for deterministic labels.
     private static func preferredStroke(
-        for command: CommandID, in bindings: [KeyStroke: CommandID]
+        for command: CommandID,
+        in bindings: [KeyStroke: CommandID]
     ) -> KeyStroke? {
         let matches = bindings.filter { $0.value == command }.map(\.key)
         guard !matches.isEmpty else { return nil }
@@ -246,7 +249,8 @@ public struct KeymapResolver: Sendable {
     // MARK: - Default builders
 
     private static func buildNanoVimDefaults(
-        config: KittyConfig, global: inout [KeyStroke: CommandID]
+        config: KittyConfig,
+        global: inout [KeyStroke: CommandID]
     ) {
         // Global hotkeys (Ctrl+key)
         global[KeyStroke(keyCode: AsciiKey.o, modifiers: .ctrl)] = .saveFile
@@ -284,7 +288,8 @@ public struct KeymapResolver: Sendable {
     }
 
     private static func buildKittyCodeDefaults(
-        config: KittyConfig, global: inout [KeyStroke: CommandID]
+        config: KittyConfig,
+        global: inout [KeyStroke: CommandID]
     ) {
         // Primary: Cmd+key bindings
         global[KeyStroke(keyCode: AsciiKey.s, modifiers: .super)] = .saveFile
@@ -361,7 +366,8 @@ public struct KeymapResolver: Sendable {
     }
 
     private static func buildClipboardBindings(
-        config: KittyConfig, global: inout [KeyStroke: CommandID]
+        config: KittyConfig,
+        global: inout [KeyStroke: CommandID]
     ) {
         let clipMod = config.keybindings.clipboardModifier
         for mods in modifiersFor(clipMod) {
@@ -380,7 +386,8 @@ public struct KeymapResolver: Sendable {
     }
 
     private static func buildHistoryBindings(
-        config: KittyConfig, global: inout [KeyStroke: CommandID]
+        config: KittyConfig,
+        global: inout [KeyStroke: CommandID]
     ) {
         let histMod = config.keybindings.historyModifier
         for mods in modifiersFor(histMod) {
@@ -398,7 +405,8 @@ public struct KeymapResolver: Sendable {
     // MARK: - Config overrides
 
     private static func applyConfigOverrides(
-        config: KittyConfig, global: inout [KeyStroke: CommandID]
+        config: KittyConfig,
+        global: inout [KeyStroke: CommandID]
     ) {
         applyOverride(config.keybindings.tabNext, for: .nextTab, in: &global)
         applyOverride(config.keybindings.tabPrev, for: .previousTab, in: &global)
@@ -422,7 +430,9 @@ public struct KeymapResolver: Sendable {
     }
 
     private static func applyOverride(
-        _ keyString: String, for command: CommandID, in bindings: inout [KeyStroke: CommandID]
+        _ keyString: String,
+        for command: CommandID,
+        in bindings: inout [KeyStroke: CommandID]
     ) {
         guard let parsed = KeyStrokeParser.parse(keyString) else { return }
         // Check if this is the default binding — if so, skip the override
@@ -431,7 +441,9 @@ public struct KeymapResolver: Sendable {
     }
 
     private static func replaceBinding(
-        for command: CommandID, with newStroke: KeyStroke, in bindings: inout [KeyStroke: CommandID]
+        for command: CommandID,
+        with newStroke: KeyStroke,
+        in bindings: inout [KeyStroke: CommandID]
     ) {
         bindings = bindings.filter { $0.value != command }
         bindings[newStroke] = command

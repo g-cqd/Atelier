@@ -95,7 +95,8 @@ struct WordAndViewportNavigationTests {
         #expect(TreePanelLayout.contentWidth(rowCount: 20, in: rect) == 9)
         #expect(
             TreePanelLayout.verticalScrollIndicatorRect(rowCount: 20, in: rect)
-                == Rect(x: 10, y: 1, width: 1, height: 5))
+                == Rect(x: 10, y: 1, width: 1, height: 5)
+        )
 
         let gripOffset = TreePanelLayout.scrollGripOffset(
             rowCount: 20,
@@ -133,7 +134,10 @@ struct WordAndViewportNavigationTests {
         insertText("!", into: sut.state)
 
         let layout = LayoutMetrics(
-            state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+            state: sut.state,
+            columns: sut.pipeline.columns,
+            rows: sut.pipeline.rows
+        )
         let editorRect = Rect(
             x: layout.editorStart,
             y: layout.contentStartRow,

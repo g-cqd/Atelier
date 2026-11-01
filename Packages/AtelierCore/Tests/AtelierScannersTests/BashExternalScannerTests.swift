@@ -34,18 +34,27 @@ private let directCases: [BashTokenCase] = [
     .init("_immediate_double_hash", "##name", rejecting: "##}"),
     .init("_external_expansion_sym_hash", "#}", rejecting: "#x"),
     .init(
-        "_external_expansion_sym_bang", "!}", rejecting: "!x",
-        offered: ["_external_expansion_sym_hash", "_external_expansion_sym_bang"]),
+        "_external_expansion_sym_bang",
+        "!}",
+        rejecting: "!x",
+        offered: ["_external_expansion_sym_hash", "_external_expansion_sym_bang"]
+    ),
     .init(
-        "_external_expansion_sym_equal", "=}", rejecting: "=x",
-        offered: ["_external_expansion_sym_hash", "_external_expansion_sym_equal"]),
+        "_external_expansion_sym_equal",
+        "=}",
+        rejecting: "=x",
+        offered: ["_external_expansion_sym_hash", "_external_expansion_sym_equal"]
+    ),
     .init("<<", "<<EOF", rejecting: "<EOF"),
     .init("<<-", "<<-EOF", rejecting: "<<=EOF", offered: ["<<", "<<-"])
 ]
 
 struct BashExternalScannerTests {
     private func scan(
-        _ input: String, at offset: Int = 0, offering names: [String], scanner: inout BashExternalScanner
+        _ input: String,
+        at offset: Int = 0,
+        offering names: [String],
+        scanner: inout BashExternalScanner
     ) -> (name: String?, lexer: StringScannerLexer) {
         var lexer = StringScannerLexer(input, at: offset)
         let valid = BashExternalScanner.externalNames.map { names.contains($0) }
@@ -63,7 +72,8 @@ struct BashExternalScannerTests {
                 "_bare_dollar", "_brace_start", "_immediate_double_hash", "_external_expansion_sym_hash",
                 "_external_expansion_sym_bang", "_external_expansion_sym_equal", "}", "]", "<<", "<<-",
                 "\\n", "(", "esac", "__error_recovery"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["bash"] != nil)
     }
 
@@ -98,7 +108,9 @@ struct BashExternalScannerTests {
         ("EOF", "hello $name\nEOF", "_heredoc_body_beginning")
     ])
     func `heredoc bodies distinguish literal and expanding delimiters`(
-        _ delimiter: String, _ body: String, _ expected: String
+        _ delimiter: String,
+        _ body: String,
+        _ expected: String
     ) {
         var scanner = BashExternalScanner()
         #expect(scan("<<", offering: ["<<"], scanner: &scanner).name == "<<")
@@ -119,7 +131,8 @@ struct BashExternalScannerTests {
         #expect(scan("WRONG", offering: ["heredoc_end"], scanner: &scanner).name == nil)
         #expect(
             scan("$name\nEOF", offering: ["_heredoc_body_beginning", "simple_heredoc_body"], scanner: &scanner)
-                .name == "_heredoc_body_beginning")
+                .name == "_heredoc_body_beginning"
+        )
         #expect(scan("$name", offering: ["simple_heredoc_body"], scanner: &scanner).name == nil)
         let content = scan("text$name\nEOF", offering: ["heredoc_content", "heredoc_end"], scanner: &scanner)
         #expect(content.name == "heredoc_content")
@@ -135,10 +148,12 @@ struct BashExternalScannerTests {
         #expect(scan("literal $name\nEOF", offering: ["_heredoc_body_beginning"], scanner: &scanner).name == nil)
         #expect(
             scan(
-                "literal $name\nEOF", offering: ["simple_heredoc_body", "_heredoc_body_beginning"],
+                "literal $name\nEOF",
+                offering: ["simple_heredoc_body", "_heredoc_body_beginning"],
                 scanner: &scanner
             )
-            .name == "simple_heredoc_body")
+            .name == "simple_heredoc_body"
+        )
     }
 
     @Test
@@ -151,11 +166,13 @@ struct BashExternalScannerTests {
         #expect(scan(source, at: 10, offering: ["heredoc_start"], scanner: &scanner).name == "heredoc_start")
         #expect(
             scan(source, at: 12, offering: ["simple_heredoc_body", "_heredoc_body_beginning"], scanner: &scanner)
-                .name == "simple_heredoc_body")
+                .name == "simple_heredoc_body"
+        )
         #expect(scan(source, at: 14, offering: ["heredoc_end"], scanner: &scanner).name == "heredoc_end")
         #expect(
             scan(source, at: 16, offering: ["simple_heredoc_body", "_heredoc_body_beginning"], scanner: &scanner)
-                .name == "simple_heredoc_body")
+                .name == "simple_heredoc_body"
+        )
         #expect(scan(source, at: 18, offering: ["heredoc_end"], scanner: &scanner).name == "heredoc_end")
     }
 
@@ -224,7 +241,8 @@ struct BashExternalScannerTests {
         #expect(scan("<<", offering: ["<<"], scanner: &scanner).name == "<<")
         #expect(
             scan(String(repeating: "E", count: 1011), offering: ["heredoc_start"], scanner: &scanner)
-                .name == "heredoc_start")
+                .name == "heredoc_start"
+        )
         var state: [UInt8] = []
         scanner.serialize(into: &state)
         #expect(state.count == maximumSerializedScannerStateSize - 1)
@@ -233,7 +251,8 @@ struct BashExternalScannerTests {
         #expect(scan("<<", offering: ["<<"], scanner: &scanner).name == "<<")
         #expect(
             scan(String(repeating: "E", count: 1012), offering: ["heredoc_start"], scanner: &scanner)
-                .name == "heredoc_start")
+                .name == "heredoc_start"
+        )
         state.removeAll()
         scanner.serialize(into: &state)
         #expect(state.isEmpty)

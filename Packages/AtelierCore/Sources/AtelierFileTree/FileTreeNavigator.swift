@@ -49,13 +49,21 @@ public enum FileTreeNavigator {
                 nodes[i].isExpanded.toggle()
                 if nodes[i].isExpanded && nodes[i].children.isEmpty {
                     nodes[i].children = DirectoryScanner.scan(
-                        nodes[i].path, maxDepth: 1, visibility: visibility, withinRoot: rootPath)
+                        nodes[i].path,
+                        maxDepth: 1,
+                        visibility: visibility,
+                        withinRoot: rootPath
+                    )
                 }
                 return
             }
             if nodes[i].isDirectory {
                 toggleExpand(
-                    in: &nodes[i].children, at: path, visibility: visibility, rootPath: rootPath)
+                    in: &nodes[i].children,
+                    at: path,
+                    visibility: visibility,
+                    rootPath: rootPath
+                )
             }
         }
     }

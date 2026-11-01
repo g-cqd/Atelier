@@ -24,7 +24,10 @@ struct MouseScrollNavigationTests {
     @Test
     func `horizontal mouse wheel events update horizontal scroll offset`() {
         let sut = makeSUT(
-            fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
+            fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"],
+            columns: 18,
+            rows: 8
+        )
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
 
@@ -226,13 +229,19 @@ struct MouseScrollNavigationTests {
     @Test
     func `scrolling past horizontal limits cancels immediately`() {
         let sut = makeSUT(
-            fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
+            fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"],
+            columns: 18,
+            rows: 8
+        )
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
         sut.state.config.editor.wrapLines = false
 
         let layout = LayoutMetrics(
-            state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+            state: sut.state,
+            columns: sut.pipeline.columns,
+            rows: sut.pipeline.rows
+        )
         let editorRect = Rect(
             x: layout.editorStart,
             y: layout.contentStartRow,

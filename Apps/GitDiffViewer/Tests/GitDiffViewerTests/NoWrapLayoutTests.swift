@@ -49,7 +49,8 @@ struct NoWrapLayoutTests {
     func `wide characters widen the unwrapped width to what they draw`() throws {
         let line = String(repeating: "漢字", count: 20)
         let text = try #require(
-            DiffRenderer.render(oldText: "a\n", newText: "a\n\(line)\n", language: .plain).unified)
+            DiffRenderer.render(oldText: "a\n", newText: "a\n\(line)\n", language: .plain).unified
+        )
         let drawn = try #require(text.attributed.string.components(separatedBy: "\n").firstIndex(of: line))
         let range = NSRange(location: text.lineStarts[drawn], length: (line as NSString).length)
         let width = text.attributed.attributedSubstring(from: range).size().width
@@ -83,7 +84,12 @@ struct NoWrapLayoutTests {
         sut.wrapsLines = false
         sut.scrollsPastEnd = true
         DiffTextViewCoordinator.configureWrapping(
-            false, column: 0, font: text.palette.font, textView: textView, scrollView: scrollView)
+            false,
+            column: 0,
+            font: text.palette.font,
+            textView: textView,
+            scrollView: scrollView
+        )
         sut.apply(text)
         // The height is TextKit's; laid out whole, as scrolling through the pane lays it out, it is the rows'.
         let layoutManager = try #require(textView.textLayoutManager)

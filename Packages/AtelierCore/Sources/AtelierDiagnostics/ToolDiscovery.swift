@@ -70,7 +70,10 @@ public actor ToolDiscovery {
     /// `homeRelativeDirectories` under the home directory, then the login shell's `$PATH`. The first executable file
     /// found wins; a relative override, custom path or `$PATH` entry is skipped.
     public func locate(
-        executableName: String, overrideVariable: String?, customPath: String?, searchesToolchain: Bool,
+        executableName: String,
+        overrideVariable: String?,
+        customPath: String?,
+        searchesToolchain: Bool,
         homeRelativeDirectories: [String] = []
     ) async -> (url: URL, origin: ToolOrigin)? {
         if let overrideVariable, let override = environment[overrideVariable], isAbsoluteExecutable(override) {
@@ -103,8 +106,10 @@ public actor ToolDiscovery {
     public func locate(_ tool: DiagnosticTool, location: ToolLocation?) async -> (url: URL, origin: ToolOrigin)? {
         if let location, !location.isEnabled { return nil }
         return await locate(
-            executableName: tool.executableName, overrideVariable: tool.overrideVariable,
-            customPath: location?.customPath, searchesToolchain: tool.isInToolchain
+            executableName: tool.executableName,
+            overrideVariable: tool.overrideVariable,
+            customPath: location?.customPath,
+            searchesToolchain: tool.isInToolchain
         )
     }
 
@@ -132,7 +137,10 @@ public actor ToolDiscovery {
     private func xcrunFind(_ name: String) async -> URL? {
         if let cached = xcrunCache[name] { return cached }
         let spec = ProcessSpec(
-            executable: URL(filePath: "/usr/bin/xcrun"), arguments: ["--find", name], timeout: .seconds(10))
+            executable: URL(filePath: "/usr/bin/xcrun"),
+            arguments: ["--find", name],
+            timeout: .seconds(10)
+        )
         let found: URL?
         do {
             let output = try await runner.run(spec)
@@ -197,8 +205,11 @@ public actor ToolDiscovery {
     private func probeShellPath() async -> [String]? {
         let shell = environment["SHELL"].flatMap { $0.hasPrefix("/") ? $0 : nil } ?? "/bin/zsh"
         let spec = ProcessSpec(
-            executable: URL(filePath: shell), arguments: ["-l", "-c", "/usr/bin/printenv PATH"],
-            currentDirectory: homeDirectory, timeout: .seconds(5))
+            executable: URL(filePath: shell),
+            arguments: ["-l", "-c", "/usr/bin/printenv PATH"],
+            currentDirectory: homeDirectory,
+            timeout: .seconds(5)
+        )
         let output: ProcessOutput
         do {
             output = try await runner.run(spec)
@@ -210,7 +221,8 @@ public actor ToolDiscovery {
         }
         guard output.succeeded else {
             Self.logger.error(
-                "The login shell \(shell) exited \(output.terminationStatus) printing its PATH: \(output.errorText)")
+                "The login shell \(shell) exited \(output.terminationStatus) printing its PATH: \(output.errorText)"
+            )
             return []
         }
         return Self.absoluteDirectories(inLastLineOf: output.standardOutput)
@@ -269,9 +281,12 @@ extension ToolDiscovery: ExecutableLocating {
     public func locateExecutable(_ query: ExecutableQuery) async -> URL? {
         for name in query.names {
             if let located = await locate(
-                executableName: name, overrideVariable: query.overrideVariable, customPath: query.customPath,
-                searchesToolchain: query.searchesToolchain, homeRelativeDirectories: query.homeRelativeDirectories)
-            {
+                executableName: name,
+                overrideVariable: query.overrideVariable,
+                customPath: query.customPath,
+                searchesToolchain: query.searchesToolchain,
+                homeRelativeDirectories: query.homeRelativeDirectories
+            ) {
                 return located.url
             }
         }

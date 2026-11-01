@@ -29,7 +29,9 @@ private func respond(_ transport: PipeTransport, to frame: Sent, with result: JS
 
 /// The legend the scripted server gives: keywords, variables and functions.
 private let legend = SemanticTokensLegend(
-    tokenTypes: ["keyword", "variable", "function"], tokenModifiers: ["declaration"])
+    tokenTypes: ["keyword", "variable", "function"],
+    tokenModifiers: ["declaration"]
+)
 
 /// An `initialize` answer that gives semantic tokens with `legend`, deltas included.
 private let initializeWithTokens: JSONValue = .object([
@@ -57,7 +59,9 @@ private func makeSession(_ factory: ScriptedConnectionFactory, clock: TestClock 
 {
     LanguageServerSession(
         configuration: LanguageServerSession.Configuration(
-            serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: URL(filePath: "/repo")),
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            workspaceRoot: URL(filePath: "/repo")
+        ),
         clock: clock
     ) { _ in await factory.make() }
 }
@@ -103,7 +107,8 @@ struct SemanticTokensTests {
         #expect(
             frames.map(\.method) == [
                 "initialize", "initialized", "textDocument/didOpen", "textDocument/semanticTokens/full"
-            ])
+            ]
+        )
         #expect(frames.last?.params == .object(["textDocument": .object(["uri": .string(uri)])]))
         await session.shutdown()
     }
@@ -131,10 +136,12 @@ struct SemanticTokensTests {
         let transport = await factory.transport(at: 0)
         let frames = try await (0 ..< transport.sink.all.count).asyncMap { try await sent(transport, at: $0) }
         #expect(
-            frames.dropFirst(4).map(\.method) == ["textDocument/didChange", "textDocument/semanticTokens/full/delta"])
+            frames.dropFirst(4).map(\.method) == ["textDocument/didChange", "textDocument/semanticTokens/full/delta"]
+        )
         #expect(
             frames.last?.params
-                == .object(["textDocument": .object(["uri": .string(uri)]), "previousResultId": .string("1")]))
+                == .object(["textDocument": .object(["uri": .string(uri)]), "previousResultId": .string("1")])
+        )
         await session.shutdown()
     }
 
@@ -151,7 +158,12 @@ struct SemanticTokensTests {
         #expect(pending.method == "textDocument/semanticTokens/full")
         // A hover with new text changes the document to version 2 while the tokens are out.
         async let hover = session.hover(
-            uri: uri, languageID: "swift", content: "let other = 2", line: 0, utf16Column: 5)
+            uri: uri,
+            languageID: "swift",
+            content: "let other = 2",
+            line: 0,
+            utf16Column: 5
+        )
         await transport.sink.waitForCount(6)
         #expect(try await sent(transport, at: 4).method == "textDocument/didChange")
         try respond(transport, to: pending, with: .object(["resultId": .string("1"), "data": numbers(tokens)]))
@@ -196,7 +208,10 @@ struct SemanticTokensTests {
         let tier = SemanticTokenTier { _ in nil }
 
         let outcome = await session.semanticTokens(
-            uri: "atelier-blob://abc123/Sources/A.swift", languageID: "swift", content: text)
+            uri: "atelier-blob://abc123/Sources/A.swift",
+            languageID: "swift",
+            content: text
+        )
         await #expect(throws: TierFailure.failed("no on-disk document for the text")) {
             try await tier.run(request()) { _ in }
         }
@@ -248,7 +263,8 @@ struct SemanticTokensTests {
         await connection.start()
 
         transport.deliver(
-            LSPFrameCodec.frame(Data(#"{"jsonrpc":"2.0","id":7,"method":"workspace/semanticTokens/refresh"}"#.utf8)))
+            LSPFrameCodec.frame(Data(#"{"jsonrpc":"2.0","id":7,"method":"workspace/semanticTokens/refresh"}"#.utf8))
+        )
         await transport.sink.waitForCount(1)
 
         let reply = try JSONDecoder().decode(Reply.self, from: unframe(await transport.sink.all[0]))

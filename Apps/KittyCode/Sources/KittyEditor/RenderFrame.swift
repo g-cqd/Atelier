@@ -79,8 +79,12 @@ public func renderFrame(pipeline: RenderPipeline, state: EditorState) {
             if screenRow >= layout.contentStartRow && screenRow < pipeline.rows - 1 {
                 pipeline.markDirty(
                     DirtyRect(
-                        row: screenRow, col: layout.editorStart,
-                        height: 1, width: layout.editorWidth))
+                        row: screenRow,
+                        col: layout.editorStart,
+                        height: 1,
+                        width: layout.editorWidth
+                    )
+                )
             }
         }
     }
@@ -106,7 +110,8 @@ public func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     lastVisualScrollOffset = currentVisualOffset
 
     renderShellLayout(
-        pipeline: pipeline, state: state,
+        pipeline: pipeline,
+        state: state,
         skipChromeSections: !dirty.contentAll && !dirty.chrome
     )
 }

@@ -69,18 +69,27 @@ struct DiffColorsSettingTests {
     /// A gutter over ten lines with line 5 changed, or a line added after it, in `palette`, drawn whole; the pixel in
     /// the change layer, after the numbers, at row `row`'s middle.
     private func changeLayerPixel(
-        ofRow row: Int, palette: DiffPalette, adds: Bool = false, compact: Bool = false
+        ofRow row: Int,
+        palette: DiffPalette,
+        adds: Bool = false,
+        compact: Bool = false
     ) throws -> NSColor? {
         let old = (1 ... 10).map { "let value\($0) = \($0)" }
         var new = old
         if adds { new.insert("let added = true", at: 5) } else { new[4] = "let value5 = five" }
         let prepared = PreparedDiff(
             FileDiffInput(
-                title: "", oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain), granularity: .word)
+                title: "",
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain
+            ),
+            granularity: .word
+        )
         let options = DiffRenderer.Options(palette: palette, sides: [.unified], compactsInline: compact)
         let rendered = try #require(
-            DiffRenderer.render(prepared: [prepared], options: options, layout: .full, withHeaders: false).unified)
+            DiffRenderer.render(prepared: [prepared], options: options, layout: .full, withHeaders: false).unified
+        )
         let layout = StaticTextLayout(rendered: rendered)
         layout.layOut(mode: .none, viewportWidth: 600)
         let gutter = DiffGutterView(clipView: nil)

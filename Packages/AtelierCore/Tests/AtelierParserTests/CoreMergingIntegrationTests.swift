@@ -22,10 +22,14 @@ struct CoreMergingIntegrationTests {
                 ("E", .prec(1, .string("x"))),
                 ("F", .string("x"))
             ],
-            extras: [])
+            extras: []
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse(source)
 

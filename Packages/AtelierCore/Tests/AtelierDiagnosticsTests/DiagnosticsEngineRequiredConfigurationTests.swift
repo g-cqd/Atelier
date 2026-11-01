@@ -12,7 +12,9 @@ struct DiagnosticsEngineRequiredConfigurationTests {
     /// An executable file at `url` for discovery to find; the fake runner never spawns it.
     private static func makeExecutable(at url: URL) throws {
         try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try "#!/bin/sh\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
@@ -23,11 +25,16 @@ struct DiagnosticsEngineRequiredConfigurationTests {
     }
 
     private static func request(
-        root: URL, files: [DiagnosticsEngine.FileTarget], corpusFingerprint: String? = nil,
-        tool: DiagnosticTool, customPath: String
+        root: URL,
+        files: [DiagnosticsEngine.FileTarget],
+        corpusFingerprint: String? = nil,
+        tool: DiagnosticTool,
+        customPath: String
     ) -> DiagnosticsEngine.Request {
         DiagnosticsEngine.Request(
-            root: root, files: files, corpusFingerprint: corpusFingerprint,
+            root: root,
+            files: files,
+            corpusFingerprint: corpusFingerprint,
             tools: [tool: ToolLocation(customPath: customPath)]
         )
     }
@@ -45,7 +52,10 @@ struct DiagnosticsEngineRequiredConfigurationTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "a",
+            url: root.appending(path: "A.swift")
+        )
         let request = Self.request(root: root, files: [file], tool: .swiftFormat, customPath: executable.path)
         let result = try await engine.run(.swiftFormat, request: request)
         #expect(result.status == .skipped("no swift-format configuration in this project"))
@@ -67,7 +77,10 @@ struct DiagnosticsEngineRequiredConfigurationTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "a",
+            url: root.appending(path: "A.swift")
+        )
         let request = Self.request(root: root, files: [file], tool: .swiftFormat, customPath: executable.path)
         let result = try await engine.run(.swiftFormat, request: request)
         #expect(result.status == .succeeded)
@@ -87,9 +100,17 @@ struct DiagnosticsEngineRequiredConfigurationTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "a",
+            url: root.appending(path: "A.swift")
+        )
         let request = Self.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftformat, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: .swiftformat,
+            customPath: executable.path
+        )
         let result = try await engine.run(.swiftformat, request: request)
         #expect(result.status == .skipped("no SwiftFormat (Lockwood) configuration in this project"))
         #expect(result.findings.isEmpty)
@@ -110,9 +131,17 @@ struct DiagnosticsEngineRequiredConfigurationTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "a",
+            url: root.appending(path: "A.swift")
+        )
         let request = Self.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftformat, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: .swiftformat,
+            customPath: executable.path
+        )
         let result = try await engine.run(.swiftformat, request: request)
         #expect(result.status == .succeeded)
         #expect(runner.specs.count == 1)

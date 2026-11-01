@@ -25,7 +25,12 @@ extension EditorState {
         // A scan cancelled or refused by the pool keeps the tree shown.
         guard
             let scanned = try? await DirectoryScanner.scanAsync(
-                rootPath, maxDepth: 1, visibility: fileVisibility, withinRoot: rootPath, pool: searchPool)
+                rootPath,
+                maxDepth: 1,
+                visibility: fileVisibility,
+                withinRoot: rootPath,
+                pool: searchPool
+            )
         else { return }
         treeNodes = scanned
         if !expandedPaths.isEmpty {
@@ -55,8 +60,11 @@ extension EditorState {
         for i in nodes.indices where nodes[i].isDirectory && paths.contains(nodes[i].path) {
             if !nodes[i].isExpanded {
                 FileTreeNavigator.toggleExpand(
-                    in: &nodes, at: nodes[i].path, visibility: fileVisibility,
-                    rootPath: rootPath)
+                    in: &nodes,
+                    at: nodes[i].path,
+                    visibility: fileVisibility,
+                    rootPath: rootPath
+                )
             }
             if !nodes[i].children.isEmpty {
                 restoreExpandedPaths(paths, in: &nodes[i].children)
@@ -79,7 +87,11 @@ extension EditorState {
         let node = flat[index].node
         guard node.isDirectory else { return }
         FileTreeNavigator.toggleExpand(
-            in: &treeNodes, at: node.path, visibility: fileVisibility, rootPath: rootPath)
+            in: &treeNodes,
+            at: node.path,
+            visibility: fileVisibility,
+            rootPath: rootPath
+        )
         refreshFlatTree()
     }
 
@@ -513,14 +525,17 @@ extension EditorState {
             ) { group in
                 group.addTask(priority: .utility) {
                     .maxLineWidth(
-                        TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: tabSize))
+                        TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: tabSize)
+                    )
                 }
 
                 if shouldHighlight {
                     group.addTask(priority: .userInitiated) {
                         if let language {
                             _ = await LanguageHighlighter.ensureArtifacts(
-                                for: language, taskProvider: taskProvider)
+                                for: language,
+                                taskProvider: taskProvider
+                            )
                         }
                         if let grammarLines = LanguageHighlighter.makeSession(language: language, theme: theme)
                             .grammarHighlightedDocument(source: content)
@@ -530,7 +545,8 @@ extension EditorState {
                         return .highlightedLines(
                             LanguageHighlighter.makeSession(language: language, theme: theme, preferGrammar: false)
                                 .highlightDocument(source: content),
-                            fromGrammar: false)
+                            fromGrammar: false
+                        )
                     }
                 }
 

@@ -60,7 +60,9 @@ extension JSONRPCID: Codable {
             self = .string(value)
         } else {
             throw DecodingError.dataCorruptedError(
-                in: container, debugDescription: "Expected a JSON-RPC id (number or string)")
+                in: container,
+                debugDescription: "Expected a JSON-RPC id (number or string)"
+            )
         }
     }
 
@@ -142,7 +144,8 @@ public enum JSONRPCMessage {
     public static func errorResponse(id: JSONRPCID, code: Int, message: String) throws -> Data {
         try AemiJSON.JSONEncoder()
             .encode(
-                ErrorResponseEnvelope(id: id, error: JSONRPCError(code: code, message: message)))
+                ErrorResponseEnvelope(id: id, error: JSONRPCError(code: code, message: message))
+            )
     }
 }
 

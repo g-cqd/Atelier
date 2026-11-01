@@ -22,16 +22,20 @@ struct DocumentationChainTests {
     @Test
     func `a page is filed under the module, the nesting types, then the symbol's name with its labels`() throws {
         let chain = try #require(
-            DocumentationChain(content: "FileManager.default.contents", line: 0, utf16Column: 12))
+            DocumentationChain(content: "FileManager.default.contents", line: 0, utf16Column: 12)
+        )
         #expect(
             chain.page(module: "Foundation", symbolName: "default")
-                == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager", "default"]))
+                == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager", "default"])
+        )
 
         let method = try #require(
-            DocumentationChain(content: "  FileManager.contents(atPath: p)", line: 0, utf16Column: 16))
+            DocumentationChain(content: "  FileManager.contents(atPath: p)", line: 0, utf16Column: 16)
+        )
         #expect(
             method.page(module: "Foundation", symbolName: "contents(atPath:)")
-                == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager", "contents(atPath:)"]))
+                == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager", "contents(atPath:)"])
+        )
     }
 
     @Test
@@ -46,7 +50,8 @@ struct DocumentationChainTests {
         #expect(chain.startsWith(module: "Foundation"))
         #expect(
             chain.page(module: "Foundation", symbolName: "FileManager")
-                == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager"]))
+                == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager"])
+        )
     }
 
     @Test
@@ -87,7 +92,9 @@ private let hoverAnswer: JSONValue = .object([
 
 private func makeService(_ factory: ScriptedConnectionFactory) -> LanguageServerSession {
     let configuration = LanguageServerSession.Configuration(
-        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+        workspaceRoot: URL(fileURLWithPath: "/tmp")
+    )
     return LanguageServerSession(configuration: configuration, clock: TestClock()) { _ in await factory.make() }
 }
 
@@ -99,8 +106,12 @@ struct LanguageServerSessionDocumentationPageTests {
         let service = makeService(factory)
 
         async let page = service.documentationPage(
-            uri: "file:///a.swift", languageID: "swift", content: "let _ = String.Encoding.utf8", line: 0,
-            utf16Column: 25)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "let _ = String.Encoding.utf8",
+            line: 0,
+            utf16Column: 25
+        )
 
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
@@ -129,7 +140,12 @@ struct LanguageServerSessionDocumentationPageTests {
         let service = makeService(factory)
 
         let page = await service.documentationPage(
-            uri: "file:///a.swift", languageID: "swift", content: "Config.load(from: url)", line: 0, utf16Column: 8)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "Config.load(from: url)",
+            line: 0,
+            utf16Column: 8
+        )
 
         #expect(page == nil)
         let frames = await factory.transport(at: 0).sink.all
@@ -166,7 +182,8 @@ struct LanguageServerSessionDocumentationPageTests {
         let provider = SDKDocumentationProvider(service: service, resolvesDocumentationPages: true)
 
         let content = try await provider.hover(
-            HoverQuery(documentURI: "file:///a.swift", content: "let b: Bool = true", line: 0, utf16Column: 8))
+            HoverQuery(documentURI: "file:///a.swift", content: "let b: Bool = true", line: 0, utf16Column: 8)
+        )
 
         #expect(content?.source == .sdk)
         #expect(content?.documentationPage == HoverContent.DocumentationPage(module: "Swift", path: ["Bool"]))
@@ -183,12 +200,17 @@ struct LanguageServerSessionDocumentationPageTests {
         let tiered = TieredHoverProviders([
             Stub(
                 content: HoverContent(
-                    markdown: "```swift\nstruct Bool\n```\n", source: .languageServer, documentationPage: page)),
+                    markdown: "```swift\nstruct Bool\n```\n",
+                    source: .languageServer,
+                    documentationPage: page
+                )
+            ),
             Stub(content: HoverContent(markdown: "A value type.", source: .docIndex))
         ])
 
         let content = try await tiered.hover(
-            HoverQuery(documentURI: "file:///a.swift", content: "Bool", line: 0, utf16Column: 0))
+            HoverQuery(documentURI: "file:///a.swift", content: "Bool", line: 0, utf16Column: 0)
+        )
 
         #expect(content?.source == .docIndex)
         #expect(content?.documentationPage == page)

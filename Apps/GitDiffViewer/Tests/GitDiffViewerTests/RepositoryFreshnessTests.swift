@@ -58,7 +58,11 @@ struct RepositoryFreshnessTests {
         let source = try #require(factory.latest)
 
         try await harness.fire(
-            .directoryChanged("/repo/.git/HEAD"), on: source, after: WatcherHarness.refDebounce, probe: probe)
+            .directoryChanged("/repo/.git/HEAD"),
+            on: source,
+            after: WatcherHarness.refDebounce,
+            probe: probe
+        )
 
         #expect(treeChanges == 0)
         try await harness.drain(sut)
@@ -80,7 +84,11 @@ struct RepositoryFreshnessTests {
 
         source.send(.directoryChanged("/repo/.git/index.lock"))
         try await harness.fire(
-            .directoryChanged("/repo/.git/index"), on: source, after: WatcherHarness.refDebounce, probe: probe)
+            .directoryChanged("/repo/.git/index"),
+            on: source,
+            after: WatcherHarness.refDebounce,
+            probe: probe
+        )
 
         #expect(otherChanges == 0)
         try await harness.drain(sut)
@@ -97,10 +105,17 @@ struct RepositoryFreshnessTests {
         let source = try #require(factory.latest)
 
         try await harness.fire(
-            .directoryChanged("/repo/.git/refs/remotes/origin/main"), on: source, after: WatcherHarness.refDebounce,
-            probe: probe)
+            .directoryChanged("/repo/.git/refs/remotes/origin/main"),
+            on: source,
+            after: WatcherHarness.refDebounce,
+            probe: probe
+        )
         try await harness.fire(
-            .directoryChanged("/repo/.git/packed-refs"), on: source, after: WatcherHarness.refDebounce, probe: probe)
+            .directoryChanged("/repo/.git/packed-refs"),
+            on: source,
+            after: WatcherHarness.refDebounce,
+            probe: probe
+        )
         try await harness.drain(sut)
     }
 
@@ -187,7 +202,8 @@ struct RepositoryFreshnessTests {
         harness.clock.advance(by: WatcherHarness.treeDebounce)
 
         #expect(
-            try await judged.expectNext() == ["build/out.o", "App.xcodeproj/xcuserdata/UserInterfaceState.xcuserstate"])
+            try await judged.expectNext() == ["build/out.o", "App.xcodeproj/xcuserdata/UserInterfaceState.xcuserstate"]
+        )
         try await harness.taskProvider.waitForAllTasks()
         #expect(treeChanges == 0)
         try await harness.drain(sut)

@@ -16,8 +16,8 @@ package final class SideState {
     }
 
     package let label: String
-    private let reader: any SourceReading
-    private let taskProvider: any TaskProvider
+    let reader: any SourceReading
+    let taskProvider: any TaskProvider
     package private(set) var source: ComparisonSource?
     package private(set) var repository: RepositoryInfo?
     package private(set) var entries: [SourceEntry] = []
@@ -46,7 +46,7 @@ package final class SideState {
 
     /// Where each file of this folder stands against the index, as git's status last reported it; nil for any other
     /// source, for a folder outside every repository, and until git answers.
-    private var gitBadgeStates: BadgeChangeStates? {
+    var gitBadgeStates: BadgeChangeStates? {
         didSet { onBadgeStatesChanged?() }
     }
     /// Where each of this side's paths stands in the comparison, merged by the owner from both sides' states; nil
@@ -54,8 +54,8 @@ package final class SideState {
     private var comparisonBadgeStates: BadgeChangeStates?
     /// Bumped by every read of git's status and by every load that brings its own; a read that lands after a newer
     /// one started is dropped.
-    @ObservationIgnored private var badgeStatesGeneration = 0
-    @ObservationIgnored private var badgeStatesTask: Task<Void, Never>?
+    @ObservationIgnored var badgeStatesGeneration = 0
+    @ObservationIgnored var badgeStatesTask: Task<Void, Never>?
 
     private var loadTask: Task<Void, Never>?
     private var ignoredTask: Task<Void, Never>?
@@ -204,8 +204,12 @@ package final class SideState {
     /// another round trip. The owner reports the change itself, so both sides can be swapped in before anything is
     /// recomputed.
     package func load(
-        _ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil,
-        badgeStates: BadgeChangeStates? = nil, resolvedCommit: String? = nil
+        _ source: ComparisonSource,
+        repository: RepositoryInfo?,
+        entries: [SourceEntry],
+        ignored: [SourceEntry]? = nil,
+        badgeStates: BadgeChangeStates? = nil,
+        resolvedCommit: String? = nil
     ) {
         let listing = Listing(entries: entries, commit: resolvedCommit)
         load(source, repository: repository, listing: listing, ignored: ignored, badgeStates: badgeStates)
@@ -214,7 +218,10 @@ package final class SideState {
     /// Adopts an already indexed listing, so a repository prologue installs both sides without rebuilding their
     /// dictionaries and trees on the main actor.
     package func load(
-        _ source: ComparisonSource, repository: RepositoryInfo?, listing: Listing, ignored: [SourceEntry]? = nil,
+        _ source: ComparisonSource,
+        repository: RepositoryInfo?,
+        listing: Listing,
+        ignored: [SourceEntry]? = nil,
         badgeStates: BadgeChangeStates? = nil
     ) {
         loadTask?.cancel()
@@ -331,49 +338,6 @@ package final class SideState {
             }
             runQueuedOutsideWriteReload()
         }
-    }
-
-    /// Re-reads git's status for this side's folder and swaps in the badge states it gives, without re-reading the
-    /// files: staging or committing moves what the index holds, not what the files hold. A no-op for any other
-    /// source; a later read or load supersedes it.
-    package func refreshBadgeStates() {
-        guard let source, case .directory = source else { return }
-        let generation = beginBadgeStatesRead()
-        let reader = reader
-        badgeStatesTask = taskProvider.task {
-            let states = await Self.readBadgeStates(of: source, reader: reader)
-            guard !Task.isCancelled else { return }
-            publish(states, generation: generation)
-        }
-    }
-
-    /// Git's status for `source` as badge states, read and built off the main actor: nil when `source` is not a
-    /// folder inside a repository, and when git fails, which leaves the side its look without git.
-    @concurrent
-    nonisolated static func readBadgeStates(of source: ComparisonSource, reader: any SourceReading) async
-        -> BadgeChangeStates?
-    {
-        do {
-            return try await reader.workingTreeStatus(of: source).map(BadgeChangeStates.init(status:))
-        } catch is CancellationError {
-            return nil
-        } catch {
-            PhaseTrace.log("git status failed for \(source.displayName): \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    /// Supersedes every earlier read of git's status; returns the generation a new result must still hold to land.
-    private func beginBadgeStatesRead() -> Int {
-        badgeStatesTask?.cancel()
-        badgeStatesTask = nil
-        badgeStatesGeneration += 1
-        return badgeStatesGeneration
-    }
-
-    private func publish(_ states: BadgeChangeStates?, generation: Int) {
-        guard generation == badgeStatesGeneration else { return }
-        gitBadgeStates = states
     }
 
     /// Reads the files git ignores, once per source and only when asked: the listing takes seconds on a tree full
@@ -545,7 +509,9 @@ extension SideState {
     /// Lists `source`, resolving a ref first: a ref that moves in between then reads as moved at the next check
     /// (``reloadIfRefMoved()``), never as current.
     nonisolated static func listing(
-        of source: ComparisonSource, reader: any SourceReading, threadProbe: (@Sendable () -> Void)? = nil
+        of source: ComparisonSource,
+        reader: any SourceReading,
+        threadProbe: (@Sendable () -> Void)? = nil
     ) async throws -> Listing {
         var commit: String?
         if case .gitRef(let repository, let ref) = source {

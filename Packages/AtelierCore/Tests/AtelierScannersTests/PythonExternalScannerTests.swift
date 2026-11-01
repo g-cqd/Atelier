@@ -30,7 +30,10 @@ private let directCases: [PythonCase] = [
 
 struct PythonExternalScannerTests {
     private func scan(
-        _ input: String, at offset: Int = 0, offering names: [String], scanner: inout PythonExternalScanner
+        _ input: String,
+        at offset: Int = 0,
+        offering names: [String],
+        scanner: inout PythonExternalScanner
     ) -> (name: String?, lexer: StringScannerLexer) {
         var lexer = StringScannerLexer(input, at: offset)
         let valid = PythonExternalScanner.externalNames.map { names.contains($0) }
@@ -63,7 +66,8 @@ struct PythonExternalScannerTests {
             PythonExternalScanner.externalNames == [
                 "_newline", "_indent", "_dedent", "string_start", "_string_content", "escape_interpolation",
                 "string_end", "comment", "]", ")", "}", "except"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["python"] != nil)
     }
 
@@ -151,7 +155,8 @@ struct PythonExternalScannerTests {
         #expect(scanner.indents == [0, 8])
         #expect(
             scan("\n        # same block\n        item", offering: ["_dedent", "_newline"], scanner: &scanner).name
-                == "_newline")
+                == "_newline"
+        )
         #expect(scanner.indents == [0, 8])
         #expect(scan("\\\n        item", offering: ["_indent", "_dedent", "_newline"], scanner: &scanner).name == nil)
         #expect(scan("\nitem", offering: ["_dedent"], scanner: &scanner).name == "_dedent")

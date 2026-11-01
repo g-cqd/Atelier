@@ -28,7 +28,8 @@ struct StringExternalVariantTests {
             ("word", .pattern("[a-z]+"))
         ],
         extras: [.pattern(#"\s"#)],
-        externals: [.symbol("CONCAT"), .string("}")])
+        externals: [.symbol("CONCAT"), .string("}")]
+    )
 
     @Test
     func `a string external is valid where only a token variant of its text can follow`() throws {
@@ -44,7 +45,8 @@ struct StringExternalVariantTests {
                 .first { state in
                     if case .shift = table.actions[state, concat] { return true }
                     return false
-                })
+                }
+        )
         #expect(table.validExternals[state][1])
     }
 
@@ -71,7 +73,10 @@ struct StringExternalVariantTests {
     private static func parser() throws -> GLRParser {
         let compiled = try compiled()
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 }
 

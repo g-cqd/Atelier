@@ -13,7 +13,8 @@ struct DiagnosticToolTests {
         (.deadwood, true)
     ])
     func `only the analyzers scope their own report to the files they are given`(
-        tool: DiagnosticTool, expected: Bool
+        tool: DiagnosticTool,
+        expected: Bool
     ) {
         #expect(tool.scopesItsOwnReport == expected)
     }

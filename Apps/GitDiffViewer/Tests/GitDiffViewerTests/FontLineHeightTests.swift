@@ -69,7 +69,8 @@ struct FontLineHeightTests {
         print(
             "BENCH palette line height: TextKit 1 object \(Self.summary(textKit1)); cached TextKit 2 "
                 + "\(Self.summary(cached)); one uncached measurement \(String(format: "%.1f", measuring)) us "
-                + "(\(sink > 0))")
+                + "(\(sink > 0))"
+        )
     }
 
     private static func microseconds(_ duration: Duration) -> Double {

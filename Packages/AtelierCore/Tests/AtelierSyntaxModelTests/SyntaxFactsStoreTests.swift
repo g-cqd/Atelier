@@ -8,8 +8,11 @@ struct SyntaxFactsStoreTests {
     /// Facts whose estimate grows with `lines`, each line holding one boundary.
     private static func facts(lines: Int) -> SyntaxFacts {
         SyntaxFacts(
-            tokenBoundaries: Array(repeating: [0 ..< 1], count: lines), declarations: [], highlights: [],
-            unexpectedShare: 0)
+            tokenBoundaries: Array(repeating: [0 ..< 1], count: lines),
+            declarations: [],
+            highlights: [],
+            unexpectedShare: 0
+        )
     }
 
     private static func revision(_ blob: String, document: String = "a.swift") -> SourceRevision {
@@ -89,7 +92,8 @@ struct SyntaxFactsStoreTests {
     func `symbol kinds share the byte budget, the least recently used entry of either leaving first`() {
         let size = Self.facts(lines: 100).estimatedBytes
         let kinds = SymbolKinds(
-            tokens: (0 ..< 200).map { HighlightToken(byteRange: $0 * 4 ..< $0 * 4 + 3, role: .variable) })
+            tokens: (0 ..< 200).map { HighlightToken(byteRange: $0 * 4 ..< $0 * 4 + 3, role: .variable) }
+        )
         let store = SyntaxFactsStore(byteLimit: size + kinds.estimatedBytes + size / 2)
         store.insert(kinds, for: Self.revision("a"))
         store.insert(Self.facts(lines: 100), for: Self.revision("b"))
@@ -113,6 +117,7 @@ struct SyntaxFactsStoreTests {
         #expect(
             [0, 2, 3, 4, 8, 10, 12, 16, 20].map(kinds.kind(atUTF8:)) == [
                 .keyword, .keyword, nil, .symbol, .symbol, nil, .literal, .comment, nil
-            ])
+            ]
+        )
     }
 }

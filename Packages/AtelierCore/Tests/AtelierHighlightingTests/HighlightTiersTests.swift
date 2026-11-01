@@ -40,8 +40,13 @@ private struct ScriptedTier: AtelierHighlighting.HighlightTier {
         let lines = 0 ..< request.lineRanges.count
         await emit(
             TierUpdate(
-                layer: layer, coverage: coverage, revision: request.revision, lines: lines,
-                tokens: LineTokens(emptyLines: lines.count)))
+                layer: layer,
+                coverage: coverage,
+                revision: request.revision,
+                lines: lines,
+                tokens: LineTokens(emptyLines: lines.count)
+            )
+        )
     }
 }
 
@@ -57,8 +62,11 @@ struct HighlightTiersTests {
             start += line.utf8.count + 1
         }
         return TierRequest(
-            revision: SourceRevision(documentID: "a.swift", language: language, key: .content("blob")), text: text,
-            lineRanges: ranges, visibleLines: visible)
+            revision: SourceRevision(documentID: "a.swift", language: language, key: .content("blob")),
+            text: text,
+            lineRanges: ranges,
+            visibleLines: visible
+        )
     }
 
     @Test
@@ -109,7 +117,8 @@ struct HighlightTiersTests {
                         case .finished(let layer): layer == .lexical
                         case .failed: false
                     }
-                })
+                }
+        )
         #expect(events.events.count == 4)
     }
 
@@ -136,7 +145,9 @@ struct HighlightTiersTests {
         let events = AsyncEventProbe<TierEvent>()
 
         await HighlightTiers.run(
-            Self.request(language: .json), tiers: [SwiftSyntaxTier(), LexicalTier()], clock: TestClock()
+            Self.request(language: .json),
+            tiers: [SwiftSyntaxTier(), LexicalTier()],
+            clock: TestClock()
         ) { events.record($0) }
 
         #expect(
@@ -145,7 +156,8 @@ struct HighlightTiersTests {
                     case .update(let update): update.layer == .lexical
                     case .finished(let layer), .failed(let layer, _): layer == .lexical
                 }
-            })
+            }
+        )
     }
 
     @Test

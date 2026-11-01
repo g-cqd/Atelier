@@ -39,7 +39,10 @@ public struct SymbolRecord: Sendable, Codable, Equatable {
 extension SymbolRecord {
     var mappingEntry: SymbolMappingEntry {
         SymbolMappingEntry(
-            name: name, visibility: visibility, assetGlyphIndex: assetGlyphIndex,
-            codepoint: codepoint)
+            name: name,
+            visibility: visibility,
+            assetGlyphIndex: assetGlyphIndex,
+            codepoint: codepoint
+        )
     }
 }

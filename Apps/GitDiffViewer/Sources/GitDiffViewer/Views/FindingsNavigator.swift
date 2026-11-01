@@ -53,7 +53,9 @@ private struct FindingsNavigatorPopover: View {
 
     private var groups: [FindingsNavigatorGrouping.FileGroup] {
         FindingsNavigatorGrouping.groups(
-            right: model.diagnostics?.findingsByFile ?? [:], left: model.diagnostics?.leftFindingsByFile ?? [:])
+            right: model.diagnostics?.findingsByFile ?? [:],
+            left: model.diagnostics?.leftFindingsByFile ?? [:]
+        )
     }
 
     var body: some View {

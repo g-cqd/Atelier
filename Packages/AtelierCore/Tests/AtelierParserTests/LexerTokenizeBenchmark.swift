@@ -35,8 +35,13 @@ struct LexerTokenizeBenchmark {
         print(
             "LEXER BENCH \(source.utf8.count) bytes, \(tokens.count) tokens, checksum \(Self.checksum(of: tokens)): "
                 + String(
-                    format: "median %.3f ms, p10 %.3f ms, p90 %.3f ms over %d runs", rank(0.5), rank(0.1), rank(0.9),
-                    runs))
+                    format: "median %.3f ms, p10 %.3f ms, p90 %.3f ms over %d runs",
+                    rank(0.5),
+                    rank(0.1),
+                    rank(0.9),
+                    runs
+                )
+        )
         #expect(tokens.last?.byteRange.upperBound == source.utf8.count)
     }
 

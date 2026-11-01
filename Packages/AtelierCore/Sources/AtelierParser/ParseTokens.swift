@@ -127,7 +127,8 @@ struct ScannedTokenSource: ParseTokenSource {
             offset: cursor.offset + length,
             point: line
                 ? Point(row: cursor.point.row + 1, column: 0)
-                : Point(row: cursor.point.row, column: cursor.point.column + length))
+                : Point(row: cursor.point.row, column: cursor.point.column + length)
+        )
     }
 }
 

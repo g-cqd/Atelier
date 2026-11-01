@@ -78,7 +78,10 @@ private let oracleCases: [LuaOracleCase] = [
 
 struct LuaExternalScannerTests {
     private func scan(
-        _ input: String, at offset: Int = 0, allowing names: [String], scanner: inout LuaExternalScanner
+        _ input: String,
+        at offset: Int = 0,
+        allowing names: [String],
+        scanner: inout LuaExternalScanner
     ) -> (name: String?, lexer: StringScannerLexer) {
         var lexer = StringScannerLexer(input, at: offset)
         let valid = LuaExternalScanner.externalNames.map { names.contains($0) }
@@ -92,7 +95,8 @@ struct LuaExternalScannerTests {
             LuaExternalScanner.externalNames == [
                 "_block_comment_start", "_block_comment_content", "_block_comment_end",
                 "_block_string_start", "_block_string_content", "_block_string_end"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["lua"] != nil)
     }
 

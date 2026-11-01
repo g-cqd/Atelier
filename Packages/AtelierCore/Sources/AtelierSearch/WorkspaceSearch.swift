@@ -36,8 +36,14 @@ public func searchWorkspace(
     let counters = SearchCounters()
     guard let pattern = compilePattern(query) else {
         return SearchRunResult(
-            query: query, results: [], totalMatchCount: 0, filesSearched: 0, filesMatched: 0, durationMilliseconds: 0,
-            wasCancelled: Task.isCancelled)
+            query: query,
+            results: [],
+            totalMatchCount: 0,
+            filesSearched: 0,
+            filesMatched: 0,
+            durationMilliseconds: 0,
+            wasCancelled: Task.isCancelled
+        )
     }
 
     // At least one worker, so that an empty file list divides by one.
@@ -60,8 +66,7 @@ public func searchWorkspace(
                         lines = bufferLines
                     } else {
                         guard
-                            let fileLines = await readFileLines(
-                                at: filePath, maximumSize: maximumFileSize, pool: pool)
+                            let fileLines = await readFileLines(at: filePath, maximumSize: maximumFileSize, pool: pool)
                         else {
                             counters.incrementFilesSearched()
                             continue
@@ -74,8 +79,7 @@ public func searchWorkspace(
                     let matches = findMatches(in: lines, pattern: pattern, maxMatches: maxResults)
                     guard !matches.isEmpty else { continue }
 
-                    let didHitCap = counters.addMatchesAndCheckCap(
-                        matches.count, maxResults: maxResults)
+                    let didHitCap = counters.addMatchesAndCheckCap(matches.count, maxResults: maxResults)
                     counters.incrementFilesMatched()
                     if didHitCap { return }
 
@@ -154,7 +158,10 @@ func searchableLines(of file: some PositionalFile, maximumSize: Int) -> [String]
         guard (try? file.pread(into: buffer, at: 0)) != nil, let base = buffer.baseAddress else { return nil }
         let probe = min(buffer.count, binaryProbeLength)
         let firstNUL = AemiKernels.firstIndexOfByte(
-            base: base.assumingMemoryBound(to: UInt8.self), count: probe, needle: 0)
+            base: base.assumingMemoryBound(to: UInt8.self),
+            count: probe,
+            needle: 0
+        )
         guard firstNUL == probe else { return nil }
         return splitLines(UnsafeRawBufferPointer(buffer))
     }
@@ -175,7 +182,10 @@ private func splitLines(_ buffer: UnsafeRawBufferPointer) -> [String] {
         }
         let remaining = count - lineStart
         let relativeNewline = AemiKernels.firstIndexOfByte(
-            base: bytes + lineStart, count: remaining, needle: 0x0A)
+            base: bytes + lineStart,
+            count: remaining,
+            needle: 0x0A
+        )
         let lineEnd = lineStart + relativeNewline
         lines.append(decodeLine(bytes, from: lineStart, to: lineEnd))
         if relativeNewline == remaining {

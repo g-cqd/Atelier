@@ -31,7 +31,8 @@ struct FilePaneScrollRangeTests {
 
     @Test(arguments: PaneLayout.allCases, [true, false])
     func `scrolled to its end, a file pane shows its last line at the bottom, its text laid out or not`(
-        layout: PaneLayout, wrapsLines: Bool
+        layout: PaneLayout,
+        wrapsLines: Bool
     ) async throws {
         let sut = HostedPanes(showing: .longLines(60), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
@@ -51,7 +52,8 @@ struct FilePaneScrollRangeTests {
     /// A long file, then a shorter one in the same pane, as the temporary tab shows the next file.
     @Test(arguments: PaneLayout.allCases, [true, false])
     func `a file pane that scrolls past its end scrolls its last line up to its top, however long its file`(
-        layout: PaneLayout, wrapsLines: Bool
+        layout: PaneLayout,
+        wrapsLines: Bool
     ) throws {
         let sut = HostedPanes(showing: .lines(60), layout: layout, wrapsLines: wrapsLines, scrollsPastEnd: true)
         try sut.expectEachPaneScrollsItsLastLineToItsTop()
@@ -84,7 +86,8 @@ struct FilePaneScrollToRowTests {
     /// The temporary tab shows the next file, and its first change, in the pane that showed the last one.
     @Test(arguments: PaneLayout.allCases, [true, false])
     func `a file shown in the pane of another opens with its first change three lines below the pane's top`(
-        layout: PaneLayout, wrapsLines: Bool
+        layout: PaneLayout,
+        wrapsLines: Bool
     ) async throws {
         let sut = HostedPanes(showing: .lines(20), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
@@ -104,7 +107,11 @@ struct FilePaneScrollToRowTests {
         throws
     {
         let sut = HostedPanes(
-            showing: .lines(12, changedAt: 11), layout: .inline, wrapsLines: true, scrollsPastEnd: scrollsPastEnd)
+            showing: .lines(12, changedAt: 11),
+            layout: .inline,
+            wrapsLines: true,
+            scrollsPastEnd: scrollsPastEnd
+        )
 
         let pane = try #require(try sut.panes().first)
         #expect(pane.clip.bounds.minY == 0)
@@ -139,7 +146,11 @@ struct FilePaneScrollToRowTests {
         throws
     {
         let sut = HostedPanes(
-            showing: .longLines(600, changedAt: 540), layout: .inline, wrapsLines: true, scrollsPastEnd: true)
+            showing: .longLines(600, changedAt: 540),
+            layout: .inline,
+            wrapsLines: true,
+            scrollsPastEnd: true
+        )
 
         sut.scrollToBottom()
 
@@ -147,7 +158,8 @@ struct FilePaneScrollToRowTests {
         let lastLineTop = try pane.bottom(ofRow: pane.lastRow) - pane.lineHeight
         #expect(
             abs(lastLineTop - pane.clip.bounds.minY) < 1,
-            "the last line is \(lastLineTop - pane.clip.bounds.minY) below the pane's top")
+            "the last line is \(lastLineTop - pane.clip.bounds.minY) below the pane's top"
+        )
     }
 
     @Test
@@ -202,7 +214,8 @@ struct PaneText {
         let tail = String(repeating: "long ", count: 32)
         return render(
             (1 ... count).map { $0.isMultiple(of: 7) ? "let value\($0) = \(tail)" : "let value\($0) = \($0)" },
-            changedAt: changed)
+            changedAt: changed
+        )
     }
 
     /// ``longLines(_:changedAt:)``'s lines, `count` of them, changed in the middle, with the scope from line `first`
@@ -214,15 +227,23 @@ struct PaneText {
         new[count / 2] = "let changed = true"
         let prepared = PreparedDiff(
             FileDiffInput(
-                title: "", oldText: lines.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain),
-            granularity: .word)
+                title: "",
+                oldText: lines.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain
+            ),
+            granularity: .word
+        )
         let folds = [
             ScopeFoldKey(fileIndex: 0, isOld: true, firstLine: first): last,
             ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: first): last
         ]
         let rendered = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(foldedScopes: folds), layout: .full, withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(foldedScopes: folds),
+            layout: .full,
+            withHeaders: false
+        )
         return PaneText(rendered: rendered, asksForChange: false)
     }
 
@@ -230,8 +251,10 @@ struct PaneText {
         var new = lines
         new[changed ?? lines.count / 2] = "let changed = true"
         let rendered = DiffRenderer.render(
-            oldText: lines.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-            language: .plain)
+            oldText: lines.joined(separator: "\n") + "\n",
+            newText: new.joined(separator: "\n") + "\n",
+            language: .plain
+        )
         return PaneText(rendered: rendered, asksForChange: changed != nil)
     }
 }
@@ -262,9 +285,14 @@ final class HostedPanes {
 
     /// `ratio` is where the window keeps its pane ratio; nil keeps one of the panes' own, starting even.
     init(
-        showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
-        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight), underBars: CGFloat = 0,
-        ratio: Binding<Double>? = nil, scrollSync: SplitPaneController.ScrollSync = .byRow,
+        showing text: PaneText,
+        layout: PaneLayout,
+        wrapsLines: Bool,
+        scrollsPastEnd: Bool = false,
+        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight),
+        underBars: CGFloat = 0,
+        ratio: Binding<Double>? = nil,
+        scrollSync: SplitPaneController.ScrollSync = .byRow,
         decorations: DiffDecorations? = nil
     ) {
         self.decorations = decorations
@@ -282,12 +310,23 @@ final class HostedPanes {
         requestedRow = Self.firstChange(of: text, in: layout)
         host = NSHostingView(
             rootView: Panes(
-                text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
-                wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars,
-                ratio: ratio, decorations: decorations))
+                text: text,
+                request: requestedRow.map(ScrollRequest.init(row:)),
+                layout: layout,
+                wrapsLines: wrapsLines,
+                scrollsPastEnd: scrollsPastEnd,
+                controller: controller,
+                underBars: underBars,
+                ratio: ratio,
+                decorations: decorations
+            )
+        )
         window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
     }
@@ -302,9 +341,16 @@ final class HostedPanes {
     func show(_ text: PaneText) {
         requestedRow = Self.firstChange(of: text, in: layout)
         host.rootView = Panes(
-            text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
-            wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars,
-            ratio: ratio, decorations: decorations)
+            text: text,
+            request: requestedRow.map(ScrollRequest.init(row:)),
+            layout: layout,
+            wrapsLines: wrapsLines,
+            scrollsPastEnd: scrollsPastEnd,
+            controller: controller,
+            underBars: underBars,
+            ratio: ratio,
+            decorations: decorations
+        )
         settle()
     }
 
@@ -354,8 +400,17 @@ final class HostedPanes {
     private func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, clickCount: Int = 1) throws -> NSEvent {
         try #require(
             NSEvent.mouseEvent(
-                with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
-                context: nil, eventNumber: 0, clickCount: clickCount, pressure: 1))
+                with: type,
+                location: point,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: clickCount,
+                pressure: 1
+            )
+        )
     }
 
     /// Gives the window, and so the panes, a new size, as a user resizing it does.
@@ -376,10 +431,13 @@ final class HostedPanes {
         return try textViews.map { textView in
             let gutter = try #require(
                 subviews(of: DiffGutterView.self, in: host)
-                    .first { ($0.source as? TextKit2RowGeometry)?.textView === textView })
+                    .first { ($0.source as? TextKit2RowGeometry)?.textView === textView }
+            )
             return ShownPane(
-                textView: textView, clip: try #require(textView.enclosingScrollView?.contentView),
-                rendered: try #require(gutter.rendered))
+                textView: textView,
+                clip: try #require(textView.enclosingScrollView?.contentView),
+                rendered: try #require(gutter.rendered)
+            )
         }
     }
 
@@ -389,7 +447,8 @@ final class HostedPanes {
             .map { textView in
                 let gutter = try #require(
                     subviews(of: DiffGutterView.self, in: host)
-                        .first { ($0.source as? TextKit2RowGeometry)?.textView === textView })
+                        .first { ($0.source as? TextKit2RowGeometry)?.textView === textView }
+                )
                 return AlignedPane(gutter: gutter, textView: textView, rendered: try #require(gutter.rendered))
             }
     }
@@ -494,7 +553,8 @@ struct ShownPane {
         let layoutManager = try #require(textView.textLayoutManager)
         let content = try #require(layoutManager.textContentManager)
         let location = try #require(
-            content.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+            content.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+        )
         return layoutManager.textLayoutFragment(for: location)?.state == .layoutAvailable
     }
 
@@ -507,7 +567,10 @@ struct ShownPane {
         try #require(fragment.state == .layoutAvailable, "the pane's top is not laid out")
         let row = rendered.rowIndex(
             containing: content.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
+                from: layoutManager.documentRange.location,
+                to: fragment.rangeInElement.location
+            )
+        )
         return (row, shownTop - (fragment.layoutFragmentFrame.minY + origin))
     }
 
@@ -515,7 +578,8 @@ struct ShownPane {
         let layoutManager = try #require(textView.textLayoutManager)
         let content = try #require(layoutManager.textContentManager)
         let location = try #require(
-            content.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+            content.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+        )
         let fragment = try #require(layoutManager.textLayoutFragment(for: location))
         try #require(fragment.state == .layoutAvailable, "row \(row) is not laid out")
         return fragment
@@ -548,7 +612,9 @@ struct Panes: View {
                 if let old = text.rendered.old, let new = text.rendered.new {
                     let isStacked = layout == .stacked
                     ResizablePanes(
-                        axis: isStacked ? .vertical : .horizontal, ratio: ratio, covered: isStacked ? underBars : 0
+                        axis: isStacked ? .vertical : .horizontal,
+                        ratio: ratio,
+                        covered: isStacked ? underBars : 0
                     ) {
                         pane(old, gutter: .old, controller: controller, underBars: underBars)
                     } trailing: {
@@ -559,11 +625,19 @@ struct Panes: View {
     }
 
     private func pane(
-        _ rendered: RenderedText, gutter: GutterStyle, controller: SplitPaneController?, underBars: CGFloat
+        _ rendered: RenderedText,
+        gutter: GutterStyle,
+        controller: SplitPaneController?,
+        underBars: CGFloat
     ) -> DiffTextView {
         DiffTextView(
-            rendered: rendered, gutter: gutter, wrapsLines: wrapsLines, scrollRequest: request,
-            splitController: controller, scrollsPastEnd: scrollsPastEnd, underBars: underBars
+            rendered: rendered,
+            gutter: gutter,
+            wrapsLines: wrapsLines,
+            scrollRequest: request,
+            splitController: controller,
+            scrollsPastEnd: scrollsPastEnd,
+            underBars: underBars
         )
         .decorated(with: decorations)
     }

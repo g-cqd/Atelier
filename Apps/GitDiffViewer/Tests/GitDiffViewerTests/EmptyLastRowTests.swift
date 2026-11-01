@@ -50,7 +50,8 @@ struct EmptyLastRowTests {
     func `an empty last row is coloured as its own row, not as the row before it`() throws {
         // The old side is a context row, then a filler for the added line.
         let side = try #require(
-            DiffRenderer.render(oldText: "x\n", newText: "x\ny\n", language: .plain, lineHeightMultiple: 1.2).old)
+            DiffRenderer.render(oldText: "x\n", newText: "x\ny\n", language: .plain, lineHeightMultiple: 1.2).old
+        )
         #expect(side.rows.map(\.kind) == [.context, .filler])
         let layout = StaticTextLayout(rendered: side)
         layout.layOut(mode: .viewport, viewportWidth: 300)
@@ -76,7 +77,8 @@ struct EmptyLastRowTests {
     @Test
     func `a text whose last row has content is stored as rendered`() throws {
         let side = try #require(
-            DiffRenderer.render(oldText: "a\n", newText: Self.added, language: .plain, lineHeightMultiple: 1.2).new)
+            DiffRenderer.render(oldText: "a\n", newText: Self.added, language: .plain, lineHeightMultiple: 1.2).new
+        )
         let layout = StaticTextLayout(rendered: side)
         #expect(layout.contentStorage.textStorage?.string == side.attributed.string)
     }

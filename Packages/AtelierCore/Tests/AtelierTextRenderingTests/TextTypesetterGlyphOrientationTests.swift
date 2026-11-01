@@ -46,7 +46,8 @@ struct TextTypesetterGlyphOrientationTests {
             let fromNative = Self.inkMismatch(tile, native)
             #expect(
                 fromNative <= Self.tolerance,
-                "band \(band) of \(rows) differs from the native rendering on \(fromNative) of its ink")
+                "band \(band) of \(rows) differs from the native rendering on \(fromNative) of its ink"
+            )
         }
     }
 
@@ -63,7 +64,8 @@ struct TextTypesetterGlyphOrientationTests {
             let fromNative = Self.inkMismatch(tile, native)
             #expect(
                 fromNative <= Self.tolerance,
-                "visual line \(band) differs from the native rendering on \(fromNative) of its ink")
+                "visual line \(band) differs from the native rendering on \(fromNative) of its ink"
+            )
         }
     }
 
@@ -85,18 +87,29 @@ struct TextTypesetterGlyphOrientationTests {
     }
 
     private static func fixture(
-        rows: [String], lineHeight: Double, wrap: LayoutConfiguration.Wrap
+        rows: [String],
+        lineHeight: Double,
+        wrap: LayoutConfiguration.Wrap
     ) throws -> Fixture {
         let configuration = LayoutConfiguration(wrap: wrap, lineHeight: lineHeight, padding: padding)
         let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         let text = StyledText.plain(
-            rows: rows, font: FontSpec(postScriptName: fontName, pointSize: pointSize), plainStyle: plainStyle)
+            rows: rows,
+            font: FontSpec(postScriptName: fontName, pointSize: pointSize),
+            plainStyle: plainStyle
+        )
         let range = RowIndex(0) ..< RowIndex(rows.count)
         let geometry = try TextTypesetter.layoutSynchronously(range, of: text, configuration: configuration)
         let baseline = try #require(geometry.first?.lines.first?.baseline)
         let tile = try TextTypesetter.renderSynchronously(
-            range, of: text, decorations: [], configuration: configuration, appearance: .light,
-            colorSpace: colorSpace, scale: scale)
+            range,
+            of: text,
+            decorations: [],
+            configuration: configuration,
+            appearance: .light,
+            colorSpace: colorSpace,
+            scale: scale
+        )
         // One native line per visual line of the tile's geometry, each at its own top.
         var lines: [(text: String, top: Double)] = []
         for (row, rowGeometry) in zip(rows, geometry) {
@@ -109,23 +122,40 @@ struct TextTypesetterGlyphOrientationTests {
             }
         }
         let native = try nativeImage(
-            lines: lines, imageHeight: Double(lines.count) * lineHeight, width: tile.image.width,
-            height: tile.image.height, baseline: Double(baseline), colorSpace: colorSpace)
+            lines: lines,
+            imageHeight: Double(lines.count) * lineHeight,
+            width: tile.image.width,
+            height: tile.image.height,
+            baseline: Double(baseline),
+            colorSpace: colorSpace
+        )
         let bandHeight = Int(lineHeight * scale)
         return Fixture(
             tile: try Pixels(tile.image, bandHeight: bandHeight, colorSpace: colorSpace),
-            native: try Pixels(native, bandHeight: bandHeight, colorSpace: colorSpace))
+            native: try Pixels(native, bandHeight: bandHeight, colorSpace: colorSpace)
+        )
     }
 
     /// `lines` drawn the canonical way: plain CoreText into an unflipped bitmap of `width` by `height` pixels.
     private static func nativeImage(
-        lines: [(text: String, top: Double)], imageHeight: Double, width: Int, height: Int, baseline: Double,
+        lines: [(text: String, top: Double)],
+        imageHeight: Double,
+        width: Int,
+        height: Int,
+        baseline: Double,
         colorSpace: CGColorSpace
     ) throws -> CGImage {
         let context = try #require(
             CGContext(
-                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        )
         context.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
         let font = CTFontCreateWithName(fontName as CFString, CGFloat(pointSize), nil)
         let attributes: [CFString: Any] = [
@@ -134,7 +164,8 @@ struct TextTypesetterGlyphOrientationTests {
         ]
         for line in lines {
             let attributed = try #require(
-                CFAttributedStringCreate(kCFAllocatorDefault, line.text as CFString, attributes as CFDictionary))
+                CFAttributedStringCreate(kCFAllocatorDefault, line.text as CFString, attributes as CFDictionary)
+            )
             let ctLine = CTLineCreateWithAttributedString(attributed)
             context.textMatrix = .identity
             context.textPosition = CGPoint(x: CGFloat(padding), y: CGFloat(imageHeight - line.top - baseline))
@@ -161,12 +192,21 @@ struct TextTypesetterGlyphOrientationTests {
             let height = image.height
             let context = try #require(
                 CGContext(
-                    data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
-                    space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                    data: nil,
+                    width: width,
+                    height: height,
+                    bitsPerComponent: 8,
+                    bytesPerRow: width * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                )
+            )
             context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             let data = try #require(context.data)
             let bytes = UnsafeBufferPointer(
-                start: data.assumingMemoryBound(to: UInt8.self), count: width * height * 4)
+                start: data.assumingMemoryBound(to: UInt8.self),
+                count: width * height * 4
+            )
             self.width = width
             self.height = height
             self.bandHeight = bandHeight

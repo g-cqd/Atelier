@@ -34,11 +34,16 @@ struct SARIFDecoderTests {
         #expect(
             findings == [
                 Finding(
-                    tool: .swiftlint, ruleID: "line_length", message: "Line too long", file: "Sources/A.swift",
+                    tool: .swiftlint,
+                    ruleID: "line_length",
+                    message: "Line too long",
+                    file: "Sources/A.swift",
                     line: 10,
-                    column: 3, severity: .warning
+                    column: 3,
+                    severity: .warning
                 )
-            ])
+            ]
+        )
     }
 
     @Test
@@ -59,10 +64,18 @@ struct SARIFDecoderTests {
         #expect(
             findings == [
                 Finding(
-                    tool: .arcleak, ruleID: "retain-cycle", message: "Retain cycle", file: "Sources/B.swift", line: 5,
-                    column: 1, endLine: 7, endColumn: 2, severity: .error
+                    tool: .arcleak,
+                    ruleID: "retain-cycle",
+                    message: "Retain cycle",
+                    file: "Sources/B.swift",
+                    line: 5,
+                    column: 1,
+                    endLine: 7,
+                    endColumn: 2,
+                    severity: .error
                 )
-            ])
+            ]
+        )
     }
 
     @Test
@@ -91,7 +104,8 @@ struct SARIFDecoderTests {
             findings[0].related == [
                 RelatedLocation(file: "Sources/D.swift", line: 20, message: "First copy"),
                 RelatedLocation(file: "Sources/E.swift", line: 30, message: "Second copy")
-            ])
+            ]
+        )
     }
 
     @Test
@@ -190,7 +204,8 @@ struct SARIFDecoderTests {
         ("error", .error), ("bogus", .warning)
     ])
     func `a missing or unknown level defaults to warning, others map directly`(
-        level: String?, expected: Finding.Severity
+        level: String?,
+        expected: Finding.Severity
     ) throws {
         let levelField = level.map { "\"level\": \"\($0)\", " } ?? ""
         let data = Self.sarif(

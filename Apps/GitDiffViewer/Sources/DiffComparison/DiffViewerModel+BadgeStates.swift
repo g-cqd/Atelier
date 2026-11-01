@@ -27,6 +27,7 @@ extension DiffViewerModel {
         unifiedBadgeStates = unified
         left.showComparisonBadgeStates(unified)
         right.showComparisonBadgeStates(
-            .merged(rightStates, with: unified) { comparison.counterpartPath(of: $0, in: .left) })
+            .merged(rightStates, with: unified) { comparison.counterpartPath(of: $0, in: .left) }
+        )
     }
 }

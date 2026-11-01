@@ -9,7 +9,9 @@ struct GitClientTests {
     @Test
     func `many blobs are read through one batch process`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-git-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         func git(_ arguments: String...) throws {
@@ -95,7 +97,8 @@ struct GitClientTests {
         #expect(commits.count == 1)
         #expect(
             commits.first
-                == GitCommit(hash: hash, shortHash: "aaaaaaa", subject: "Add a feature\u{1f}with a stray separator"))
+                == GitCommit(hash: hash, shortHash: "aaaaaaa", subject: "Add a feature\u{1f}with a stray separator")
+        )
     }
 
     @Test
@@ -108,7 +111,8 @@ struct GitClientTests {
         #expect(GitCommit.abbreviated("main") == "main")
         #expect(
             GitCommit.abbreviated("feature/a-branch-name-that-happens-to-be-forty")
-                == "feature/a-branch-name-that-happens-to-be-forty")
+                == "feature/a-branch-name-that-happens-to-be-forty"
+        )
         #expect(GitCommit.abbreviated(String(repeating: "g", count: 40)) == String(repeating: "g", count: 40))
     }
 
@@ -121,7 +125,8 @@ struct GitClientTests {
             upstream\thttps://example.com/upstream.git (fetch)
             mirror\tgit@example.com:mirror.git (push)
             """
-            .utf8)
+            .utf8
+        )
 
         let remotes = GitParsers.remotes(output)
 
@@ -129,7 +134,8 @@ struct GitClientTests {
             remotes == [
                 GitRemote(name: "origin", fetchURL: "git@github.com:aemi/atelier.git"),
                 GitRemote(name: "upstream", fetchURL: "https://example.com/upstream.git")
-            ])
+            ]
+        )
     }
 
     @Test
@@ -154,7 +160,9 @@ struct GitClientTests {
     @Test
     func `a failing command reports git's message`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-git-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 

@@ -24,7 +24,8 @@ struct GrammarCompilationBenchmark {
             let memory = footprint().current
             print(
                 "GRAMMAR PHASE \(name) \(phase): \(lastPhaseTime.duration(to: now)), "
-                    + "resident delta \(memory - lastPhaseMemory) bytes")
+                    + "resident delta \(memory - lastPhaseMemory) bytes"
+            )
             lastPhaseTime = now
             lastPhaseMemory = memory
         }
@@ -43,7 +44,8 @@ struct GrammarCompilationBenchmark {
         let peakRise = footprint().peak - memoryBefore.peak
         print(
             "GRAMMAR BENCH \(name): median \(median) of \(runs), peak footprint +\(peakRise / 1_048_576) MiB, "
-                + "\(result.parseTable.stateCount) parse states, digest \(try digest(of: result))")
+                + "\(result.parseTable.stateCount) parse states, digest \(try digest(of: result))"
+        )
         #expect(result.parseTable.stateCount > 0)
     }
 

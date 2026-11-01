@@ -23,7 +23,8 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
     ///   - store: Where the facts are kept.
     ///   - revision: The revision of a text the provider is asked about; nil parses it without the store.
     public init(
-        store: SyntaxFactsStore, revision: @escaping @Sendable (_ text: String, _ language: Language) -> SourceRevision?
+        store: SyntaxFactsStore,
+        revision: @escaping @Sendable (_ text: String, _ language: Language) -> SourceRevision?
     ) {
         self.store = store
         self.revision = revision
@@ -36,7 +37,10 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
                 if let stored = storedBoundaries(of: text) { return stored }
                 let ranges = Self.swiftTokenRanges(text: text, selectedLines: nil)
                 return Self.splitByLine(
-                    Self.utf16Ranges(from: ranges, in: text), text: text, lineCount: Self.lineCount(text))
+                    Self.utf16Ranges(from: ranges, in: text),
+                    text: text,
+                    lineCount: Self.lineCount(text)
+                )
             default:
                 return CodeTokenRanges().tokenRangesByLine(text: text, language: language)
         }
@@ -56,7 +60,8 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
                 if let stored = storedBoundaries(of: text) {
                     return Dictionary(
                         lineIndices.filter(stored.indices.contains).map { ($0, stored[$0]) },
-                        uniquingKeysWith: { first, _ in first })
+                        uniquingKeysWith: { first, _ in first }
+                    )
                 }
                 let lines = Self.selectedLines(in: text, indices: Set(lineIndices))
                 guard !lines.isEmpty else { return [:] }
@@ -111,8 +116,10 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
     /// caller's stack, which must be deep enough.
     static func tokenBoundaries(of tree: SourceFileSyntax, text: String) -> [[Range<Int>]] {
         splitByLine(
-            utf16Ranges(from: tokenRanges(in: tree, selectedLines: nil), in: text), text: text,
-            lineCount: lineCount(text))
+            utf16Ranges(from: tokenRanges(in: tree, selectedLines: nil), in: text),
+            text: text,
+            lineCount: lineCount(text)
+        )
     }
 
     /// Parsed and walked on ``SwiftSyntaxStack``: a side whose brackets never close nests past a worker thread's stack.
@@ -193,7 +200,8 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
         for byte in text.utf8 {
             if byte == 10, indices.contains(line) {
                 selected.append(
-                    LineSpan(index: line, utf8: lineUTF8Start ..< utf8Offset, utf16: lineUTF16Start ..< utf16Offset))
+                    LineSpan(index: line, utf8: lineUTF8Start ..< utf8Offset, utf16: lineUTF16Start ..< utf16Offset)
+                )
             }
             utf8Offset += 1
             if byte & 0xC0 != 0x80 {
@@ -208,7 +216,8 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
         }
         if lastByte != nil, lastByte != 10, indices.contains(line) {
             selected.append(
-                LineSpan(index: line, utf8: lineUTF8Start ..< utf8Offset, utf16: lineUTF16Start ..< utf16Offset))
+                LineSpan(index: line, utf8: lineUTF8Start ..< utf8Offset, utf16: lineUTF16Start ..< utf16Offset)
+            )
         }
         return selected
     }
@@ -230,7 +239,8 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
                 if end > start {
                     result[line.index, default: []]
                         .append(
-                            (start - line.utf16.lowerBound) ..< (end - line.utf16.lowerBound))
+                            (start - line.utf16.lowerBound) ..< (end - line.utf16.lowerBound)
+                        )
                 }
                 current += 1
             }

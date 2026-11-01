@@ -24,7 +24,9 @@ public enum SwiftSyntaxFacts {
     /// The facts `store` keeps for `revision`, or those one parse of `text` finds on ``SwiftSyntaxStack`` while the
     /// calling task is suspended, which `store` keeps; nil when `isCancelled` answers true between two steps.
     public static func facts(
-        for revision: SourceRevision, text: String, in store: SyntaxFactsStore,
+        for revision: SourceRevision,
+        text: String,
+        in store: SyntaxFactsStore,
         isCancelled: @escaping @Sendable () -> Bool = { false }
     ) async -> SyntaxFacts? {
         if let kept = store.facts(for: revision) { return kept }
@@ -54,8 +56,11 @@ public enum SwiftSyntaxFacts {
         var highlights: [HighlightToken]?
         if share <= SwiftSyntaxHighlights.maximumUnexpectedShare {
             let parsed = SwiftSyntaxHighlights.Parsed(
-                tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences,
-                keywordAttributeRanges: walk.keywordAttributeRanges)
+                tree: tree,
+                declarationNames: walk.declarationNames,
+                typeReferences: walk.typeReferences,
+                keywordAttributeRanges: walk.keywordAttributeRanges
+            )
             do {
                 highlights = try parsed.tokens(in: nil, isCancelled: isCancelled)
             } catch {
@@ -65,7 +70,11 @@ public enum SwiftSyntaxFacts {
         if isCancelled() { return nil }
         return SyntaxFacts(
             tokenBoundaries: SwiftSyntaxTokenRanges.tokenBoundaries(of: tree, text: text),
-            declarations: walk.declarations, highlights: highlights, unexpectedShare: share, scopes: walk.scopes)
+            declarations: walk.declarations,
+            highlights: highlights,
+            unexpectedShare: share,
+            scopes: walk.scopes
+        )
     }
 }
 
@@ -232,8 +241,13 @@ final class TreeWalk: SyntaxVisitor {
         for element in node.elements {
             declarations.append(
                 SyntaxDeclaration(
-                    name: Self.strippingBackticks(element.name.text), kind: .enumCase, range: Self.range(of: node),
-                    documentation: documentation, signature: signature))
+                    name: Self.strippingBackticks(element.name.text),
+                    kind: .enumCase,
+                    range: Self.range(of: node),
+                    documentation: documentation,
+                    signature: signature
+                )
+            )
         }
         return .visitChildren
     }
@@ -247,8 +261,13 @@ final class TreeWalk: SyntaxVisitor {
         for name in names {
             declarations.append(
                 SyntaxDeclaration(
-                    name: Self.strippingBackticks(name.text), kind: .variable, range: Self.range(of: node),
-                    documentation: documentation, signature: signature))
+                    name: Self.strippingBackticks(name.text),
+                    kind: .variable,
+                    range: Self.range(of: node),
+                    documentation: documentation,
+                    signature: signature
+                )
+            )
         }
         return .visitChildren
     }
@@ -258,7 +277,10 @@ final class TreeWalk: SyntaxVisitor {
     private static let keywordAttributeNames: Set<String> = ["concurrent"]
 
     private func declare(
-        _ node: some DeclSyntaxProtocol, name: TokenSyntax, role: HighlightRole, kind: SyntaxDeclaration.Kind
+        _ node: some DeclSyntaxProtocol,
+        name: TokenSyntax,
+        role: HighlightRole,
+        kind: SyntaxDeclaration.Kind
     ) -> SyntaxVisitorContinueKind {
         declarationNames[name.positionAfterSkippingLeadingTrivia.utf8Offset] = role
         if collectsDeclarations { record(DeclSyntax(node), name: name.text, kind: kind) }
@@ -269,8 +291,13 @@ final class TreeWalk: SyntaxVisitor {
         let documentation = Self.documentation(from: decl.leadingTrivia)
         declarations.append(
             SyntaxDeclaration(
-                name: Self.strippingBackticks(name), kind: kind, range: Self.range(of: decl),
-                documentation: documentation, signature: documentation.map { _ in Self.signature(of: decl) }))
+                name: Self.strippingBackticks(name),
+                kind: kind,
+                range: Self.range(of: decl),
+                documentation: documentation,
+                signature: documentation.map { _ in Self.signature(of: decl) }
+            )
+        )
     }
 
     private static func range(of node: some SyntaxProtocol) -> Range<Int> {

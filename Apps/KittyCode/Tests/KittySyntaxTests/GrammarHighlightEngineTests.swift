@@ -28,7 +28,8 @@ struct GrammarHighlightEngineTests {
         #expect(engine.supports(.json))
         let session = LanguageHighlighter.makeSession(language: "json", preferGrammar: true)
         #expect(
-            engine.highlight(utf8: source, language: .json) == session.highlightDocumentTokens(source: "{\"a\": 1}"))
+            engine.highlight(utf8: source, language: .json) == session.highlightDocumentTokens(source: "{\"a\": 1}")
+        )
         // The grammar parses the object, so its query colours the key and the number.
         let roles = Set(engine.highlight(utf8: source, language: .json).map(\.role))
         #expect(roles.isSuperset(of: [.property, .number]))
@@ -45,8 +46,11 @@ struct GrammarHighlightEngineTests {
         }
         lineRanges.append(start ..< source.utf8.count)
         let request = TierRequest(
-            revision: SourceRevision(documentID: "a.json", language: .json, key: .version(1)), text: source,
-            lineRanges: lineRanges, visibleLines: 0 ..< lineRanges.count)
+            revision: SourceRevision(documentID: "a.json", language: .json, key: .version(1)),
+            text: source,
+            lineRanges: lineRanges,
+            visibleLines: 0 ..< lineRanges.count
+        )
         let updates = UpdateLog()
 
         try await LanguageHighlighter.grammarTier().run(request) { updates.append($0) }
@@ -54,7 +58,8 @@ struct GrammarHighlightEngineTests {
         let session = LanguageHighlighter.makeSession(language: "json", preferGrammar: true)
         let expected = LineTokens(
             HighlightMerger.merge(session.highlightDocumentTokens(source: source), sourceByteCount: source.utf8.count),
-            lineRanges: lineRanges)
+            lineRanges: lineRanges
+        )
         let update = try #require(updates.all.first)
         #expect(updates.all.count == 1)
         #expect(update.layer == .structural)

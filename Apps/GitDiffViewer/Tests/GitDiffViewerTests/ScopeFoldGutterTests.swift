@@ -11,7 +11,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct ScopeFoldGutterTests {
     /// The new side's `f`, lines 1 to 3 of ``ScopeLinesTests/text``.
     private static let f = ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: 1)
@@ -27,13 +28,18 @@ struct ScopeFoldGutterTests {
     {
         let text = ScopeLinesTests.text
         let prepared = PreparedDiff(
-            FileDiffInput(title: "a.swift", oldText: text, newText: text, language: .swift), granularity: .word)
+            FileDiffInput(title: "a.swift", oldText: text, newText: text, language: .swift),
+            granularity: .word
+        )
         let rendered = try #require(
             DiffRenderer.render(
-                prepared: [prepared], options: DiffRenderer.Options(sides: [.new], foldedScopes: folds), layout: .full,
+                prepared: [prepared],
+                options: DiffRenderer.Options(sides: [.new], foldedScopes: folds),
+                layout: .full,
                 withHeaders: false
             )
-            .new)
+            .new
+        )
         let decorations = DiffDecorations(new: .init(scopes: try ScopeLinesTests.scopes()), markVersion: 1)
         let pane = try HostedDecoratedPane(rendered: rendered, decorations: decorations)
         let content = try #require(pane.window.contentView)
@@ -49,9 +55,17 @@ struct ScopeFoldGutterTests {
         let point = gutter.convert(NSPoint(x: x ?? gutter.ribbonX + 2, y: frame.midY), to: nil)
         let event = try #require(
             NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: gutter.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
-                pressure: 1))
+                with: .leftMouseDown,
+                location: point,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: gutter.window?.windowNumber ?? 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
+        )
         gutter.mouseDown(with: event)
     }
 
@@ -59,9 +73,18 @@ struct ScopeFoldGutterTests {
     private static func press(right: Bool, all: Bool = false, in textView: NSTextView) throws {
         let event = try #require(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: all ? [.command, .option, .shift] : [.command, .option],
-                timestamp: 0, windowNumber: textView.window?.windowNumber ?? 0, context: nil, characters: "",
-                charactersIgnoringModifiers: "", isARepeat: false, keyCode: right ? 124 : 123))
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: all ? [.command, .option, .shift] : [.command, .option],
+                timestamp: 0,
+                windowNumber: textView.window?.windowNumber ?? 0,
+                context: nil,
+                characters: "",
+                charactersIgnoringModifiers: "",
+                isARepeat: false,
+                keyCode: right ? 124 : 123
+            )
+        )
         textView.keyDown(with: event)
     }
 
@@ -84,7 +107,9 @@ struct ScopeFoldGutterTests {
         tracker.attach(to: textView, gutter: folded.gutter)
         defer { tracker.detach() }
         let screen = textView.firstRect(
-            forCharacterRange: NSRange(location: fold.marker.lowerBound + 1, length: 1), actualRange: nil)
+            forCharacterRange: NSRange(location: fold.marker.lowerBound + 1, length: 1),
+            actualRange: nil
+        )
         let window = try #require(textView.window).convertFromScreen(screen)
         #expect(tracker.unfoldMarker(at: textView.convert(NSPoint(x: window.midX, y: window.midY), from: nil)))
 
@@ -109,7 +134,8 @@ struct ScopeFoldGutterTests {
         let foldedView = try folded.pane.textView
         let first = try #require(folded.gutter.rendered?.folds.first?.firstRow)
         foldedView.setSelectedRange(
-            NSRange(location: try #require(folded.gutter.rendered).lineStarts[first], length: 0))
+            NSRange(location: try #require(folded.gutter.rendered).lineStarts[first], length: 0)
+        )
 
         try Self.press(right: true, in: foldedView)
         try Self.press(right: true, all: true, in: foldedView)

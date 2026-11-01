@@ -15,7 +15,8 @@ struct EditorStateForwarderTests {
         let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         defer { state.shutdown() }
         state.highlightedLines = LineHighlights(
-            (0 ..< 10_000).map { [StyledSpan(text: "line \($0)", style: .default)] })
+            (0 ..< 10_000).map { [StyledSpan(text: "line \($0)", style: .default)] }
+        )
         let storage = state.workspace.highlightedLines.storedLines.withUnsafeBufferPointer { $0.baseAddress }
         let edited = [StyledSpan(text: "edited", style: .default)]
 

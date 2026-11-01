@@ -14,7 +14,8 @@ struct RoleBasedThemeResolverTests {
             "keyword": Style(fg: .rgb(r: 1, g: 2, b: 3), bold: true), "keyword.return": Style(italic: true),
             "function": Style(fg: .rgb(r: 4, g: 5, b: 6)), "comment": Style(dim: true)
         ],
-        defaultStyle: Style(fg: .rgb(r: 7, g: 8, b: 9)))
+        defaultStyle: Style(fg: .rgb(r: 7, g: 8, b: 9))
+    )
 
     @Test(arguments: [Theme.monokai, partialTheme])
     func `a resolver that looks every role up at once resolves each as one that looks it up per token`(theme: Theme) {
@@ -26,7 +27,8 @@ struct RoleBasedThemeResolverTests {
             for modifiers in modifierSets {
                 #expect(
                     precomputed.resolve(role: role, modifiers: modifiers)
-                        == perToken.resolve(role: role, modifiers: modifiers))
+                        == perToken.resolve(role: role, modifiers: modifiers)
+                )
             }
         }
     }

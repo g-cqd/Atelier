@@ -15,7 +15,9 @@ extension EditorState: FileWatcherDelegate {
     }
 
     public func fileWatcherDidReloadActiveBuffer(
-        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+        buffer: DocumentBuffer,
+        content: String,
+        replaced: consuming DocumentBuffer.ReplacedContents
     ) {
         // The old text's highlights and caches, which the buffer no longer holds, retired once replaced, below.
         let retired = activeDocumentStorage(replaced: consume replaced)
@@ -39,7 +41,9 @@ extension EditorState: FileWatcherDelegate {
     }
 
     public func fileWatcherDidReloadInactiveBuffer(
-        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+        buffer: DocumentBuffer,
+        content: String,
+        replaced: consuming DocumentBuffer.ReplacedContents
     ) {
         schedulePostLoadProcessing(for: buffer, content: content)
         // The only reference left to the old text's highlights, which an inactive tab an open left behind still holds.
@@ -70,10 +74,16 @@ extension EditorState {
                 switch consume reloaded {
                     case (let file, let replaced)? where self.bufferManager.activeBuffer === buffer:
                         self.fileWatcherDidReloadActiveBuffer(
-                            buffer: buffer, content: file.content, replaced: consume replaced)
+                            buffer: buffer,
+                            content: file.content,
+                            replaced: consume replaced
+                        )
                     case (let file, let replaced)?:
                         self.fileWatcherDidReloadInactiveBuffer(
-                            buffer: buffer, content: file.content, replaced: consume replaced)
+                            buffer: buffer,
+                            content: file.content,
+                            replaced: consume replaced
+                        )
                     case nil:
                         self.statusMessage = "\(buffer.fileName) changed while reloading: reload again to discard it"
                 }

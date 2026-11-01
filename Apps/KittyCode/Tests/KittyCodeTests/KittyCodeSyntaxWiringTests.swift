@@ -34,7 +34,9 @@ struct KittyCodeSyntaxWiringTests {
 
     @Test func `language highlighter falls back for unsupported languages`() {
         let lines = LanguageHighlighter.highlightDocument(
-            source: "// comment", language: "unknown_lang")
+            source: "// comment",
+            language: "unknown_lang"
+        )
         #expect(lines.count == 1)
         #expect(lines[0].count == 1)
         #expect(lines[0][0].text == "// comment")
@@ -82,7 +84,8 @@ struct KittyCodeSyntaxWiringTests {
         state.cursorCol = 0
 
         let mutation = try #require(
-            TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor))
+            TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
+        )
         state.textDidChange(mutation)
 
         #expect(state.fileContent.prefix(2) == ["helloworld", "tail"])

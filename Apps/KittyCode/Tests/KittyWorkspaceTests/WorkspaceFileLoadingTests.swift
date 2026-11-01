@@ -14,7 +14,8 @@ struct WorkspaceFileLoadingTests {
         ("a\rb\r", .carriageReturn)
     ])
     func `a file loads with LF line breaks and remembers the ending it used`(
-        bytes: String, lineEnding: TextDocument.LineEnding
+        bytes: String,
+        lineEnding: TextDocument.LineEnding
     ) throws {
         let loaded = try WorkspaceFileLoading.decode(Data(bytes.utf8))
 
@@ -63,7 +64,9 @@ struct WorkspaceFileLoadingTests {
 
         #expect(throws: IOError.self) {
             try WorkspaceFileLoading.contents(
-                of: TruncatedAfterSizing(file: file, path: path), maximumSize: WorkspaceFileLoading.maxFileSize)
+                of: TruncatedAfterSizing(file: file, path: path),
+                maximumSize: WorkspaceFileLoading.maxFileSize
+            )
         }
     }
 

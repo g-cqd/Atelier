@@ -39,10 +39,15 @@ struct TabBarLayoutTests {
 
     @Test(arguments: [false, true], [false, true])
     func `a kept-open tab shows a pin after an upright name, active or hovered or not`(
-        isActive: Bool, isHovering: Bool
+        isActive: Bool,
+        isHovering: Bool
     ) {
         let appearance = TabAppearance.resolve(
-            isPinned: true, isActive: isActive, isHovering: isHovering, isHoveringClose: false)
+            isPinned: true,
+            isActive: isActive,
+            isHovering: isHovering,
+            isHoveringClose: false
+        )
         #expect(appearance.showsPin)
         #expect(!appearance.isItalic)
     }
@@ -50,14 +55,19 @@ struct TabBarLayoutTests {
     @Test(arguments: [false, true], [false, true])
     func `a preview tab shows an italic name and no pin, active or hovered or not`(isActive: Bool, isHovering: Bool) {
         let appearance = TabAppearance.resolve(
-            isPinned: false, isActive: isActive, isHovering: isHovering, isHoveringClose: false)
+            isPinned: false,
+            isActive: isActive,
+            isHovering: isHovering,
+            isHoveringClose: false
+        )
         #expect(!appearance.showsPin)
         #expect(appearance.isItalic)
     }
 
     @Test(arguments: [false, true], [false, true])
     func `the file list's fixed tab shows an upright name with neither pin nor close disc`(
-        isActive: Bool, isHovering: Bool
+        isActive: Bool,
+        isHovering: Bool
     ) {
         let appearance = TabAppearance.fixed(isActive: isActive, isHovering: isHovering)
         #expect(!appearance.showsPin)
@@ -69,21 +79,38 @@ struct TabBarLayoutTests {
     @Test(arguments: [false, true])
     func `hovering tones the capsule with a faint wash, and resting leaves it clear`(isActive: Bool) {
         let resting = TabAppearance.resolve(
-            isPinned: true, isActive: isActive, isHovering: false, isHoveringClose: false)
+            isPinned: true,
+            isActive: isActive,
+            isHovering: false,
+            isHoveringClose: false
+        )
         let hovered = TabAppearance.resolve(
-            isPinned: true, isActive: isActive, isHovering: true, isHoveringClose: false)
+            isPinned: true,
+            isActive: isActive,
+            isHovering: true,
+            isHoveringClose: false
+        )
         #expect(resting.washOpacity == 0)
         #expect(hovered.washOpacity > 0)
     }
 
     @Test(arguments: [false, true], [false, true])
     func `the active tab keeps a stronger outline and the primary ink whichever tab is hovered`(
-        activeHovered: Bool, inactiveHovered: Bool
+        activeHovered: Bool,
+        inactiveHovered: Bool
     ) {
         let active = TabAppearance.resolve(
-            isPinned: true, isActive: true, isHovering: activeHovered, isHoveringClose: false)
+            isPinned: true,
+            isActive: true,
+            isHovering: activeHovered,
+            isHoveringClose: false
+        )
         let inactive = TabAppearance.resolve(
-            isPinned: true, isActive: false, isHovering: inactiveHovered, isHoveringClose: false)
+            isPinned: true,
+            isActive: false,
+            isHovering: inactiveHovered,
+            isHoveringClose: false
+        )
         #expect(active.outlineOpacity > inactive.outlineOpacity)
         #expect(active.usesPrimaryInk)
         #expect(!inactive.usesPrimaryInk)
@@ -92,9 +119,17 @@ struct TabBarLayoutTests {
     @Test
     func `the close button's disc shows only while the pointer is over the button itself`() {
         let overButton = TabAppearance.resolve(
-            isPinned: true, isActive: false, isHovering: true, isHoveringClose: true)
+            isPinned: true,
+            isActive: false,
+            isHovering: true,
+            isHoveringClose: true
+        )
         let overTab = TabAppearance.resolve(
-            isPinned: true, isActive: false, isHovering: true, isHoveringClose: false)
+            isPinned: true,
+            isActive: false,
+            isHovering: true,
+            isHoveringClose: false
+        )
         #expect(overButton.closeDiscOpacity > overButton.washOpacity)
         #expect(overTab.closeDiscOpacity == 0)
     }

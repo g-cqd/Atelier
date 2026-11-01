@@ -47,7 +47,10 @@ public struct TierRequest: Sendable {
     public let unit: TokenUnit
 
     public init(
-        revision: SourceRevision, text: String, lineRanges: [Range<Int>], visibleLines: Range<Int>,
+        revision: SourceRevision,
+        text: String,
+        lineRanges: [Range<Int>],
+        visibleLines: Range<Int>,
         unit: TokenUnit = .utf8
     ) {
         self.revision = revision
@@ -95,7 +98,11 @@ public struct TierUpdate: Sendable {
     public let tokens: LineTokens
 
     public init(
-        layer: HighlightLayer, coverage: TierCoverage, revision: SourceRevision, lines: Range<Int>, tokens: LineTokens
+        layer: HighlightLayer,
+        coverage: TierCoverage,
+        revision: SourceRevision,
+        lines: Range<Int>,
+        tokens: LineTokens
     ) {
         precondition(tokens.count == lines.count, "an update holds one entry per line it covers")
         self.layer = layer

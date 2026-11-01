@@ -44,7 +44,9 @@ struct EditorContentLayoutRegressionTests {
         let row1Chars = (0 ..< 40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars)
         #expect(
-            row1Text.contains("hello"), "Editor content should appear at row 0 (contentStartRow)")
+            row1Text.contains("hello"),
+            "Editor content should appear at row 0 (contentStartRow)"
+        )
     }
 
     @Test
@@ -54,7 +56,11 @@ struct EditorContentLayoutRegressionTests {
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "world", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "world",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.refreshHighlights()
 
@@ -64,7 +70,9 @@ struct EditorContentLayoutRegressionTests {
         let row2Chars = (0 ..< cols).map { sut.pipeline.buffer[1, $0].character }
         let row2Text = String(row2Chars)
         #expect(
-            row2Text.contains("world"), "Editor content should appear at row 1 below tab ribbon")
+            row2Text.contains("world"),
+            "Editor content should appear at row 1 below tab ribbon"
+        )
 
         // Row 0 should NOT contain editor content (it's the tab ribbon)
         let row1Chars = (0 ..< cols).map { sut.pipeline.buffer[0, $0].character }
@@ -77,7 +85,11 @@ struct EditorContentLayoutRegressionTests {
         let cols = 40
         let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "x", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "x",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
 
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
@@ -141,7 +153,11 @@ struct EditorContentLayoutRegressionTests {
         sut.state.mode = .editor
         sut.state.treePanelWidth = 15
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello world",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
 
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
@@ -159,7 +175,8 @@ struct EditorContentLayoutRegressionTests {
         let editorText = String(editorArea).trimmingCharacters(in: .whitespaces)
         #expect(
             editorText.contains("hello") || editorText.contains("1"),
-            "Editor area should have content at row 1")
+            "Editor area should have content at row 1"
+        )
 
         // Status bar at last row
         let statusChars = (0 ..< 60).map { sut.pipeline.buffer[11, $0].character }
@@ -187,6 +204,7 @@ struct EditorContentLayoutRegressionTests {
         let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
         #expect(
             row1Text.contains("content") || row1Text.contains("1"),
-            "Editor should render from column 0 when sidebar is collapsed")
+            "Editor should render from column 0 when sidebar is collapsed"
+        )
     }
 }

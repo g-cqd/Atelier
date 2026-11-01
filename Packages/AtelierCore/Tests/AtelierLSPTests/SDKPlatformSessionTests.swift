@@ -46,7 +46,8 @@ private actor PlatformSessions {
         return LanguageServerSession(
             configuration: LanguageServerSession.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/true"),
-                workspaceRoot: URL(filePath: "/probe-\(platform.rawValue)", directoryHint: .isDirectory)),
+                workspaceRoot: URL(filePath: "/probe-\(platform.rawValue)", directoryHint: .isDirectory)
+            ),
             clock: TestClock()
         ) { _ in await factory.make() }
     }
@@ -164,7 +165,8 @@ struct SDKPlatformSessionTests {
         let provider = SDKDocumentationProvider(sessions: { await sessions.make($0) })
 
         let answer = try await provider.hover(
-            query("import UIKit\nlet url = URL.homeDirectory", hovering: "homeDirectory"))
+            query("import UIKit\nlet url = URL.homeDirectory", hovering: "homeDirectory")
+        )
 
         #expect(answer?.markdown == "Documented on macOS.")
         #expect(await sessions.asked == [.iOS, .macOS])
@@ -180,15 +182,20 @@ struct SDKPlatformSessionTests {
         let root = URL(filePath: repository.path, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root.appending(path: ".git"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(
-            at: root.appending(path: "App.xcodeproj"), withIntermediateDirectories: true)
+            at: root.appending(path: "App.xcodeproj"),
+            withIntermediateDirectories: true
+        )
         try Data("SDKROOT = iphoneos;".utf8).write(to: root.appending(path: "App.xcodeproj/project.pbxproj"))
         let sessions = PlatformSessions()
         let provider = SDKDocumentationProvider(sessions: { await sessions.make($0) })
 
         let answer = try await provider.hover(
             query(
-                "import SwiftUI\nlet host: UIHostingController<Text>? = nil", hovering: "UIHostingController",
-                documentURI: root.appending(path: "App/Sources/Screen.swift").absoluteString))
+                "import SwiftUI\nlet host: UIHostingController<Text>? = nil",
+                hovering: "UIHostingController",
+                documentURI: root.appending(path: "App/Sources/Screen.swift").absoluteString
+            )
+        )
 
         #expect(answer?.markdown == "Documented on iOS.")
         #expect(await sessions.asked == [.iOS])

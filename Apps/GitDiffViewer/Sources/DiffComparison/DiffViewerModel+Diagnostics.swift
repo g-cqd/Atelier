@@ -40,7 +40,8 @@ extension DiffViewerModel {
         if let scope {
             paths = DiagnosticFilePaths(
                 right: scope.right == right.source ? paths.right : [:],
-                left: scope.left == left.source ? paths.left : [:])
+                left: scope.left == left.source ? paths.left : [:]
+            )
         }
         diagnosticFilePathCache = (pipeline.targetVersion, scope?.key, paths)
         diagnosticFilePathBuilds += 1
@@ -62,8 +63,11 @@ extension DiffViewerModel {
                 self?.retrySemanticColor(afterTrusting: root)
             }
         let hoverDocs = HoverDocumentationModel(
-            lspRegistry: lspRegistry, taskProvider: taskProvider, index: DocCommentIndex(store: syntaxFacts),
-            symbolKinds: syntaxFacts)
+            lspRegistry: lspRegistry,
+            taskProvider: taskProvider,
+            index: DocCommentIndex(store: syntaxFacts),
+            symbolKinds: syntaxFacts
+        )
         hoverDocs.isEnabled = settings.showsHoverDocumentation
         self.hoverDocs = hoverDocs
         // The setting is an appearance change, which the model's own observer passes over.
@@ -94,12 +98,22 @@ extension DiffViewerModel {
             .map { index, pair in
                 let (filePair, diff) = pair
                 return HoverDocumentationModel.FileEntry(
-                    index: index, leftPath: filePair.path, rightPath: filePair.new?.relativePath,
-                    oldText: diff.model.oldText, newText: diff.model.newText, oldBlobID: filePair.old?.blobID,
-                    newBlobID: filePair.new?.blobID)
+                    index: index,
+                    leftPath: filePair.path,
+                    rightPath: filePair.new?.relativePath,
+                    oldText: diff.model.oldText,
+                    newText: diff.model.newText,
+                    oldBlobID: filePair.old?.blobID,
+                    newBlobID: filePair.new?.blobID
+                )
             }
         hoverDocs.comparisonChanged(
-            root: root, files: files, corpusReader: reader, corpusSource: right.source, corpusEntries: right.entries)
+            root: root,
+            files: files,
+            corpusReader: reader,
+            corpusSource: right.source,
+            corpusEntries: right.entries
+        )
     }
 
     /// The severity counts of the file at `leftPath`: the right side's findings, keyed by its right path, and the left

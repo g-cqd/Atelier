@@ -193,15 +193,18 @@ import Testing
         let document = HoverMarkdownStructurer.structure(markdown)
         #expect(document.summary == "A colour reference embedded in a widget response.")
         #expect(
-            document.discussion == "Points at the same entity as ``Widget/Colour``, so it reuses its identifier type.")
+            document.discussion == "Points at the same entity as ``Widget/Colour``, so it reuses its identifier type."
+        )
         #expect(document.extraCandidates.count == 2)
         #expect(
             document.extraCandidates[0].declaration
-                == "@GenerateStub public struct Reference: Identifiable, Decodable, Hashable, Sendable")
+                == "@GenerateStub public struct Reference: Identifiable, Decodable, Hashable, Sendable"
+        )
         #expect(document.extraCandidates[0].summary == "A priority reference embedded in a widget response.")
         #expect(
             document.extraCandidates[1].declaration
-                == "@GenerateStub public struct Reference: Identifiable, Decodable, Sendable")
+                == "@GenerateStub public struct Reference: Identifiable, Decodable, Sendable"
+        )
         #expect(document.extraCandidates[1].summary == "A size reference embedded in a widget response.")
     }
 
@@ -218,7 +221,8 @@ import Testing
         #expect(
             discussion.contains(
                 "to a variable or constant.\n\n    var godotHasArrived = false\n\n    let numbers = 1...5\n"
-            ))
+            )
+        )
         #expect(discussion.contains("    while i {\n        print(i)\n        i -= 1\n    }\n"))
         #expect(discussion.contains("Using Imported Boolean values\n=============================\n"))
         #expect(discussion.hasSuffix("have a consistent type interface."))
@@ -269,7 +273,8 @@ import Testing
             document.parameters == [
                 .init(name: "point", text: "The point to move."),
                 .init(name: "offset", text: "How far to move it, in points.")
-            ])
+            ]
+        )
         #expect(document.returns == "The moved point.")
         #expect(document.summary == "Moves a point.")
         #expect(document.discussion == nil)
@@ -297,7 +302,8 @@ import Testing
             document.parameters == [
                 .init(name: "point", text: "The point to move."), .init(name: "offset", text: "How far to move it."),
                 .init(name: "animated", text: "Whether the move animates.")
-            ])
+            ]
+        )
         #expect(document.returns == "The moved point.")
         #expect(document.discussion == nil)
     }

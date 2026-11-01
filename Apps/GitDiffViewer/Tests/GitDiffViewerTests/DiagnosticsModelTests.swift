@@ -29,7 +29,12 @@ struct DiagnosticsModelTests {
         let model =
             if let clock {
                 DiagnosticsModel(
-                    engine: runner, settings: settings, taskProvider: spy, clock: clock, debounce: Self.debounce)
+                    engine: runner,
+                    settings: settings,
+                    taskProvider: spy,
+                    clock: clock,
+                    debounce: Self.debounce
+                )
             } else {
                 DiagnosticsModel(engine: runner, settings: settings, taskProvider: spy, debounce: .milliseconds(1))
             }
@@ -60,7 +65,9 @@ struct DiagnosticsModelTests {
         let runner = FakeDiagnosticsRunner()
         await runner.configure(.swiftlint, findings: [finding(.swiftlint, file: "A.swift")])
         await runner.configure(
-            .arcleak, findings: [finding(.arcleak, file: "A.swift"), finding(.arcleak, file: "B.swift")])
+            .arcleak,
+            findings: [finding(.arcleak, file: "A.swift"), finding(.arcleak, file: "B.swift")]
+        )
         let sut = try makeSUT(runner: runner)
 
         sut.model.comparisonChanged(
@@ -86,7 +93,8 @@ struct DiagnosticsModelTests {
             findings: [
                 finding(.swiftlint, file: "A.swift", severity: .error),
                 finding(.swiftlint, file: "A.swift", severity: .warning)
-            ])
+            ]
+        )
         await runner.configure(.arcleak, findings: [finding(.arcleak, file: "B.swift", severity: .warning)])
         let sut = try makeSUT(runner: runner)
 
@@ -116,7 +124,10 @@ struct DiagnosticsModelTests {
         sut.model.onFindingsChanged = { changed.append($0) }
 
         sut.model.comparisonChanged(
-            root: Self.root, files: [.init(path: "A.swift", contentHash: "a", url: nil)], corpusFingerprint: nil)
+            root: Self.root,
+            files: [.init(path: "A.swift", contentHash: "a", url: nil)],
+            corpusFingerprint: nil
+        )
         try await sut.spy.waitForAllTasks()
 
         #expect(changed.contains(["A.swift"]))
@@ -128,7 +139,10 @@ struct DiagnosticsModelTests {
         await runner.configure(.swiftlint, findings: [finding(.swiftlint, file: "A.swift")])
         let sut = try makeSUT(runner: runner)
         sut.model.comparisonChanged(
-            root: Self.root, files: [.init(path: "A.swift", contentHash: "a", url: nil)], corpusFingerprint: nil)
+            root: Self.root,
+            files: [.init(path: "A.swift", contentHash: "a", url: nil)],
+            corpusFingerprint: nil
+        )
         try await sut.spy.waitForAllTasks()
         #expect(!sut.model.findingsByFile.isEmpty)
 
@@ -143,10 +157,14 @@ struct DiagnosticsModelTests {
         let runner = FakeDiagnosticsRunner()
         let sut = try makeSUT(runner: runner)
         sut.settings.toolLocations = Dictionary(
-            uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) })
+            uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) }
+        )
 
         sut.model.comparisonChanged(
-            root: Self.root, files: [.init(path: "A.swift", contentHash: "a", url: nil)], corpusFingerprint: nil)
+            root: Self.root,
+            files: [.init(path: "A.swift", contentHash: "a", url: nil)],
+            corpusFingerprint: nil
+        )
         try await sut.spy.waitForAllTasks()
 
         let calls = await sut.runner.calls
@@ -164,7 +182,12 @@ struct DiagnosticsModelTests {
         let clock = TestClock()
         let spy = TaskProviderSpy.tolerant()
         let model = DiagnosticsModel(
-            engine: runner, settings: settings, taskProvider: spy, clock: clock, debounce: Self.debounce)
+            engine: runner,
+            settings: settings,
+            taskProvider: spy,
+            clock: clock,
+            debounce: Self.debounce
+        )
 
         try await startRun(on: clock) {
             model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
@@ -251,7 +274,10 @@ struct DiagnosticsModelTests {
         let sut = try makeSUT(runner: runner, clock: clock)
         try await startRun(on: clock) {
             sut.model.comparisonChanged(
-                root: Self.root, files: [target("A.swift"), target("B.swift")], corpusFingerprint: "one")
+                root: Self.root,
+                files: [target("A.swift"), target("B.swift")],
+                corpusFingerprint: "one"
+            )
         }
         try await sut.spy.waitForAllTasks()
         await runner.configure(.swiftlint, findings: [finding(.swiftlint, file: "C.swift")])
@@ -264,8 +290,10 @@ struct DiagnosticsModelTests {
 
         try await startRun(on: clock) {
             sut.model.comparisonChanged(
-                root: Self.root, files: [target("A.swift"), target("B.swift"), target("C.swift")],
-                corpusFingerprint: "two")
+                root: Self.root,
+                files: [target("A.swift"), target("B.swift"), target("C.swift")],
+                corpusFingerprint: "two"
+            )
         }
         _ = try await swiftlintLanded.expectNext()
 
@@ -285,7 +313,10 @@ struct DiagnosticsModelTests {
         let sut = try makeSUT(runner: runner, clock: clock)
         try await startRun(on: clock) {
             sut.model.comparisonChanged(
-                root: Self.root, files: [target("A.swift"), target("B.swift")], corpusFingerprint: "fp")
+                root: Self.root,
+                files: [target("A.swift"), target("B.swift")],
+                corpusFingerprint: "fp"
+            )
         }
         try await sut.spy.waitForAllTasks()
 
@@ -319,6 +350,11 @@ private actor FakeDiagnosticsRunner: DiagnosticsRunning {
         let findings = findingsByTool[tool] ?? []
         if let gate = gates[tool] { try await gate.wait() }
         return DiagnosticsEngine.ToolResult(
-            tool: tool, findings: findings, status: .succeeded, duration: .zero, fromCache: false)
+            tool: tool,
+            findings: findings,
+            status: .succeeded,
+            duration: .zero,
+            fromCache: false
+        )
     }
 }

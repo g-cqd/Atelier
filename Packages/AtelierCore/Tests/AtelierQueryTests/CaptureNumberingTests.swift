@@ -15,7 +15,8 @@ struct CaptureNumberingTests {
             ["null" "true"] @constant
             (comment) @comment @spell
             (string) @property
-            """)
+            """
+        )
         #expect(query.captureNames == ["property", "pair", "string", "constant", "comment", "spell"])
     }
 
@@ -25,7 +26,11 @@ struct CaptureNumberingTests {
         let colon = SyntaxNode(type: ":", byteRange: 1 ..< 2, isNamed: false)
         let value = SyntaxNode(type: "string", byteRange: 2 ..< 3)
         let pair = SyntaxNode(
-            type: "pair", children: [key, colon, value], byteRange: 0 ..< 3, fields: ["key": [key]])
+            type: "pair",
+            children: [key, colon, value],
+            byteRange: 0 ..< 3,
+            fields: ["key": [key]]
+        )
         let tree = SyntaxTree(root: SyntaxNode(type: "document", children: [pair], byteRange: 0 ..< 3), source: "k:v")
         let query = try QueryParser.parse(
             """
@@ -33,7 +38,8 @@ struct CaptureNumberingTests {
             (string) @string
             ":" @delimiter
             (string) @property
-            """)
+            """
+        )
 
         var patternCaptures: [QueryPattern.Capture] = []
         for pattern in query.patterns { Self.collectCaptures(pattern, into: &patternCaptures) }

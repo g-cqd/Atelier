@@ -175,19 +175,29 @@ struct DirectoryScannerTests {
         // Create a sibling-of-root whose name begins with `tree.root` prefix.
         let siblingPath = tree.root + "-evil-sibling"
         try FileManager.default.createDirectory(
-            atPath: siblingPath, withIntermediateDirectories: true)
+            atPath: siblingPath,
+            withIntermediateDirectories: true
+        )
         defer { try? FileManager.default.removeItem(atPath: siblingPath) }
         try "x"
             .write(
-                toFile: siblingPath + "/secret.txt", atomically: true, encoding: .utf8)
+                toFile: siblingPath + "/secret.txt",
+                atomically: true,
+                encoding: .utf8
+            )
 
         // Place a symlink inside the workspace pointing at the sibling.
         let linkPath = tree.root + "/link"
         try FileManager.default.createSymbolicLink(
-            atPath: linkPath, withDestinationPath: siblingPath)
+            atPath: linkPath,
+            withDestinationPath: siblingPath
+        )
 
         let entries = DirectoryScanner.scan(
-            tree.root, maxDepth: 2, withinRoot: tree.root)
+            tree.root,
+            maxDepth: 2,
+            withinRoot: tree.root
+        )
         let names = entries.map(\.name)
         #expect(!names.contains("link"), "symlink escaping the workspace must not appear")
     }
@@ -202,15 +212,22 @@ struct DirectoryScannerTests {
         // Sibling-of-workspace acting as the escape target.
         let escapeTarget = tree.root + "-escape-target"
         try FileManager.default.createDirectory(
-            atPath: escapeTarget, withIntermediateDirectories: true)
+            atPath: escapeTarget,
+            withIntermediateDirectories: true
+        )
         defer { try? FileManager.default.removeItem(atPath: escapeTarget) }
         try "x"
             .write(
-                toFile: escapeTarget + "/leaked.txt", atomically: true, encoding: .utf8)
+                toFile: escapeTarget + "/leaked.txt",
+                atomically: true,
+                encoding: .utf8
+            )
 
         let deepLink = tree.root + "/level1/level2/escape"
         try FileManager.default.createSymbolicLink(
-            atPath: deepLink, withDestinationPath: escapeTarget)
+            atPath: deepLink,
+            withDestinationPath: escapeTarget
+        )
 
         let pool = BlockingOffloadPool(width: 1)
         defer { pool.shutdown() }
@@ -222,7 +239,8 @@ struct DirectoryScannerTests {
         let escapeNames = level2.children.map(\.name)
         #expect(
             !escapeNames.contains("escape"),
-            "deep symlink escaping the workspace must not appear at any depth")
+            "deep symlink escaping the workspace must not appear at any depth"
+        )
     }
 
     /// A symlink into another part of the workspace is kept, even from a nested directory it does not point into.
@@ -238,15 +256,21 @@ struct DirectoryScannerTests {
         let linkPath = tree.root + "/siblingB/peek"
         let targetPath = tree.root + "/siblingA/note.txt"
         try FileManager.default.createSymbolicLink(
-            atPath: linkPath, withDestinationPath: targetPath)
+            atPath: linkPath,
+            withDestinationPath: targetPath
+        )
 
         let entries = DirectoryScanner.scan(
-            tree.root, maxDepth: 3, withinRoot: tree.root)
+            tree.root,
+            maxDepth: 3,
+            withinRoot: tree.root
+        )
 
         let siblingB = try #require(entries.first { $0.name == "siblingB" })
         let names = siblingB.children.map(\.name)
         #expect(
             names.contains("peek"),
-            "intra-workspace symlink must be visible when withinRoot is the workspace")
+            "intra-workspace symlink must be visible when withinRoot is the workspace"
+        )
     }
 }

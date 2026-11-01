@@ -24,10 +24,14 @@ struct AmbiguityOrderTests {
                 ("_expression", .symbol("name")), ("name", .pattern("[a-z]+"))
             ],
             extras: [.pattern(#"\s"#)],
-            conflicts: [["_expression", "type"]])
+            conflicts: [["_expression", "type"]]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("a.b!")
 

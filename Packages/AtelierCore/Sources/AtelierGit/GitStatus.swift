@@ -106,8 +106,12 @@ public struct GitStatusEntry: Sendable, Hashable {
 
     /// Both columns default to ``GitStatusCode/unmodified``, for an entry built without git's `XY` field.
     public init(
-        path: String, originalPath: String? = nil, status: FileStatus, isSubmodule: Bool = false,
-        indexStatus: GitStatusCode = .unmodified, worktreeStatus: GitStatusCode = .unmodified
+        path: String,
+        originalPath: String? = nil,
+        status: FileStatus,
+        isSubmodule: Bool = false,
+        indexStatus: GitStatusCode = .unmodified,
+        worktreeStatus: GitStatusCode = .unmodified
     ) {
         self.path = path
         self.originalPath = originalPath

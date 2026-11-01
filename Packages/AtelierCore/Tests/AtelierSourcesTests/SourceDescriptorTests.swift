@@ -6,8 +6,11 @@ import Testing
 
 struct SourceDescriptorTests {
     private static let repository = RepositoryInfo(
-        root: URL(filePath: "/tmp/Atelier", directoryHint: .isDirectory), branches: ["main"], tags: [],
-        commits: [])
+        root: URL(filePath: "/tmp/Atelier", directoryHint: .isDirectory),
+        branches: ["main"],
+        tags: [],
+        commits: []
+    )
 
     @Test
     func `a git ref describes the repository as its context and the abbreviated ref as its primary text`() {

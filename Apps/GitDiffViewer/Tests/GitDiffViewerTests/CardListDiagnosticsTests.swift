@@ -22,11 +22,19 @@ struct CardListDiagnosticsTests {
     private static let debounce: Duration = .milliseconds(250)
     /// Every tool named, SwiftLint alone enabled.
     private static let onlySwiftLint = Dictionary(
-        uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) })
+        uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) }
+    )
 
     private static func finding(_ file: String, line: Int, rule: String) -> Finding {
         Finding(
-            tool: .swiftlint, ruleID: rule, message: "message", file: file, line: line, column: 1, severity: .warning)
+            tool: .swiftlint,
+            ruleID: rule,
+            message: "message",
+            file: file,
+            line: line,
+            column: 1,
+            severity: .warning
+        )
     }
 
     /// Three files of thirty lines, each changed at line 20 alone, so a card shows lines 17 to 23 and hides the rest.
@@ -54,7 +62,8 @@ struct CardListDiagnosticsTests {
                 Self.finding("b.swift", line: 20, rule: "b20"),
                 // Hidden in the gap above the change.
                 Self.finding("b.swift", line: 2, rule: "b2")
-            ])
+            ]
+        )
         let list = CardList(model: sut)
         defer { list.close() }
         list.pump()
@@ -78,8 +87,12 @@ struct CardListDiagnosticsTests {
         sut.settings.toolLocations = Self.onlySwiftLint
         let clock = TestClock()
         sut.diagnostics = DiagnosticsModel(
-            engine: FixedFindingsRunner(findings: findings), settings: sut.settings,
-            taskProvider: harness.taskProvider, clock: clock, debounce: Self.debounce)
+            engine: FixedFindingsRunner(findings: findings),
+            settings: sut.settings,
+            taskProvider: harness.taskProvider,
+            clock: clock,
+            debounce: Self.debounce
+        )
         let mark = clock.registrationMark()
         sut.updateAnalyzedSides()
         try await clock.expectSleepers(after: mark)
@@ -96,8 +109,11 @@ private final class CardList {
 
     init(model: DiffViewerModel) {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 900), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 900),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: CombinedDiffView(model: model))
     }
@@ -156,6 +172,11 @@ private actor FixedFindingsRunner: DiagnosticsRunning {
 
     func run(_ tool: DiagnosticTool, request: DiagnosticsEngine.Request) async throws -> DiagnosticsEngine.ToolResult {
         DiagnosticsEngine.ToolResult(
-            tool: tool, findings: findings, status: .succeeded, duration: .zero, fromCache: false)
+            tool: tool,
+            findings: findings,
+            status: .succeeded,
+            duration: .zero,
+            fromCache: false
+        )
     }
 }

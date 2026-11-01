@@ -10,7 +10,11 @@ struct SearchReplaceTests {
         let pattern = SearchPattern.literal(text: "hello", caseSensitive: true)
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
         let result = buildReplacement(
-            for: match, in: "hello world", pattern: pattern, replacement: "hi")
+            for: match,
+            in: "hello world",
+            pattern: pattern,
+            replacement: "hi"
+        )
         #expect(result == "hi")
     }
 
@@ -21,7 +25,11 @@ struct SearchReplaceTests {
         )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 11)
         let result = buildReplacement(
-            for: match, in: "hello_world", pattern: pattern, replacement: "$2_$1")
+            for: match,
+            in: "hello_world",
+            pattern: pattern,
+            replacement: "$2_$1"
+        )
         #expect(result == "world_hello")
     }
 
@@ -35,7 +43,11 @@ struct SearchReplaceTests {
         ]
 
         let (newLines, count) = applyReplacements(
-            to: lines, matches: matches, pattern: pattern, replacement: "hi")
+            to: lines,
+            matches: matches,
+            pattern: pattern,
+            replacement: "hi"
+        )
 
         #expect(count == 2)
         #expect(newLines[0] == "hi hi")
@@ -48,7 +60,11 @@ struct SearchReplaceTests {
         let matches = [SearchMatch(row: 0, colStart: 0, colEnd: 6)]
 
         let (newLines, count) = applyReplacements(
-            to: lines, matches: matches, pattern: pattern, replacement: "")
+            to: lines,
+            matches: matches,
+            pattern: pattern,
+            replacement: ""
+        )
 
         #expect(count == 1)
         #expect(newLines[0] == "world")
@@ -64,7 +80,11 @@ struct SearchReplaceTests {
         ]
 
         let (newLines, count) = applyReplacements(
-            to: lines, matches: matches, pattern: pattern, replacement: "hi")
+            to: lines,
+            matches: matches,
+            pattern: pattern,
+            replacement: "hi"
+        )
 
         #expect(count == 2)
         #expect(newLines[0] == "hi world")
@@ -77,27 +97,41 @@ struct SearchReplaceTests {
         let pattern = SearchPattern.literal(text: "HELLO", caseSensitive: false)
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
         let result = buildReplacement(
-            for: match, in: "hello world", pattern: pattern, replacement: "HI")
+            for: match,
+            in: "hello world",
+            pattern: pattern,
+            replacement: "HI"
+        )
         #expect(result == "HI")
     }
 
     @Test("$0 captures full regex match")
     func dollarZeroCapturesFullMatch() throws {
         let pattern = try #require(
-            compilePattern(SearchQuery(text: "\\d+", isCaseSensitive: true, isRegex: true)))
+            compilePattern(SearchQuery(text: "\\d+", isCaseSensitive: true, isRegex: true))
+        )
         let match = SearchMatch(row: 0, colStart: 5, colEnd: 8)
         let result = buildReplacement(
-            for: match, in: "line 123 end", pattern: pattern, replacement: "[$0]")
+            for: match,
+            in: "line 123 end",
+            pattern: pattern,
+            replacement: "[$0]"
+        )
         #expect(result == "[123]")
     }
 
     @Test("$$ produces literal $ in replacement")
     func doubleDollarEscape() throws {
         let pattern = try #require(
-            compilePattern(SearchQuery(text: "(\\w+)", isCaseSensitive: true, isRegex: true)))
+            compilePattern(SearchQuery(text: "(\\w+)", isCaseSensitive: true, isRegex: true))
+        )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
         let result = buildReplacement(
-            for: match, in: "hello", pattern: pattern, replacement: "$$1=$1")
+            for: match,
+            in: "hello",
+            pattern: pattern,
+            replacement: "$$1=$1"
+        )
         #expect(result == "$1=hello")
     }
 
@@ -109,7 +143,11 @@ struct SearchReplaceTests {
         )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 11)
         let result = buildReplacement(
-            for: match, in: "hello world", pattern: pattern, replacement: "$10")
+            for: match,
+            in: "hello world",
+            pattern: pattern,
+            replacement: "$10"
+        )
         #expect(result == "hello0")
     }
 
@@ -119,20 +157,34 @@ struct SearchReplaceTests {
         let pattern = try #require(
             compilePattern(
                 SearchQuery(
-                    text: "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)", isCaseSensitive: true, isRegex: true)))
+                    text: "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)",
+                    isCaseSensitive: true,
+                    isRegex: true
+                )
+            )
+        )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 10)
         let result = buildReplacement(
-            for: match, in: "abcdefghij", pattern: pattern, replacement: "$10")
+            for: match,
+            in: "abcdefghij",
+            pattern: pattern,
+            replacement: "$10"
+        )
         #expect(result == "j")
     }
 
     @Test("trailing $ is emitted literally")
     func trailingDollarLiteral() throws {
         let pattern = try #require(
-            compilePattern(SearchQuery(text: "\\w+", isCaseSensitive: true, isRegex: true)))
+            compilePattern(SearchQuery(text: "\\w+", isCaseSensitive: true, isRegex: true))
+        )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
         let result = buildReplacement(
-            for: match, in: "hello", pattern: pattern, replacement: "[$0]$")
+            for: match,
+            in: "hello",
+            pattern: pattern,
+            replacement: "[$0]$"
+        )
         #expect(result == "[hello]$")
     }
 }

@@ -14,7 +14,9 @@ import os
 
 /// Highlighter signposts, so Instruments can attribute frame time to parsing, merging and each kind of highlight.
 private let highlighterSignposter = OSSignposter(
-    subsystem: "com.kittytui.syntax", category: "highlight")
+    subsystem: "com.kittytui.syntax",
+    category: "highlight"
+)
 
 public enum LanguageHighlighter: Sendable {
     /// Maximum source size in bytes for grammar-backed highlighting, the grammar tier's (`GrammarEngine`).
@@ -36,7 +38,8 @@ public enum LanguageHighlighter: Sendable {
     /// The grammar tier over KittyCode's grammars, for the tier job: the session's parse, gate and query, with the
     /// tier's deadline, failure record, throughput predictor and breaker (PERF-11 step 4).
     public static func grammarTier(
-        record: GrammarTierRecord = GrammarTierRecord(), deadline: Duration = GrammarTier.defaultDeadline
+        record: GrammarTierRecord = GrammarTierRecord(),
+        deadline: Duration = GrammarTier.defaultDeadline
     ) -> GrammarTier {
         GrammarTier(artifacts: .shared, record: record, deadline: deadline)
     }
@@ -227,7 +230,10 @@ public enum LanguageHighlighter: Sendable {
 
             var scratch = splitScratch
             let result = splitDocumentSpans(
-                spans, source: source, defaultStyle: theme.defaultStyle, scratch: &scratch
+                spans,
+                source: source,
+                defaultStyle: theme.defaultStyle,
+                scratch: &scratch
             )
             return result
         }
@@ -243,7 +249,10 @@ public enum LanguageHighlighter: Sendable {
             let utf8 = Array(source.utf8)
             return HighlightMerger.resolveToLines(
                 tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
-                utf8: utf8, resolver: resolver, defaultStyle: theme.defaultStyle)
+                utf8: utf8,
+                resolver: resolver,
+                defaultStyle: theme.defaultStyle
+            )
         }
 
         /// Highlights only the visible lines, querying the tree over their byte range; without a usable parse the
@@ -272,7 +281,9 @@ public enum LanguageHighlighter: Sendable {
                         }
 
                         let viewportSource = extractViewportSource(
-                            source: source, byteRange: byteRange)
+                            source: source,
+                            byteRange: byteRange
+                        )
                         let vpByteCount = viewportSource.utf8.count
                         let localTokens = tokens.compactMap { token -> HighlightToken? in
                             let start = token.byteRange.lowerBound - byteRange.lowerBound
@@ -288,7 +299,9 @@ public enum LanguageHighlighter: Sendable {
                         }
 
                         let merged = HighlightMerger.merge(
-                            localTokens, sourceByteCount: viewportSource.utf8.count)
+                            localTokens,
+                            sourceByteCount: viewportSource.utf8.count
+                        )
                         let spans = HighlightMerger.resolveToSpans(
                             tokens: merged,
                             source: viewportSource,
@@ -298,8 +311,11 @@ public enum LanguageHighlighter: Sendable {
 
                         var scratch = splitScratch
                         return splitDocumentSpans(
-                            spans, source: viewportSource, defaultStyle: theme.defaultStyle,
-                            scratch: &scratch)
+                            spans,
+                            source: viewportSource,
+                            defaultStyle: theme.defaultStyle,
+                            scratch: &scratch
+                        )
                     } catch {
                         return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                     }
@@ -312,7 +328,8 @@ public enum LanguageHighlighter: Sendable {
         /// The three-layer merge restricted to the visible lines, for a first render ahead of
         /// `highlightDocumentMerged(source:)`.
         public func highlightViewportMerged(
-            source: String, visibleLineRange: Range<Int>
+            source: String,
+            visibleLineRange: Range<Int>
         ) async -> [[StyledSpan]] {
             guard !source.isEmpty else {
                 return [[StyledSpan(text: "", style: theme.defaultStyle)]]
@@ -324,7 +341,9 @@ public enum LanguageHighlighter: Sendable {
             // Layer 0: lexical baseline over the visible bytes only
             let lexicalTokens = LexicalHighlightEngine()
                 .highlight(
-                    utf8: Array(viewportSource.utf8), language: lexicalLanguage)
+                    utf8: Array(viewportSource.utf8),
+                    language: lexicalLanguage
+                )
 
             // Layer 1: structural tokens scoped to viewport
             var structuralTokens: [HighlightToken] = []
@@ -340,8 +359,11 @@ public enum LanguageHighlighter: Sendable {
                                     guard start >= 0, end <= vpCount, start < end else { return nil }
                                     return HighlightToken(
                                         byteRange: start ..< end,
-                                        role: token.role, modifiers: token.modifiers,
-                                        layer: token.layer, priority: token.priority)
+                                        role: token.role,
+                                        modifiers: token.modifiers,
+                                        layer: token.layer,
+                                        priority: token.priority
+                                    )
                                 }
                         }
                     }
@@ -359,8 +381,12 @@ public enum LanguageHighlighter: Sendable {
                         return nil
                     }
                     return HighlightToken(
-                        byteRange: start ..< end, role: token.role,
-                        modifiers: token.modifiers, layer: token.layer, priority: token.priority)
+                        byteRange: start ..< end,
+                        role: token.role,
+                        modifiers: token.modifiers,
+                        layer: token.layer,
+                        priority: token.priority
+                    )
                 }
             }
 
@@ -370,14 +396,23 @@ public enum LanguageHighlighter: Sendable {
             }
 
             let merged = HighlightMerger.merge(
-                allTokens, sourceByteCount: viewportSource.utf8.count)
+                allTokens,
+                sourceByteCount: viewportSource.utf8.count
+            )
             let spans = HighlightMerger.resolveToSpans(
-                tokens: merged, source: viewportSource, resolver: resolver,
-                defaultStyle: theme.defaultStyle)
+                tokens: merged,
+                source: viewportSource,
+                resolver: resolver,
+                defaultStyle: theme.defaultStyle
+            )
 
             var scratch = splitScratch
             return splitDocumentSpans(
-                spans, source: viewportSource, defaultStyle: theme.defaultStyle, scratch: &scratch)
+                spans,
+                source: viewportSource,
+                defaultStyle: theme.defaultStyle,
+                scratch: &scratch
+            )
         }
 
         // MARK: - Viewport Helpers
@@ -423,7 +458,8 @@ public enum LanguageHighlighter: Sendable {
         /// The visible lines through the lexical engine, scanned together so a string or comment that opens
         /// on one visible line and closes on another is styled as one.
         private func viewportFallback(
-            source: String, visibleLineRange: Range<Int>
+            source: String,
+            visibleLineRange: Range<Int>
         ) -> [[StyledSpan]] {
             let lines = extractVisibleLines(source: source, visibleLineRange: visibleLineRange)
             return lexicalLines(source: lines.joined(separator: "\n"))
@@ -466,7 +502,10 @@ public enum LanguageHighlighter: Sendable {
         let lexicalLanguage = language.flatMap(Language.init(name:)) ?? .plain
         return HighlightMerger.resolveToSpans(
             tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
-            utf8: utf8[...], resolver: RoleBasedThemeResolver(theme: theme), defaultStyle: theme.defaultStyle)
+            utf8: utf8[...],
+            resolver: RoleBasedThemeResolver(theme: theme),
+            defaultStyle: theme.defaultStyle
+        )
     }
 
     public static func makeSession(
@@ -510,7 +549,8 @@ public enum LanguageHighlighter: Sendable {
     /// Ensures grammar artifacts are loaded for a language, compiling off the main thread.
     /// Returns true if artifacts became available (newly loaded or already cached).
     public static func ensureArtifacts(
-        for language: String, taskProvider: any TaskProvider = .default
+        for language: String,
+        taskProvider: any TaskProvider = .default
     ) async -> Bool {
         await taskProvider.detachedTask(role: .work, priority: .userInitiated) {
             await SyntaxArtifactsCache.shared.loadIfNeeded(for: language)

@@ -19,8 +19,10 @@ struct WaitTimeout: Error, CustomStringConvertible {
 /// The wait runs in a task of its own, which the bound cancels and leaves to unwind rather than awaits: a wait that
 /// ignores cancellation still fails its test instead of hanging the run. Cancelling the caller cancels the wait.
 func withFailureBound<Value: Sendable>(
-    awaiting awaited: String, bound: Duration = TaskProviderSpy.failureBound,
-    sourceLocation: SourceLocation = #_sourceLocation, _ wait: @escaping @Sendable () async throws -> Value
+    awaiting awaited: String,
+    bound: Duration = TaskProviderSpy.failureBound,
+    sourceLocation: SourceLocation = #_sourceLocation,
+    _ wait: @escaping @Sendable () async throws -> Value
 ) async throws -> Value {
     let outcome = FirstOutcome<Value>()
     let waiter = Task {
@@ -86,7 +88,9 @@ extension TestClock {
     /// ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed first. Take `mark` just before the step that
     /// puts the sleepers to sleep: the advance that follows then fires them, never an earlier sleeper alone.
     func expectSleepers(
-        _ count: Int = 1, after mark: RegistrationMark, sourceLocation: SourceLocation = #_sourceLocation
+        _ count: Int = 1,
+        after mark: RegistrationMark,
+        sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         let awaited = count == 1 ? "A sleeper registered after the mark" : "\(count) sleepers registered after the mark"
         try await withFailureBound(awaiting: awaited, sourceLocation: sourceLocation) { [self] in
@@ -149,7 +153,9 @@ extension AsyncProbe {
 /// time instead, and ends the process, which stops the run with the failure named rather than hanging it.
 @MainActor
 func withMainThreadBound<Value>(
-    _ activity: String, bound seconds: Double = 60, sourceLocation: SourceLocation = #_sourceLocation,
+    _ activity: String,
+    bound seconds: Double = 60,
+    sourceLocation: SourceLocation = #_sourceLocation,
     _ work: () async throws -> Value
 ) async rethrows -> Value {
     let watch = MainThreadWatch()

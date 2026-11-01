@@ -82,7 +82,10 @@ struct ParseActionResolver {
     /// `completedRules`, the productions that end there with that lookahead. A conflict lists its reductions by rule
     /// index, then its shift, so the parser forks in the same order on every run.
     private func action(
-        on lookahead: String, shift: Int?, completedRules: [Int], in itemSet: LookaheadItemSet
+        on lookahead: String,
+        shift: Int?,
+        completedRules: [Int],
+        in itemSet: LookaheadItemSet
     ) -> Action {
         // The augmented rule's end is the accept.
         guard !completedRules.contains(0) else { return .accept }
@@ -91,8 +94,12 @@ struct ParseActionResolver {
         for rule in completedRules.sorted() {
             let last = productions[rule].steps.last
             reductions.insert(
-                rule, symbol: productions[rule].name, precedence: last?.precedence ?? 0,
-                associativity: last?.associativity, resolver: self)
+                rule,
+                symbol: productions[rule].name,
+                precedence: last?.precedence ?? 0,
+                associativity: last?.associativity,
+                resolver: self
+            )
         }
         let reduceActions = reductions.rules.map { rule in
             Action.reduce(ruleIndex: rule, count: productions[rule].steps.count, nonTerminal: productions[rule].name)
@@ -126,7 +133,10 @@ struct ParseActionResolver {
         /// Adds the reduction of `rule` as tree-sitter inserts a reduction: it replaces the reductions of lower
         /// precedence, is left out against higher, and joins those it neither beats nor loses to.
         mutating func insert(
-            _ rule: Int, symbol: String, precedence: Precedence, associativity: Associativity?,
+            _ rule: Int,
+            symbol: String,
+            precedence: Precedence,
+            associativity: Associativity?,
             resolver: ParseActionResolver
         ) {
             if !rules.isEmpty {
@@ -164,7 +174,9 @@ struct ParseActionResolver {
     }
 
     private func winner(
-        shifting lookahead: String, in itemSet: LookaheadItemSet, against reductions: Reductions
+        shifting lookahead: String,
+        in itemSet: LookaheadItemSet,
+        against reductions: Reductions
     ) -> Winner {
         var shiftIsHigher = false
         var shiftIsLower = false
@@ -174,7 +186,10 @@ struct ParseActionResolver {
                 continue
             }
             switch compare(
-                steps[item.dot - 1].precedence, [productions[item.rule].name], reductions.precedence, reductions.symbols
+                steps[item.dot - 1].precedence,
+                [productions[item.rule].name],
+                reductions.precedence,
+                reductions.symbols
             )
             {
                 case .higher: shiftIsHigher = true
@@ -200,7 +215,10 @@ struct ParseActionResolver {
     /// that names both, earlier over later, a list naming a rule of `leftSymbols` or `rightSymbols` as well as a name;
     /// the same when no list orders them.
     func compare(
-        _ left: Precedence, _ leftSymbols: [String], _ right: Precedence, _ rightSymbols: [String]
+        _ left: Precedence,
+        _ leftSymbols: [String],
+        _ right: Precedence,
+        _ rightSymbols: [String]
     ) -> PrecedenceOrder {
         if case .integer(let leftValue) = left, case .integer(let rightValue) = right, leftValue != 0 || rightValue != 0
         {

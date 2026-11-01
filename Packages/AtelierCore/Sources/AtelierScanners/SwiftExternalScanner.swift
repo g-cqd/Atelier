@@ -155,7 +155,9 @@ public struct SwiftExternalScanner: GrammarExternalScanner {
         // Now consume any operators that might cause our whitespace to be suppressed.
         var operatorResult: TokenType?
         let sawOperator = Self.eatOperators(
-            &lexer, validSymbols: validSymbols, markEnd: !hasWhitespaceResult,
+            &lexer,
+            validSymbols: validSymbols,
+            markEnd: !hasWhitespaceResult,
             priorChar: comment == .continueSlashConsumed ? Self.ascii("/") : 0,
             symbolResult: &operatorResult
         )
@@ -184,7 +186,9 @@ public struct SwiftExternalScanner: GrammarExternalScanner {
     }
 
     static func emit(
-        _ token: TokenType?, lexer: inout some ScannerLexer, validSymbols: [Bool]
+        _ token: TokenType?,
+        lexer: inout some ScannerLexer,
+        validSymbols: [Bool]
     ) -> Bool {
         guard let token, validSymbols[token.rawValue] else { return false }
         lexer.resultSymbol = token.rawValue
@@ -220,7 +224,9 @@ public struct SwiftExternalScanner: GrammarExternalScanner {
     }
 
     static func eatComment(
-        _ lexer: inout some ScannerLexer, markEnd: Bool, symbolResult: inout TokenType?
+        _ lexer: inout some ScannerLexer,
+        markEnd: Bool,
+        symbolResult: inout TokenType?
     ) -> ParseDirective {
         guard lexer.lookahead == ascii("/") else { return .continueNothing }
         lexer.advance(skip: false)
@@ -264,7 +270,9 @@ public struct SwiftExternalScanner: GrammarExternalScanner {
     // Preserve the pinned scanner's newline, comment and operator decision order.
     // swiftlint:disable:next cyclomatic_complexity
     static func eatWhitespace(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], symbolResult: inout TokenType?
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        symbolResult: inout TokenType?
     ) -> ParseDirective {
         var whitespaceDirective: ParseDirective = .continueNothing
         let semiIsValid = validSymbols[TokenType.implicitSemi.rawValue] && validSymbols[TokenType.explicitSemi.rawValue]
@@ -330,7 +338,11 @@ public struct SwiftExternalScanner: GrammarExternalScanner {
 
             var operatorResult: TokenType?
             let sawOperator = eatOperators(
-                &lexer, validSymbols: validSymbols, markEnd: false, priorChar: 0, symbolResult: &operatorResult
+                &lexer,
+                validSymbols: validSymbols,
+                markEnd: false,
+                priorChar: 0,
+                symbolResult: &operatorResult
             )
             if sawOperator {
                 // The operator we saw should suppress the newline, so bail out.

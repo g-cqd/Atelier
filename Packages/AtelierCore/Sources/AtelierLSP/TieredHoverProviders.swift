@@ -46,8 +46,10 @@ public struct TieredHoverProviders: HoverProvider {
                 return content
             }
             return HoverContent(
-                markdown: baseDeclaration + "\n\n" + content.markdown, source: content.source,
-                documentationPage: content.documentationPage ?? existingBase.documentationPage)
+                markdown: baseDeclaration + "\n\n" + content.markdown,
+                source: content.source,
+                documentationPage: content.documentationPage ?? existingBase.documentationPage
+            )
         }
         return base
     }

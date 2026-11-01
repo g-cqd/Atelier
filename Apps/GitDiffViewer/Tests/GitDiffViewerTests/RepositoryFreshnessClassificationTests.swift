@@ -6,7 +6,10 @@ import Testing
 /// repository and in a linked worktree. Only `HEAD`, the index and the refs count inside the git dirs.
 struct RepositoryFreshnessClassificationTests {
     private static let paths = RepositoryFreshness.WatchedPaths(
-        root: "/repo", gitDir: "/repo/.git", commonDir: "/repo/.git")
+        root: "/repo",
+        gitDir: "/repo/.git",
+        commonDir: "/repo/.git"
+    )
 
     private func classify(_ path: String) -> RepositoryFreshness.Classification {
         RepositoryFreshness.classify(path, paths: Self.paths)
@@ -71,7 +74,10 @@ struct RepositoryFreshnessClassificationTests {
     @Test
     func `in a linked worktree, its own HEAD and index and the shared refs count, the main worktree's do not`() {
         let paths = RepositoryFreshness.WatchedPaths(
-            root: "/wt", gitDir: "/main/.git/worktrees/wt", commonDir: "/main/.git")
+            root: "/wt",
+            gitDir: "/main/.git/worktrees/wt",
+            commonDir: "/main/.git"
+        )
 
         #expect(RepositoryFreshness.classify("/main/.git/worktrees/wt/HEAD", paths: paths) == .head)
         #expect(RepositoryFreshness.classify("/main/.git/worktrees/wt/index", paths: paths) == .index)

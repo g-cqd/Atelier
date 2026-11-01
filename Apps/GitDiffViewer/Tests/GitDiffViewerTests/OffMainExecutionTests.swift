@@ -40,8 +40,16 @@ struct OffMainExecutionTests {
 
     private func finding(line: Int, file: String = "a.swift") -> Finding {
         Finding(
-            tool: .swiftlint, ruleID: "rule", message: "message", file: file, line: line, column: nil,
-            endLine: nil, endColumn: nil, severity: .warning)
+            tool: .swiftlint,
+            ruleID: "rule",
+            message: "message",
+            file: file,
+            line: line,
+            column: nil,
+            endLine: nil,
+            endColumn: nil,
+            severity: .warning
+        )
     }
 
     @Test
@@ -71,18 +79,30 @@ struct OffMainExecutionTests {
     func `buildOffMain runs off the main actor and answers the same trees as build`() async {
         let comparison = Comparison(
             left: [entry("a/x.swift", "1"), entry("z.swift", "2")],
-            right: [entry("a/x.swift", "9"), entry("z.swift", "2")], leftSource: nil, rightSource: nil,
-            leftIgnored: [], rightIgnored: [])
+            right: [entry("a/x.swift", "9"), entry("z.swift", "2")],
+            leftSource: nil,
+            rightSource: nil,
+            leftIgnored: [],
+            rightIgnored: []
+        )
         let leftTree = PathNode.tree(from: ["a/x.swift", "z.swift"])
         let rightTree = PathNode.tree(from: ["a/x.swift", "z.swift"])
 
         #expect(isOnMainThread())
         let built = await ExplorerTrees.buildOffMain(
-            comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: false,
-            style: .hierarchy)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: rightTree,
+            showsChangesOnly: false,
+            style: .hierarchy
+        )
         let sync = ExplorerTrees.build(
-            comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: false,
-            style: .hierarchy)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: rightTree,
+            showsChangesOnly: false,
+            style: .hierarchy
+        )
 
         #expect(built.left.map(\.id) == sync.left.map(\.id))
         #expect(built.statuses == sync.statuses)
@@ -123,8 +143,13 @@ struct OffMainExecutionTests {
         #expect(isOnMainThread())
         let loaded = try #require(
             await DiffViewerModel.loadSides(
-                in: root, leftRef: "HEAD", rightRef: "main", reader: reader,
-                threadProbe: { ranOnMain.withLock { $0.append(isOnMainThread()) } }))
+                in: root,
+                leftRef: "HEAD",
+                rightRef: "main",
+                reader: reader,
+                threadProbe: { ranOnMain.withLock { $0.append(isOnMainThread()) } }
+            )
+        )
 
         // Once as the prologue starts, then once per side as its index is built.
         #expect(ranOnMain.withLock { $0 } == [false, false, false])
@@ -137,7 +162,9 @@ struct OffMainExecutionTests {
     @Test
     func `a prepared side index keeps the first entry listed for a path`() {
         let listing = SideState.Listing(
-            entries: [entry("a/one.swift", "first"), entry("a/one.swift", "second")], commit: nil)
+            entries: [entry("a/one.swift", "first"), entry("a/one.swift", "second")],
+            commit: nil
+        )
 
         #expect(listing.entriesByPath["a/one.swift"]?.blobID == "first")
         #expect(listing.tree.map(\.id) == ["a"])

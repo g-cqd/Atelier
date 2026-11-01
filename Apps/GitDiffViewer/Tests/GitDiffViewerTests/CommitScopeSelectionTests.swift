@@ -62,8 +62,11 @@ struct CommitScopeSelectionTests {
         let sut = DiffViewerModel(
             settings: ViewerSettings(defaults: harness.scratchDefaults.defaults),
             reader: reader ?? SourceLoader(runner: runner, pool: GitRepositoryFixture.pool),
-            history: CommitHistory(runner: runner, gate: GitConfigGate()), taskProvider: harness.taskProvider,
-            uptime: harness.uptime.provider, clock: harness.clock)
+            history: CommitHistory(runner: runner, gate: GitConfigGate()),
+            taskProvider: harness.taskProvider,
+            uptime: harness.uptime.provider,
+            clock: harness.clock
+        )
         sut.settings.explorerPlacement = .unifiedSidebar
         sut.settings.treeStyle = .flat
         sut.settings.groupsByCommit = grouping
@@ -131,7 +134,8 @@ struct CommitScopeSelectionTests {
             let sut = makeSUT()
             try await load(sut, history.ref(history.base), history.ref(history.reshape))
             let section = try #require(
-                sut.commitGroup(forSelection: ExplorerSection.selectionKey(forGroup: "commit:\(history.reshape)")))
+                sut.commitGroup(forSelection: ExplorerSection.selectionKey(forGroup: "commit:\(history.reshape)"))
+            )
             let renamedRow = try #require(section.rows.first { $0.change?.status == .renamed })
             func key(_ path: String) -> String {
                 ExplorerSection.selectionKey(forGroup: section.id, path: path)
@@ -181,7 +185,9 @@ struct CommitScopeSelectionTests {
                     makeConfiguration: { _, _ in
                         asked.withLock { $0 += 1 }
                         return nil
-                    }))
+                    }
+                )
+            )
             try await load(sut, history.ref(history.base), .directory(history.root))
 
             try await show(sut, ExplorerSection.selectionKey(forGroup: "commit:\(history.second)", path: "f.swift"))

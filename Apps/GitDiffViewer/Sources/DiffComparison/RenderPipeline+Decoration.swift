@@ -56,7 +56,8 @@ extension RenderPipeline {
         decorator.noteDisplayed(id, published: Set(files.map(\.rendered.id)))
         decorator.cancel(
             keepingColors: Set(files.flatMap { [$0.composition.old, $0.composition.new] }.compactMap(\.self)),
-            marks: Set(files.map(\.diff.id)))
+            marks: Set(files.map(\.diff.id))
+        )
         if let file = files.first(where: { $0.rendered.id == id }) {
             for side in [RenderedSide.old, .new] {
                 startColors(side, of: file)
@@ -92,10 +93,14 @@ extension RenderPipeline {
             .map { rendered, prepared in
                 let (diff, pair) = prepared
                 return PublishedFile(
-                    rendered: rendered, diff: diff,
+                    rendered: rendered,
+                    diff: diff,
                     composition: DiffDecorator.Composition(
-                        preparation: diff.id, old: colorKey(of: pair.old, side: .old, in: diff),
-                        new: colorKey(of: pair.new, side: .new, in: diff)))
+                        preparation: diff.id,
+                        old: colorKey(of: pair.old, side: .old, in: diff),
+                        new: colorKey(of: pair.new, side: .new, in: diff)
+                    )
+                )
             }
     }
 
@@ -127,10 +132,12 @@ extension RenderPipeline {
         let text = side == .old ? diff.oldText : diff.newText
         let lines = side == .old ? diff.model.oldLines : diff.model.newLines
         let request = TierRequest(
-            revision: Self.revision(of: key, path: diff.title, language: diff.language), text: text,
+            revision: Self.revision(of: key, path: diff.title, language: diff.language),
+            text: text,
             lineRanges: DiffRenderer.lineRanges(of: text, lines: lines),
             visibleLines: visibleLines(of: side, in: file) ?? Self.linesAroundFirstChange(of: side, in: diff),
-            unit: .utf16)
+            unit: .utf16
+        )
         let stamp = DiffDecorator.Stamp(generation: generation, fileID: file.rendered.id)
         let lineCount = lines.count
         let tiers = decorator.activeTiers(for: diff.language)
@@ -142,7 +149,9 @@ extension RenderPipeline {
                     await self.land(update, lineCount: lineCount, key: key, stamp: stamp)
                 }
                 self.decorator.endColors(key, cancelled: Task.isCancelled)
-            }, for: key)
+            },
+            for: key
+        )
     }
 
     /// Takes a tier's update, unless its job was cancelled, or its render was superseded and no published file shows
@@ -176,10 +185,17 @@ extension RenderPipeline {
         decorator.trackScopes(
             taskProvider.task(priority: .utility) {
                 let scopes = await DiffDecorations.scopes(
-                    of: text, lineRanges: lineRanges, language: diff.language, revision: revision, store: store)
+                    of: text,
+                    lineRanges: lineRanges,
+                    language: diff.language,
+                    revision: revision,
+                    store: store
+                )
                 if let scopes { self.land(scopes, key: key, stamp: stamp) }
                 self.decorator.endScopes(key, cancelled: Task.isCancelled)
-            }, for: key)
+            },
+            for: key
+        )
     }
 
     /// Takes a side's scopes, unless their job was cancelled, or their render was superseded and no published file

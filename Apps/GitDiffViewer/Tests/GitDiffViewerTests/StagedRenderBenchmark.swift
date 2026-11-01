@@ -59,19 +59,31 @@ struct StagedRenderBenchmark {
                     let start = Self.cpu()
                     let prepared = PreparedDiff(input, granularity: .word)
                     let diff = DiffRenderer.render(
-                        prepared: [prepared], options: options, layout: .full, withHeaders: false)
+                        prepared: [prepared],
+                        options: options,
+                        layout: .full,
+                        withHeaders: false
+                    )
                     if !current {
                         // What the preparation ran before the text came first.
                         _ = DiffModel(
-                            oldText: pair.old, newText: pair.new, granularity: .word, language: .swift,
-                            tokenRanges: CodeTokenRanges())
+                            oldText: pair.old,
+                            newText: pair.new,
+                            granularity: .word,
+                            language: .swift,
+                            tokenRanges: CodeTokenRanges()
+                        )
                         let engine = LexicalHighlightEngine()
                         _ = DecorationFixtures.byLine(
-                            engine.highlight(utf8: Array(pair.old.utf8), language: .swift), text: pair.old,
-                            lines: prepared.model.oldLines)
+                            engine.highlight(utf8: Array(pair.old.utf8), language: .swift),
+                            text: pair.old,
+                            lines: prepared.model.oldLines
+                        )
                         _ = DecorationFixtures.byLine(
-                            engine.highlight(utf8: Array(pair.new.utf8), language: .swift), text: pair.new,
-                            lines: prepared.model.newLines)
+                            engine.highlight(utf8: Array(pair.new.utf8), language: .swift),
+                            text: pair.new,
+                            lines: prepared.model.newLines
+                        )
                     }
                     let elapsed = Self.cpu() - start
                     if round > 0, current { textFirst.append(elapsed) }
@@ -82,7 +94,8 @@ struct StagedRenderBenchmark {
             }
             print(
                 "BENCH staged \(name) stage 0 off the main actor: text first \(Self.summary(textFirst)) ms CPU, "
-                    + "before \(Self.summary(before)) ms CPU (budget \(budget))")
+                    + "before \(Self.summary(before)) ms CPU (budget \(budget))"
+            )
             #expect(Self.median(textFirst) <= budget)
             if name == "L", let text = rendered?.new { try await Self.measureMainActor(text, pair: pair) }
         }
@@ -95,7 +108,8 @@ struct StagedRenderBenchmark {
         }
         print(
             "BENCH staged L stage 2: \(prepared.model.structure.changes.count) changes' emphasis and moved lines "
-                + "\(Self.summary(marks)) ms CPU (budget 250)")
+                + "\(Self.summary(marks)) ms CPU (budget 250)"
+        )
         #expect(Self.median(marks) <= 250)
     }
 
@@ -116,7 +130,8 @@ struct StagedRenderBenchmark {
         // The first screen's fragments, which a window's viewport would validate: a detached view has no viewport.
         var screen: [NSTextLayoutFragment] = []
         _ = layoutManager.enumerateTextLayoutFragments(
-            from: layoutManager.documentRange.location, options: .ensuresLayout
+            from: layoutManager.documentRange.location,
+            options: .ensuresLayout
         ) { fragment in
             screen.append(fragment)
             return fragment.layoutFragmentFrame.maxY < 800
@@ -128,14 +143,17 @@ struct StagedRenderBenchmark {
             store.update(rendered: text, decorations: nil, view: textView)
             let start = threadCPU()
             store.update(
-                rendered: text, decorations: DecorationFixtures.colors(old: nil, new: layers, version: round + 1),
-                view: textView)
+                rendered: text,
+                decorations: DecorationFixtures.colors(old: nil, new: layers, version: round + 1),
+                view: textView
+            )
             for fragment in screen { store.validate(fragment, in: layoutManager) }
             if round > 0 { applied.append(threadCPU() - start) }
         }
         print(
             "BENCH staged L stage 0 on the main actor \(summary(shown)) ms CPU (budget 16); stage 1, one screen of "
-                + "the lexer's colour \(summary(applied)) ms CPU (budget 1)")
+                + "the lexer's colour \(summary(applied)) ms CPU (budget 1)"
+        )
         #expect(median(shown) <= 16)
         #expect(median(applied) <= 1)
     }

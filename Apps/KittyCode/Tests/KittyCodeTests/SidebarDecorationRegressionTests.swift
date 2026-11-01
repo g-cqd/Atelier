@@ -38,7 +38,11 @@ struct SidebarDecorationRegressionTests {
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
         sut.state.bufferManager.open(
-            filePath: "/note.txt", fileName: "note.txt", content: "hello", language: nil)
+            filePath: "/note.txt",
+            fileName: "note.txt",
+            content: "hello",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.bufferManager.activeBuffer?.gitLineDecorations = GitLineDecorations(markers: [
             0: .added
@@ -56,7 +60,11 @@ struct SidebarDecorationRegressionTests {
         let cols = 40
         let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
         sut.state.bufferManager.open(
-            filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
+            filePath: "/note.txt",
+            fileName: "note.txt",
+            content: "x",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
 
@@ -68,7 +76,8 @@ struct SidebarDecorationRegressionTests {
             let cell = sut.pipeline.buffer[0, col]
             #expect(
                 cell.style == sut.state.colorScheme.gitModified,
-                "M indicator should use gitModified style")
+                "M indicator should use gitModified style"
+            )
         }
     }
 
@@ -79,7 +88,11 @@ struct SidebarDecorationRegressionTests {
         sut.state.treePanelWidth = 16
         sut.state.activeSidebarPanel = .openDocuments
         sut.state.bufferManager.open(
-            filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
+            filePath: "/note.txt",
+            fileName: "note.txt",
+            content: "x",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
 
@@ -91,7 +104,8 @@ struct SidebarDecorationRegressionTests {
             let cell = sut.pipeline.buffer[0, col]
             #expect(
                 cell.style == sut.state.colorScheme.gitModified,
-                "M indicator should use gitModified style")
+                "M indicator should use gitModified style"
+            )
         }
     }
 
@@ -103,7 +117,10 @@ struct SidebarDecorationRegressionTests {
         sut.state.treeNodes = (0 ..< 20)
             .map { i in
                 FileNode(
-                    name: String(format: "file%02d.txt", i), path: "/file\(i).txt", isDirectory: false)
+                    name: String(format: "file%02d.txt", i),
+                    path: "/file\(i).txt",
+                    isDirectory: false
+                )
             }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
@@ -114,7 +131,10 @@ struct SidebarDecorationRegressionTests {
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         let layout = LayoutMetrics(
-            state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+            state: sut.state,
+            columns: sut.pipeline.columns,
+            rows: sut.pipeline.rows
+        )
         let topRow = layout.contentStartRow
         let treeStartCol = layout.activityBarWidth
         let treeEndCol = treeStartCol + layout.sidebarWidth

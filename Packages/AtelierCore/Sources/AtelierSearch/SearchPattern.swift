@@ -42,7 +42,8 @@ private final class SearchPatternCache: Sendable {
             text: query.text,
             isRegex: query.isRegex,
             isCaseSensitive: query.isCaseSensitive,
-            wholeWord: query.wholeWord)
+            wholeWord: query.wholeWord
+        )
         if let hit = storage.withLock({ $0.entries[key] }) {
             return hit
         }
@@ -71,7 +72,9 @@ private final class SearchPatternCache: Sendable {
                 let escaped = NSRegularExpression.escapedPattern(for: query.text)
                 guard
                     let regex = try? SearchRegex(
-                        pattern: "\\b\(escaped)\\b", caseSensitive: query.isCaseSensitive)
+                        pattern: "\\b\(escaped)\\b",
+                        caseSensitive: query.isCaseSensitive
+                    )
                 else { return nil }
                 return .regex(regex)
             }
@@ -82,7 +85,9 @@ private final class SearchPatternCache: Sendable {
         let patternText = query.wholeWord ? "\\b(?:\(query.text))\\b" : query.text
         guard
             let regex = try? SearchRegex(
-                pattern: patternText, caseSensitive: query.isCaseSensitive)
+                pattern: patternText,
+                caseSensitive: query.isCaseSensitive
+            )
         else { return nil }
         return .regex(regex)
     }

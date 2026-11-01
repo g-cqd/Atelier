@@ -18,7 +18,8 @@ struct JavaScriptExternalScannerTests {
             JavaScriptExternalScanner.externalNames == [
                 "_automatic_semicolon", "_template_chars", "_ternary_qmark", "html_comment", "||",
                 "escape_sequence", "regex_pattern", "jsx_text"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["javascript"] != nil)
     }
 

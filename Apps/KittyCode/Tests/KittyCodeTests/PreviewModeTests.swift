@@ -19,7 +19,11 @@ struct PreviewModeTests {
     func `openPreview creates a preview buffer`() {
         let manager = BufferManager()
         let idx = manager.openPreview(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello",
+            language: nil
+        )
         #expect(idx == 0)
         #expect(manager.count == 1)
         #expect(manager.activeBuffer?.isPreview == true)
@@ -53,7 +57,11 @@ struct PreviewModeTests {
         config.tabRibbon.persistence = .preview
         let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.bufferManager.openPreview(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         #expect(state.bufferManager.activeBuffer?.isPreview == true)
 

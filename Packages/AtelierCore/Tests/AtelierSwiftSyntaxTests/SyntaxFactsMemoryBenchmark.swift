@@ -54,7 +54,8 @@ struct SyntaxFactsMemoryBenchmark {
             "SyntaxFactsMemoryBenchmark: \(texts.count) files, \(source / 1024) KB of source (mean \(Int(meanFile)) B); "
                 + "facts hold \(actual / 1024) KB as the allocator reports, \(estimated / 1024) KB estimated "
                 + "(ratio \(Double(actual) / Double(estimated))); \(Int(perKilobyte)) B per KB of source; "
-                + "a full card list's 400 sides: \(Int(cardList) >> 20) MB")
+                + "a full card list's 400 sides: \(Int(cardList) >> 20) MB"
+        )
         withExtendedLifetime(kept) {}
         #expect(actual > 0)
     }

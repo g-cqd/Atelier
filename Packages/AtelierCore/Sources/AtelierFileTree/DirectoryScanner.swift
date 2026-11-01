@@ -38,8 +38,13 @@ public enum DirectoryScanner {
         var count = 0
         let root = withinRoot ?? path
         return scanDirectory(
-            path, root: root, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility,
-            entryCount: &count)
+            path,
+            root: root,
+            maxDepth: maxDepth,
+            maxEntries: maxEntries,
+            visibility: visibility,
+            entryCount: &count
+        )
     }
 
     /// Directories ``scanAsync(_:maxDepth:maxEntries:visibility:withinRoot:pool:)`` lists at once: a wide tree queues
@@ -69,8 +74,13 @@ public enum DirectoryScanner {
         pool: BlockingOffloadPool
     ) async throws -> [FileNode] {
         try await scanAsync(
-            path, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility, withinRoot: withinRoot,
-            offload: pool)
+            path,
+            maxDepth: maxDepth,
+            maxEntries: maxEntries,
+            visibility: visibility,
+            withinRoot: withinRoot,
+            offload: pool
+        )
     }
 
     /// ``scanAsync(_:maxDepth:maxEntries:visibility:withinRoot:pool:)`` over any ``BlockingOffload``; a test's spy
@@ -136,9 +146,13 @@ public enum DirectoryScanner {
             (listings[directory] ?? [])
                 .map { item in
                     FileNode(
-                        name: item.name, path: item.path, isDirectory: item.isDirectory,
-                        children: item.isDirectory ? nodes(in: item.path, listings: listings) : [])
-                })
+                        name: item.name,
+                        path: item.path,
+                        isDirectory: item.isDirectory,
+                        children: item.isDirectory ? nodes(in: item.path, listings: listings) : []
+                    )
+                }
+        )
     }
 
     // MARK: - Synchronous
@@ -179,7 +193,12 @@ public enum DirectoryScanner {
             }
             entries.append(
                 FileNode(
-                    name: item, path: fullPath, isDirectory: isDir.boolValue, children: children))
+                    name: item,
+                    path: fullPath,
+                    isDirectory: isDir.boolValue,
+                    children: children
+                )
+            )
         }
 
         return sortEntries(entries)

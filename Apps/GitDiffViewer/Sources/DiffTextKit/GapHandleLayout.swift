@@ -53,7 +53,11 @@ package enum GapHandleLayout {
         let separator: CGRect? =
             handles.count == 2
             ? CGRect(
-                x: band.minX, y: band.minY + separatorOffset(bandHeight: band.height), width: band.width, height: 1)
+                x: band.minX,
+                y: band.minY + separatorOffset(bandHeight: band.height),
+                width: band.width,
+                height: 1
+            )
             : nil
         let halves = handles.map { handle in
             // Two halves split the band at the separator's middle; a lone half has the whole band.
@@ -80,8 +84,11 @@ package enum GapHandleLayout {
             let gripY = band.minY + ((interior.lowerBound + interior.upperBound) / 2 - 0.5 - band.minY).rounded()
             let gripWidth = min(gripLength, max(halfWidth - 6, 2))
             return Half(
-                handle: handle, rect: rect,
-                grip: CGRect(x: rect.midX - gripWidth / 2, y: gripY, width: gripWidth, height: 1), hitArea: hitArea)
+                handle: handle,
+                rect: rect,
+                grip: CGRect(x: rect.midX - gripWidth / 2, y: gripY, width: gripWidth, height: 1),
+                hitArea: hitArea
+            )
         }
         return Handle(separator: separator, halves: halves)
     }

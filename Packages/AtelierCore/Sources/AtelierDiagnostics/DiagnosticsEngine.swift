@@ -36,8 +36,11 @@ public actor DiagnosticsEngine {
         public var contentIdentity: String?
 
         public init(
-            root: URL, files: [FileTarget], corpusFingerprint: String? = nil,
-            tools: [DiagnosticTool: ToolLocation] = [:], contentIdentity: String? = nil
+            root: URL,
+            files: [FileTarget],
+            corpusFingerprint: String? = nil,
+            tools: [DiagnosticTool: ToolLocation] = [:],
+            contentIdentity: String? = nil
         ) {
             self.root = root
             self.files = files
@@ -84,7 +87,7 @@ public actor DiagnosticsEngine {
 
     /// Identifies a cached run: the tool binary by path and modification date, so an updated tool never reuses a
     /// result, its configuration, its analysis root, and its payload.
-    private struct CacheKey: Hashable {
+    struct CacheKey: Hashable {
         let tool: DiagnosticTool
         let executablePath: String
         let executableModification: Date?
@@ -96,19 +99,19 @@ public actor DiagnosticsEngine {
     private let runner: any ProcessRunner
     private let discovery: ToolDiscovery
     private let clock: any Clock<Duration>
-    private let fileManager = FileManager.default
+    let fileManager = FileManager.default
 
     /// What a cached run concluded: its findings, or, for a request identified by content, that it skipped for
     /// want of a configuration file, which only the files could tell.
-    private enum CachedOutcome {
+    enum CachedOutcome {
         case findings([Finding])
         case skipped(String)
     }
 
-    private var cache: [CacheKey: CachedOutcome] = [:]
+    var cache: [CacheKey: CachedOutcome] = [:]
     /// Recency order for the cache's simple LRU eviction, oldest first.
-    private var cacheOrder: [CacheKey] = []
-    private let cacheCapacity = 64
+    var cacheOrder: [CacheKey] = []
+    let cacheCapacity = 64
 
     public init(runner: any ProcessRunner, discovery: ToolDiscovery, clock: any Clock<Duration> = ContinuousClock()) {
         self.runner = runner
@@ -140,9 +143,7 @@ public actor DiagnosticsEngine {
         if scope == .perFile || tool.scopesItsOwnReport {
             let onDisk = request.files.compactMap(\.url).map(\.path)
             if onDisk.isEmpty {
-                return ToolResult(
-                    tool: tool, findings: [], status: .skipped("sources not on disk"), duration: .zero,
-                    fromCache: false)
+                return Self.withoutFindings(tool, .skipped("sources not on disk"))
             }
             scopedPaths = onDisk
         } else {
@@ -160,8 +161,10 @@ public actor DiagnosticsEngine {
         }
 
         let spec = ProcessSpec(
-            executable: located.url, arguments: ToolCommand.analyze(tool, files: scopedPaths, root: request.root),
-            currentDirectory: request.root, standardInput: ToolCommand.standardInput(tool, files: scopedPaths),
+            executable: located.url,
+            arguments: ToolCommand.analyze(tool, files: scopedPaths, root: request.root),
+            currentDirectory: request.root,
+            standardInput: ToolCommand.standardInput(tool, files: scopedPaths),
             timeout: ToolCommand.timeout(tool)
         )
 
@@ -174,22 +177,16 @@ public actor DiagnosticsEngine {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            return ToolResult(
-                tool: tool, findings: [], status: .failed(String(describing: error)), duration: .zero,
-                fromCache: false)
+            return Self.withoutFindings(tool, .failed(String(describing: error)))
         }
         guard let output else {
-            return ToolResult(
-                tool: tool, findings: [], status: .failed("the run produced no result"), duration: duration,
-                fromCache: false)
+            return Self.withoutFindings(tool, .failed("the run produced no result"), duration: duration)
         }
 
         let exitStatus = output.terminationStatus
         let ranToCompletion = ToolCommand.acceptableExitCodes(tool).contains(exitStatus)
         guard ranToCompletion || ToolCommand.exitCodesAcceptedWithParsableOutput(tool).contains(exitStatus) else {
-            return ToolResult(
-                tool: tool, findings: [], status: .failed(Self.failureMessage(of: output)), duration: duration,
-                fromCache: false)
+            return Self.withoutFindings(tool, .failed(Self.failureMessage(of: output)), duration: duration)
         }
 
         let findings: [Finding]
@@ -198,14 +195,24 @@ public actor DiagnosticsEngine {
             case .failure(let failure):
                 // A run that stopped short explains itself on standard error, not in the output it failed to write.
                 let message = ranToCompletion ? failure.message : Self.failureMessage(of: output)
-                return ToolResult(
-                    tool: tool, findings: [], status: .failed(message), duration: duration, fromCache: false)
+                return Self.withoutFindings(tool, .failed(message), duration: duration)
         }
 
         store(.findings(findings), for: cacheKey)
         return ToolResult(
-            tool: tool, findings: filterFindings(findings, tool: tool, request: request), status: .succeeded,
-            duration: duration, fromCache: false)
+            tool: tool,
+            findings: filterFindings(findings, tool: tool, request: request),
+            status: .succeeded,
+            duration: duration,
+            fromCache: false
+        )
+    }
+
+    /// A result for `tool` that found nothing, because it did not run or did not finish: what happened is `status`.
+    private static func withoutFindings(_ tool: DiagnosticTool, _ status: RunStatus, duration: Duration = .zero)
+        -> ToolResult
+    {
+        ToolResult(tool: tool, findings: [], status: status, duration: duration, fromCache: false)
     }
 
     /// What ``run(_:request:)`` would answer for `tool` without running anything and without reading
@@ -232,9 +239,7 @@ public actor DiagnosticsEngine {
     /// located the tool, so a missing tool still shows as missing.
     private static func resultWithoutRunning(_ tool: DiagnosticTool, request: Request) -> ToolResult? {
         if tool.scope == .corpus, request.corpusFingerprint == nil {
-            return ToolResult(
-                tool: tool, findings: [], status: .skipped("requires a working tree"), duration: .zero,
-                fromCache: false)
+            return Self.withoutFindings(tool, .skipped("requires a working tree"))
         }
         guard request.files.isEmpty else { return nil }
         if tool.scope == .perFile, !tool.scopesItsOwnReport {
@@ -244,8 +249,7 @@ public actor DiagnosticsEngine {
     }
 
     private static func skippedForConfiguration(_ tool: DiagnosticTool) -> ToolResult {
-        ToolResult(
-            tool: tool, findings: [], status: .skipped(missingConfiguration(tool)), duration: .zero, fromCache: false)
+        Self.withoutFindings(tool, .skipped(missingConfiguration(tool)))
     }
 
     /// Why a tool that needs a configuration file did not run.
@@ -263,127 +267,14 @@ public actor DiagnosticsEngine {
         switch outcome {
             case .findings(let findings):
                 ToolResult(
-                    tool: tool, findings: filterFindings(findings, tool: tool, request: request), status: .succeeded,
-                    duration: .zero, fromCache: true)
+                    tool: tool,
+                    findings: filterFindings(findings, tool: tool, request: request),
+                    status: .succeeded,
+                    duration: .zero,
+                    fromCache: true
+                )
             case .skipped(let reason):
                 ToolResult(tool: tool, findings: [], status: .skipped(reason), duration: .zero, fromCache: true)
         }
-    }
-
-    // MARK: - Fingerprints
-
-    /// `tool`'s cache key for `request`, run with the binary at `locatedPath`.
-    /// A request identified by content is keyed by that identity, which covers its configuration files, in place of
-    /// its root and their dates: its root is a throwaway folder, and may not exist yet.
-    private func cacheKey(for tool: DiagnosticTool, request: Request, locatedPath: String) -> CacheKey {
-        CacheKey(
-            tool: tool, executablePath: locatedPath, executableModification: modificationDate(ofItemAt: locatedPath),
-            configFingerprint: request.contentIdentity == nil ? configFingerprint(for: tool, root: request.root) : "",
-            root: request.contentIdentity.map { "content:\($0)" } ?? canonicalRoot(request.root),
-            payloadFingerprint: payloadFingerprint(for: tool, request: request))
-    }
-
-    /// A fingerprint of `tool`'s configuration files at `root`: each configured name's size and modification date,
-    /// or `absent` when it does not exist. Any change to a config file busts the cache.
-    private func configFingerprint(for tool: DiagnosticTool, root: URL) -> String {
-        tool.configFileNames
-            .map { name in
-                let path = root.appending(path: name).path
-                guard let attributes = try? fileManager.attributesOfItem(atPath: path) else { return "\(name)=absent" }
-                let size = (attributes[.size] as? UInt64) ?? 0
-                let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-                return "\(name)=\(size):\(modified)"
-            }
-            .joined(separator: "|")
-    }
-
-    /// `root` as an absolute, symlink-free path, so every spelling of one directory shares its cache entries.
-    private func canonicalRoot(_ root: URL) -> String {
-        root.resolvingSymlinksInPath().standardizedFileURL.path
-    }
-
-    /// What is being analyzed: for a per-file tool the sorted `path=hash` pairs, so moving content between paths
-    /// still changes it; for a corpus tool the corpus fingerprint, with the sorted paths added for a tool that scopes
-    /// its own report, since its report depends on which files it was given.
-    private func payloadFingerprint(for tool: DiagnosticTool, request: Request) -> String {
-        switch tool.scope {
-            case .perFile:
-                return request.files.map { "\($0.path)=\($0.contentHash)" }.sorted().joined(separator: ",")
-            case .corpus:
-                let corpus = request.corpusFingerprint ?? ""
-                guard tool.scopesItsOwnReport else { return corpus }
-                let scopedFiles = request.files.map(\.path).sorted().joined(separator: ",")
-                return "\(corpus)|\(scopedFiles)"
-        }
-    }
-
-    /// Why a tool's output could not be decoded, carried as the message for ``RunStatus/failed(_:)``.
-    private struct ParseFailure: Error {
-        let message: String
-    }
-
-    /// What a failed run printed on standard error, or its exit status when it printed nothing there.
-    private static func failureMessage(of output: ProcessOutput) -> String {
-        output.errorText.isEmpty ? "exit \(output.terminationStatus)" : output.errorText
-    }
-
-    /// The tool's output decoded per its format on the concurrent executor, so a large log never holds the engine.
-    @concurrent
-    private static func parsedFindings(
-        from output: ProcessOutput, tool: DiagnosticTool, root: URL
-    ) async -> Result<[Finding], ParseFailure> {
-        switch tool.outputFormat {
-            case .sarif:
-                do {
-                    return .success(try SARIFDecoder.findings(from: output.standardOutput, tool: tool, root: root))
-                } catch {
-                    return .failure(ParseFailure(message: String(describing: error)))
-                }
-            case .xcodeTextOnStderr:
-                let stderrText = String(decoding: output.standardError, as: UTF8.self)
-                let stdoutText = String(decoding: output.standardOutput, as: UTF8.self)
-                return .success(
-                    XcodeTextParser.findings(from: stderrText, tool: tool, root: root)
-                        + XcodeTextParser.findings(from: stdoutText, tool: tool, root: root))
-        }
-    }
-
-    /// Narrows a corpus tool's findings to the requested files. A per-file tool only ran on those, and a tool that
-    /// ``DiagnosticTool/scopesItsOwnReport`` already scoped its report to them, so its findings are kept as written.
-    private func filterFindings(_ findings: [Finding], tool: DiagnosticTool, request: Request) -> [Finding] {
-        guard tool.scope == .corpus, !tool.scopesItsOwnReport else { return findings }
-        let paths = Set(request.files.map(\.path))
-        return findings.filter { paths.contains($0.file) }
-    }
-
-    private func modificationDate(ofItemAt path: String) -> Date? {
-        (try? fileManager.attributesOfItem(atPath: path))?[.modificationDate] as? Date
-    }
-
-    // MARK: - Cache
-
-    private func cachedOutcome(for key: CacheKey) -> CachedOutcome? {
-        guard let outcome = cache[key] else { return nil }
-        touch(key)
-        return outcome
-    }
-
-    private func store(_ outcome: CachedOutcome, for key: CacheKey) {
-        if cache[key] == nil {
-            cacheOrder.append(key)
-            if cacheOrder.count > cacheCapacity {
-                let evicted = cacheOrder.removeFirst()
-                cache.removeValue(forKey: evicted)
-            }
-        } else {
-            touch(key)
-        }
-        cache[key] = outcome
-    }
-
-    private func touch(_ key: CacheKey) {
-        guard let index = cacheOrder.firstIndex(of: key) else { return }
-        cacheOrder.remove(at: index)
-        cacheOrder.append(key)
     }
 }

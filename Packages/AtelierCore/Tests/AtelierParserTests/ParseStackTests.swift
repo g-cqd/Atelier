@@ -90,8 +90,13 @@ struct ParseStackTests {
         var commented = ParseStack(state: 0)
         commented.extras.append(
             ParseToken(
-                terminal: nil, type: "comment", byteRange: 0 ..< 2,
-                pointRange: .zero ..< Point(row: 0, column: 2), isExtra: true))
+                terminal: nil,
+                type: "comment",
+                byteRange: 0 ..< 2,
+                pointRange: .zero ..< Point(row: 0, column: 2),
+                isExtra: true
+            )
+        )
 
         let merged = ParseStack.mergingIdenticalHistories([plain, commented])
 

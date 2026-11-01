@@ -33,15 +33,27 @@ struct EditorRetiredStorageTests {
     /// screen as an open leaves them, with `retire` recorded from here on.
     private func makeState(preview: Bool = false) -> (state: EditorState, log: RetiredLog) {
         let state = EditorState(
-            rootPath: ".", config: KittyConfig(), taskProvider: TaskProviderSpy(), searchPool: EditorTestPool.shared)
+            rootPath: ".",
+            config: KittyConfig(),
+            taskProvider: TaskProviderSpy(),
+            searchPool: EditorTestPool.shared
+        )
         let content = Self.lines.joined(separator: "\n")
         if preview {
             state.config.tabRibbon.persistence = .preview
             state.bufferManager.openPreview(
-                filePath: "/project/file.swift", fileName: "file.swift", content: content, language: "swift")
+                filePath: "/project/file.swift",
+                fileName: "file.swift",
+                content: content,
+                language: "swift"
+            )
         } else {
             state.bufferManager.open(
-                filePath: "/project/file.swift", fileName: "file.swift", content: content, language: "swift")
+                filePath: "/project/file.swift",
+                fileName: "file.swift",
+                content: content,
+                language: "swift"
+            )
         }
         state.workspace.restoreStateFromActiveBuffer()
         state.highlightedLines = LineHighlights(Self.lines.map { [StyledSpan(text: $0, style: .default)] })
@@ -60,7 +72,8 @@ struct EditorRetiredStorageTests {
 
     /// Expects the closed buffer, then the highlights it shares, to be held by the retired storage alone.
     private func expectOnlyRetiredReferences(
-        buffer retiredBuffer: inout DocumentBuffer?, highlights: inout LineHighlights
+        buffer retiredBuffer: inout DocumentBuffer?,
+        highlights: inout LineHighlights
     ) throws {
         var buffer = try #require(retiredBuffer)
         retiredBuffer = nil
@@ -141,9 +154,13 @@ struct EditorRetiredStorageTests {
     private func openOtherFile(in state: EditorState) {
         state.saveStateToActiveBuffer()
         state.finishOpeningFile(
-            requestID: state.nextOpenRequestID(), path: "/project/other.swift", name: "other.swift",
-            loadedFile: LoadedFile(content: "let other = 1\n", lineEnding: .lineFeed), language: "swift",
-            modificationDate: nil)
+            requestID: state.nextOpenRequestID(),
+            path: "/project/other.swift",
+            name: "other.swift",
+            loadedFile: LoadedFile(content: "let other = 1\n", lineEnding: .lineFeed),
+            language: "swift",
+            modificationDate: nil
+        )
     }
 
     @Test

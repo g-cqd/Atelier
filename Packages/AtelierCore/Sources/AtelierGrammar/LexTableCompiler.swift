@@ -26,7 +26,9 @@ public enum LexTableCompiler: Sendable {
     // MARK: - Private
 
     private static func extractTokens(
-        from rule: Rule, keywords: inout [String: Int], tokenID: inout Int
+        from rule: Rule,
+        keywords: inout [String: Int],
+        tokenID: inout Int
     ) {
         switch rule {
             case .string(let value):
@@ -59,7 +61,9 @@ public enum LexTableCompiler: Sendable {
     private static func extractCommentPatterns(from grammar: GrammarDefinition) -> [CommentPattern] {
         var patterns: [CommentPattern] = []
         let ruleMap = Dictionary(
-            grammar.rules.map { ($0.name, $0.rule) }, uniquingKeysWith: { first, _ in first })
+            grammar.rules.map { ($0.name, $0.rule) },
+            uniquingKeysWith: { first, _ in first }
+        )
 
         for extra in grammar.extras {
             if case .symbol(let name) = extra, let rule = ruleMap[name] {
@@ -70,7 +74,8 @@ public enum LexTableCompiler: Sendable {
     }
 
     private static func extractCommentPatternsFromRule(
-        _ rule: Rule, into patterns: inout [CommentPattern]
+        _ rule: Rule,
+        into patterns: inout [CommentPattern]
     ) {
         switch rule {
             case .token(let content), .immediateToken(let content):
@@ -136,7 +141,8 @@ public enum LexTableCompiler: Sendable {
                         minCount > 1
                     {
                         result.append(
-                            contentsOf: repeatElement(Character(escaped), count: minCount - 1))
+                            contentsOf: repeatElement(Character(escaped), count: minCount - 1)
+                        )
                     }
                     while i < chars.count && chars[i] != "}" { i += 1 }
                     if i < chars.count { i += 1 }
@@ -212,14 +218,21 @@ extension LexTableCompiler {
         keywordTokens: [String: Int] = [:]
     ) throws(GrammarError) -> LexTable {
         try compile(
-            nfa: TokenNFA(tokens: tokens, separators: separators), tokens: tokens, validTokens: validTokens,
-            wordToken: wordToken, keywordTokens: keywordTokens)
+            nfa: TokenNFA(tokens: tokens, separators: separators),
+            tokens: tokens,
+            validTokens: validTokens,
+            wordToken: wordToken,
+            keywordTokens: keywordTokens
+        )
     }
 
     /// ``compile(tokens:separators:validTokens:)`` from the automaton of `tokens` already built.
     static func compile(
-        nfa: TokenNFA, tokens: [LexicalToken], validTokens: [[Int]],
-        wordToken: Int? = nil, keywordTokens: [String: Int] = [:]
+        nfa: TokenNFA,
+        tokens: [LexicalToken],
+        validTokens: [[Int]],
+        wordToken: Int? = nil,
+        keywordTokens: [String: Int] = [:]
     ) throws(GrammarError) -> LexTable {
         let priorities = tokens.map(\.priority)
         var builder = LexAutomatonBuilder(nfa: nfa, tokens: priorities)
@@ -237,7 +250,8 @@ extension LexTableCompiler {
             modeValidTokens.append(valid)
             modeEmptyTokens.append(preferredEmptyToken(in: valid, nfa: nfa, tokens: priorities, afterSeparator: false))
             modeEmptyAfterSeparator.append(
-                preferredEmptyToken(in: valid, nfa: nfa, tokens: priorities, afterSeparator: true))
+                preferredEmptyToken(in: valid, nfa: nfa, tokens: priorities, afterSeparator: true)
+            )
             return modeStarts.count - 1
         }
         var stateModes: [Int] = []
@@ -250,7 +264,8 @@ extension LexTableCompiler {
         // over everything up to the next quote.
         let startingLikeSeparators = nfa.tokensStartingLikeSeparators()
         let errorMode = try mode(
-            for: tokens.indices.filter { !tokens[$0].isImmediate && !startingLikeSeparators.contains($0) })
+            for: tokens.indices.filter { !tokens[$0].isImmediate && !startingLikeSeparators.contains($0) }
+        )
         return LexTable(
             tokens: tokens.map { LexToken(name: $0.name, isNamed: $0.isNamed, isExtra: $0.isExtra) },
             automaton: LexAutomaton(builder.states),
@@ -268,7 +283,10 @@ extension LexTableCompiler {
 
     /// The highest-priority nullable token that may start here, applying the same tie-breaks as the automaton.
     static func preferredEmptyToken(
-        in valid: [Int], nfa: TokenNFA, tokens: [LexTokenPriority], afterSeparator: Bool
+        in valid: [Int],
+        nfa: TokenNFA,
+        tokens: [LexTokenPriority],
+        afterSeparator: Bool
     ) -> Int? {
         var preferred: Int?
         for token in valid where nfa.nullableTokens.contains(token) && (!afterSeparator || !tokens[token].isImmediate) {

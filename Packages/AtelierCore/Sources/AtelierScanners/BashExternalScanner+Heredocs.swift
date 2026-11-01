@@ -79,7 +79,9 @@ extension BashExternalScanner {
     // Mirrors the upstream C function branch for branch, so the port stays comparable with it line by line.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     mutating func scanHeredocContent(
-        _ lexer: inout some ScannerLexer, middleType: TokenType, endType: TokenType
+        _ lexer: inout some ScannerLexer,
+        middleType: TokenType,
+        endType: TokenType
     ) -> Bool {
         var didAdvance = false
         let index = heredocs.count - 1

@@ -25,7 +25,9 @@ struct IgnoredFilesTests {
     @Test
     func `a repository folder lists what git sees, dotfiles included and ignored files apart`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-ignored-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-ignored-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root.appending(path: "src"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: root.appending(path: "build"), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -55,7 +57,8 @@ struct IgnoredFilesTests {
         let ignored = try await loader.ignoredEntries(of: .directory(root))
 
         #expect(
-            listed.map(\.relativePath).sorted() == [".gitignore", ".hidden.txt", "src/a.swift", "src/untracked.swift"])
+            listed.map(\.relativePath).sorted() == [".gitignore", ".hidden.txt", "src/a.swift", "src/untracked.swift"]
+        )
         #expect(listed.allSatisfy { $0.blobID != nil })
         #expect(ignored.map(\.relativePath) == ["build/out.txt"])
         #expect(ignored.allSatisfy { $0.blobID == nil })
@@ -64,7 +67,9 @@ struct IgnoredFilesTests {
     @Test
     func `a plain folder is scanned without hidden files and has nothing ignored`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-plain-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-plain-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try "hidden\n".write(to: root.appending(path: ".hidden.txt"), atomically: true, encoding: .utf8)

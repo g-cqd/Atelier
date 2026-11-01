@@ -149,8 +149,11 @@ private final class GutterFixture {
         layout = try Self.layout(expansions: expansions)
         scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: visibleHeight))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 200, height: visibleHeight), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: visibleHeight),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         gutter.style = .new
         show(layout)
         scrollView.documentView = gutter
@@ -166,10 +169,13 @@ private final class GutterFixture {
         new[39] = "let value40 = forty"
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain, layout: .changes(context: 2, expansions: expansions)
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain,
+                layout: .changes(context: 2, expansions: expansions)
             )
-            .new)
+            .new
+        )
         let layout = StaticTextLayout(rendered: rendered)
         layout.layOut(mode: .none, viewportWidth: 800)
         return layout
@@ -211,8 +217,16 @@ private final class GutterFixture {
         let location = gutter.convert(point, to: nil)
         guard
             let event = NSEvent.mouseEvent(
-                with: type, location: location, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
-                context: nil, eventNumber: 0, clickCount: clicks, pressure: 1)
+                with: type,
+                location: location,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: clicks,
+                pressure: 1
+            )
         else { return }
         switch type {
             case .leftMouseDown: gutter.mouseDown(with: event)
@@ -293,11 +307,23 @@ struct DiffGutterGapHandleTests {
         let fixture = try GutterFixture()
         let gap = try #require(fixture.middleGap())
         let finding = Finding(
-            tool: .swiftlint, ruleID: "rule", message: "message", file: "a.swift", line: 1, column: nil,
-            endLine: nil, endColumn: nil, severity: .warning)
+            tool: .swiftlint,
+            ruleID: "rule",
+            message: "message",
+            file: "a.swift",
+            line: 1,
+            column: nil,
+            endLine: nil,
+            endColumn: nil,
+            severity: .warning
+        )
         fixture.gutter.overlay = DiagnosticOverlay(rows: [
             gap.row - 1: DiagnosticOverlay.RowDiagnostics(
-                severity: .warning, count: 1, findings: [finding], squiggles: [])
+                severity: .warning,
+                count: 1,
+                findings: [finding],
+                squiggles: []
+            )
         ])
         let upper = try #require(fixture.halves(of: gap).first)
 
@@ -499,7 +525,9 @@ struct DiffGutterGapHandleTests {
         let upper = try #require(fixture.halves(of: gap).first)
         fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.rect.midY))
         fixture.mouse(
-            .leftMouseDragged, at: NSPoint(x: upper.rect.midX, y: fixture.gutter.visibleRect.maxY + 4))
+            .leftMouseDragged,
+            at: NSPoint(x: upper.rect.midX, y: fixture.gutter.visibleRect.maxY + 4)
+        )
 
         // Five rows open above the boundary, pushing it below what shows, as a hold does.
         fixture.show(try GutterFixture.layout(expansions: [gap.marker.key: GapExpansion(below: 5)]))
@@ -527,7 +555,11 @@ struct DiffGutterGapEdgeTests {
         gutter.rendered = rendered
         gutter.frame = NSRect(x: 0, y: 0, width: gutter.thickness, height: layout.height)
         let window = NSWindow(
-            contentRect: gutter.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            contentRect: gutter.frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView?.addSubview(gutter)
         return (gutter, layout, window)
     }
@@ -558,9 +590,13 @@ struct DiffGutterGapEdgeTests {
         let text = changedAtLineTen()
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: text.old, newText: text.new, language: .plain, layout: .changes(context: 1, expansions: [:])
+                oldText: text.old,
+                newText: text.new,
+                language: .plain,
+                layout: .changes(context: 1, expansions: [:])
             )
-            .new)
+            .new
+        )
         let (gutter, layout, _) = gutter(over: rendered, style: .new)
         defer { withExtendedLifetime(layout) {} }
         var bands: [Int: NSRect] = [:]
@@ -574,7 +610,8 @@ struct DiffGutterGapEdgeTests {
         #expect(bands[0] == NSRect(x: 0, y: 0, width: width, height: height))
         #expect(firstRowTop == height)
         #expect(
-            bands[rendered.rows.count] == NSRect(x: 0, y: gutter.bounds.maxY - height, width: width, height: height))
+            bands[rendered.rows.count] == NSRect(x: 0, y: gutter.bounds.maxY - height, width: width, height: height)
+        )
     }
 
     @Test
@@ -584,9 +621,13 @@ struct DiffGutterGapEdgeTests {
         let text = changedAtLineTen()
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: text.old, newText: text.new, language: .plain, layout: .changes(context: 1, expansions: [:])
+                oldText: text.old,
+                newText: text.new,
+                language: .plain,
+                layout: .changes(context: 1, expansions: [:])
             )
-            .new)
+            .new
+        )
         let (gutter, layout, _) = gutter(over: rendered, style: .new)
         defer { withExtendedLifetime(layout) {} }
         let x = handleMidX(in: gutter)
@@ -598,7 +639,8 @@ struct DiffGutterGapEdgeTests {
             at: [
                 NSPoint(x: 0.5, y: 40), NSPoint(x: x, y: 0.5), NSPoint(x: x, y: bottom - 0.5), NSPoint(x: x, y: 11),
                 NSPoint(x: x, y: bottom - 11)
-            ])
+            ]
+        )
 
         #expect(samples.count == 5)
         #expect(samples[1] != samples[0])
@@ -612,9 +654,13 @@ struct DiffGutterGapEdgeTests {
         let text = changedAtLineTen()
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: text.old, newText: text.new, language: .plain, layout: .changes(context: 1, expansions: [:])
+                oldText: text.old,
+                newText: text.new,
+                language: .plain,
+                layout: .changes(context: 1, expansions: [:])
             )
-            .new)
+            .new
+        )
         let (gutter, layout, _) = gutter(over: rendered, style: .new)
         defer { withExtendedLifetime(layout) {} }
         var bands: [NSRect] = []
@@ -623,7 +669,9 @@ struct DiffGutterGapEdgeTests {
 
         // At the gutter's leading edge, clear of the halves, across each band's middle and away from it.
         let samples = pixels(
-            of: gutter, at: bands.flatMap { [NSPoint(x: 0.5, y: $0.midY), NSPoint(x: 0.5, y: $0.minY + 2)] })
+            of: gutter,
+            at: bands.flatMap { [NSPoint(x: 0.5, y: $0.midY), NSPoint(x: 0.5, y: $0.minY + 2)] }
+        )
 
         #expect(samples.count == 4)
         #expect(samples[0] == samples[1])
@@ -657,7 +705,8 @@ struct DiffGutterGapEdgeTests {
                 NSPoint(x: 0.5, y: above.maxY + 3), NSPoint(x: x, y: above.minY + 3), NSPoint(x: x, y: below.maxY - 3),
                 NSPoint(x: 0.5, y: above.midY), NSPoint(x: 0.5, y: below.midY), NSPoint(x: x, y: above.maxY - 1.5),
                 NSPoint(x: x, y: below.minY + 1.5)
-            ])
+            ]
+        )
 
         #expect(samples.count == 7)
         #expect(samples[1 ... 4].allSatisfy { $0 == samples[0] })

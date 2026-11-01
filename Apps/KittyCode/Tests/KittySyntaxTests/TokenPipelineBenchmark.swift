@@ -54,7 +54,8 @@ struct TokenPipelineBenchmark {
                 flatChecksum = Self.checksum(
                     of: lines.map { line in
                         line.map { HighlightToken(byteRange: $0.range, role: $0.role, modifiers: $0.modifiers) }
-                    })
+                    }
+                )
             }
             if iteration >= Self.warmUps { flatSamples.append(elapsed) }
         }
@@ -71,9 +72,13 @@ struct TokenPipelineBenchmark {
         let grammar = try GrammarLoader.load(from: "\(resources)/Grammars/json/grammar.json")
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let query = try QueryParser.parse(
-            String(contentsOfFile: "\(resources)/Grammars/json/highlights.scm", encoding: .utf8))
+            String(contentsOfFile: "\(resources)/Grammars/json/highlights.scm", encoding: .utf8)
+        )
         let source = Self.jsonDocument(bytes: 40_000)
         let parseStart = ContinuousClock.now
         let tree = try parser.parse(source)
@@ -89,7 +94,8 @@ struct TokenPipelineBenchmark {
         }
         let captureCount = matches.reduce(0) { $0 + $1.captures.count }
         print(
-            "BENCH json matches \(matches.count) captures \(captureCount) checksum \(Self.checksum(of: matches))")
+            "BENCH json matches \(matches.count) captures \(captureCount) checksum \(Self.checksum(of: matches))"
+        )
         Self.report("json match", matchSamples)
 
         // What `buildTokens` did per capture before the roles were resolved once per query: two lookups by name.

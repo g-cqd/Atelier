@@ -89,7 +89,12 @@ struct SplitCardHeightTests {
         let lines = (1 ... 40).map { "let value\($0) = \($0)\n" }
         let changed = lines.enumerated().filter { $0.offset % 13 != 5 }.map(\.element).joined() + "let added = 0\n"
         let diff = DiffRenderer.render(
-            oldText: lines.joined(), newText: changed, language: .plain, lineHeightMultiple: 1.2, layout: layout)
+            oldText: lines.joined(),
+            newText: changed,
+            language: .plain,
+            lineHeightMultiple: 1.2,
+            layout: layout
+        )
         for side in try [#require(diff.old), #require(diff.new)] {
             #expect(side.rows.contains { $0.kind == .filler })
             let analytic = StaticTextLayout(rendered: side)
@@ -110,7 +115,8 @@ struct SplitCardHeightTests {
                 EmbeddedDiffTextView(layouts: sut.layouts, side: .old, gutter: .old, width: width, wrapMode: mode)
             } trailing: { width in
                 EmbeddedDiffTextView(layouts: sut.layouts, side: .new, gutter: .new, width: width, wrapMode: mode)
-            })
+            }
+        )
         host.sizingOptions = []
         let heights = [CGFloat.greatestFiniteMagnitude, 0, 10_000]
             .map {
@@ -130,7 +136,8 @@ struct SplitCardHeightTests {
                 EmbeddedDiffTextView(layouts: sut.layouts, side: .old, gutter: .old, width: width)
             } trailing: { width in
                 EmbeddedDiffTextView(layouts: sut.layouts, side: .new, gutter: .new, width: width)
-            })
+            }
+        )
         host.sizingOptions = []
         for proposed in [CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude), .zero] {
             let size = host.sizeThatFits(in: proposed)

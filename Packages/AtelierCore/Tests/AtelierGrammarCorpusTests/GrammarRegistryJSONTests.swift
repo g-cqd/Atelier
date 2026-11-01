@@ -100,7 +100,10 @@ struct GrammarRegistryJSONTests {
     func `bundled JSON parses a nested value without ERROR nodes`() throws {
         let compiled = try compiledJSONGrammar()
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let tree = try parser.parse(#"{"name":"value","items":[1,true,null]}"#)
         #expect(tree.root.type == "document")
         var pending = [tree.root]
@@ -114,7 +117,10 @@ struct GrammarRegistryJSONTests {
     func `bundled JSON parses without error nodes`() throws {
         let compiled = try compiledJSONGrammar()
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let tree = try parser.parse(#"{"name":"value","enabled":true,"count":3}"#)
         var pending = [tree.root]
         var errorCount = 0
@@ -128,7 +134,8 @@ struct GrammarRegistryJSONTests {
     private func compiledJSONGrammar() throws -> ParseTableCompiler.CompilationResult {
         let grammars = try GrammarCorpus.bundled().grammarsDirectory
         return try ParseTableCompiler.compile(
-            GrammarLoader.load(from: grammars.appending(path: "json/grammar.json").path))
+            GrammarLoader.load(from: grammars.appending(path: "json/grammar.json").path)
+        )
     }
 
     private func writeManifest(_ contents: Data) throws -> String {

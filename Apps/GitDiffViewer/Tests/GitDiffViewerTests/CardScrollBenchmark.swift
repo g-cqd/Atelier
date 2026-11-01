@@ -44,8 +44,11 @@ struct CardScrollBenchmark {
 
     // Serialized: the cards would otherwise share the main thread and time each other.
     @Test(
-        .serialized, .timeLimit(.minutes(20)), .enabled(if: environment["GDV_BENCH"] != nil),
-        arguments: cases)
+        .serialized,
+        .timeLimit(.minutes(20)),
+        .enabled(if: environment["GDV_BENCH"] != nil),
+        arguments: cases
+    )
     func `a scroll step deep in a long card, and a reveal there`(rows: Int, wrapsLines: Bool) async throws {
         let runs = Self.environment["GDV_BENCH_RUNS"].flatMap(Int.init) ?? 12
         let stepsPerRun = 10
@@ -123,8 +126,11 @@ struct CardScrollBenchmark {
                 + "first step of a round \(Self.summary(firstSteps)); "
                 + "reveal \(Self.summary(reveals)), step after a reveal \(Self.summary(stepsAfterReveal)); "
                 + String(
-                    format: "footprint %.1f MB, %.1f MB more than once the card showed", Self.footprint(),
-                    Self.footprint() - loadedFootprint))
+                    format: "footprint %.1f MB, %.1f MB more than once the card showed",
+                    Self.footprint(),
+                    Self.footprint() - loadedFootprint
+                )
+        )
     }
 
     /// Repeats `phase`, `step` or `reveal`, alone for GDV_BENCH_PROFILE_SECONDS, for a sampling profiler.
@@ -173,12 +179,16 @@ struct CardScrollBenchmark {
 
     /// Expects no misplaced row, naming the first few.
     private static func expectPlaced(
-        _ misplaced: [Int: CGFloat], _ when: String, sourceLocation: SourceLocation = #_sourceLocation
+        _ misplaced: [Int: CGFloat],
+        _ when: String,
+        sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let first = misplaced.sorted { $0.key < $1.key }.prefix(4).map { "row \($0.key) off by \($0.value)" }
         #expect(
-            misplaced.isEmpty, "\(misplaced.count) rows misplaced \(when): \(first.joined(separator: ", "))",
-            sourceLocation: sourceLocation)
+            misplaced.isEmpty,
+            "\(misplaced.count) rows misplaced \(when): \(first.joined(separator: ", "))",
+            sourceLocation: sourceLocation
+        )
     }
 
     /// The process's physical memory footprint, in megabytes.
@@ -205,7 +215,12 @@ struct CardScrollBenchmark {
         let sorted = samples.sorted()
         let pick = { (fraction: Double) in sorted[Int((Double(sorted.count - 1) * fraction).rounded())] }
         return String(
-            format: "median %.2f ms (p10 %.2f, p90 %.2f, n %d)", pick(0.5), pick(0.1), pick(0.9), sorted.count)
+            format: "median %.2f ms (p10 %.2f, p90 %.2f, n %d)",
+            pick(0.5),
+            pick(0.1),
+            pick(0.9),
+            sorted.count
+        )
     }
 }
 
@@ -216,8 +231,11 @@ private final class BenchCardList {
 
     init(model: DiffViewerModel) {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1_000, height: 800), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 1_000, height: 800),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: CombinedDiffView(model: model))
     }

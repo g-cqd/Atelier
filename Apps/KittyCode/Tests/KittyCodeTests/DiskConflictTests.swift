@@ -43,7 +43,11 @@ struct DiskConflictTests {
         config.keybindingMode = keybindingMode
         let taskProvider = TaskProviderSpy()
         let state = EditorState(
-            rootPath: root, config: config, taskProvider: taskProvider, searchPool: EditorTestPool.shared)
+            rootPath: root,
+            config: config,
+            taskProvider: taskProvider,
+            searchPool: EditorTestPool.shared
+        )
         state.openFilePath(path, name: "notes.txt")
         try await taskProvider.waitForAllTasks(timeout: .seconds(30))
         insertText("mine ", into: state)
@@ -59,7 +63,8 @@ struct DiskConflictTests {
         #expect(try conflict.fileText() == "theirs\n")
         #expect(
             conflict.state.statusMessage
-                == "notes.txt changed on disk: Ctrl+Shift+O overwrites it, Ctrl+Shift+R reloads it")
+                == "notes.txt changed on disk: Ctrl+Shift+O overwrites it, Ctrl+Shift+R reloads it"
+        )
         #expect(conflict.state.bufferManager.activeBuffer?.isDirty == true)
     }
 
@@ -78,7 +83,10 @@ struct DiskConflictTests {
         let conflict = try await makeConflict()
         defer { conflict.removeDirectory() }
         let pipeline = RenderPipeline(
-            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)), columns: 80, rows: 24)
+            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),
+            columns: 80,
+            rows: 24
+        )
 
         #expect(dispatchCommand(.forceSaveFile, state: conflict.state, pipeline: pipeline))
         #expect(try conflict.fileText() == "mine original\n")

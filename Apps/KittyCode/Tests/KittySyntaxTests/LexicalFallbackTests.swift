@@ -70,13 +70,24 @@ struct LexicalFallbackTests {
     @Test
     func `a theme style converts to a terminal style channel by channel`() {
         let style = ThemeStyle(
-            foreground: ThemeColor(red: 1, green: 0, blue: 0.5), background: ThemeColor(byteRed: 1, green: 2, blue: 3),
-            isBold: true, isItalic: true, isUnderlined: true, isStruckThrough: true)
+            foreground: ThemeColor(red: 1, green: 0, blue: 0.5),
+            background: ThemeColor(byteRed: 1, green: 2, blue: 3),
+            isBold: true,
+            isItalic: true,
+            isUnderlined: true,
+            isStruckThrough: true
+        )
         #expect(
             Style(style)
                 == Style(
-                    fg: .rgb(r: 255, g: 0, b: 128), bg: .rgb(r: 1, g: 2, b: 3), bold: true, italic: true,
-                    underline: .single, strikethrough: true))
+                    fg: .rgb(r: 255, g: 0, b: 128),
+                    bg: .rgb(r: 1, g: 2, b: 3),
+                    bold: true,
+                    italic: true,
+                    underline: .single,
+                    strikethrough: true
+                )
+        )
         #expect(Style(ThemeStyle()) == Style())
     }
 }

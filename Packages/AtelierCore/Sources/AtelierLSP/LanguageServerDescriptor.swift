@@ -19,8 +19,11 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
         public var openDocumentLimit: Int
 
         public init(
-            idleShutdown: Duration = .seconds(180), initializeTimeout: Duration = .seconds(2),
-            requestTimeout: Duration = .seconds(2), maximumRestarts: Int = 2, openDocumentLimit: Int = 32
+            idleShutdown: Duration = .seconds(180),
+            initializeTimeout: Duration = .seconds(2),
+            requestTimeout: Duration = .seconds(2),
+            maximumRestarts: Int = 2,
+            openDocumentLimit: Int = 32
         ) {
             self.idleShutdown = idleShutdown
             self.initializeTimeout = initializeTimeout
@@ -60,10 +63,18 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
     public let runtimeExecutableName: String?
 
     public init(
-        id: String, displayName: String, executableNames: [String], arguments: [String] = [],
-        languages: Set<Language>, rootMarkers: [String] = [], initializationOptions: JSONValue? = nil,
-        environmentName: String, searchesToolchain: Bool = false, homeRelativeDirectories: [String] = [],
-        tuning: SessionTuning = SessionTuning(), resolvesDocumentationPages: Bool = false,
+        id: String,
+        displayName: String,
+        executableNames: [String],
+        arguments: [String] = [],
+        languages: Set<Language>,
+        rootMarkers: [String] = [],
+        initializationOptions: JSONValue? = nil,
+        environmentName: String,
+        searchesToolchain: Bool = false,
+        homeRelativeDirectories: [String] = [],
+        tuning: SessionTuning = SessionTuning(),
+        resolvesDocumentationPages: Bool = false,
         runtimeExecutableName: String? = nil
     ) {
         self.id = id
@@ -85,15 +96,20 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
     /// `overridePrefix` + ``environmentName`` when a prefix is given.
     public func executableQuery(customPath: String?, overridePrefix: String?) -> ExecutableQuery {
         ExecutableQuery(
-            names: executableNames, overrideVariable: overridePrefix.map { $0 + environmentName },
-            customPath: customPath, searchesToolchain: searchesToolchain,
-            homeRelativeDirectories: homeRelativeDirectories)
+            names: executableNames,
+            overrideVariable: overridePrefix.map { $0 + environmentName },
+            customPath: customPath,
+            searchesToolchain: searchesToolchain,
+            homeRelativeDirectories: homeRelativeDirectories
+        )
     }
 
     /// The server's executable as `locator` finds it for ``executableQuery(customPath:overridePrefix:)``; nil when it
     /// is not installed.
     public func locate(
-        using locator: any ExecutableLocating, customPath: String?, overridePrefix: String?
+        using locator: any ExecutableLocating,
+        customPath: String?,
+        overridePrefix: String?
     ) async -> URL? {
         await locator.locateExecutable(executableQuery(customPath: customPath, overridePrefix: overridePrefix))
     }
@@ -104,7 +120,9 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
     /// next to `serverExecutable` first, where a version manager installs both, then as `locator` finds it; nil when
     /// neither finds it.
     public func sessionEnvironment(
-        serverExecutable: URL, locator: any ExecutableLocating, base: [String: String]
+        serverExecutable: URL,
+        locator: any ExecutableLocating,
+        base: [String: String]
     ) async -> [String: String]? {
         guard let runtimeExecutableName else { return nil }
         let sibling = serverExecutable.deletingLastPathComponent().appending(path: runtimeExecutableName)
@@ -112,8 +130,8 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
         if FileManager.default.isExecutableFile(atPath: sibling.path(percentEncoded: false)) {
             runtime = sibling
         } else if let located = await locator.locateExecutable(
-            ExecutableQuery(names: [runtimeExecutableName], homeRelativeDirectories: homeRelativeDirectories))
-        {
+            ExecutableQuery(names: [runtimeExecutableName], homeRelativeDirectories: homeRelativeDirectories)
+        ) {
             runtime = located
         } else {
             return nil
@@ -218,9 +236,15 @@ extension LanguageServerDescriptor {
     /// sourcekit-lsp, for Swift, from the toolchain; its hover sessions skip background indexing, which builds the
     /// project. Its root is the one the caller starts from, the repository's, as before the other servers came.
     public static let sourceKitLSP = LanguageServerDescriptor(
-        id: "sourcekit-lsp", displayName: "sourcekit-lsp", executableNames: ["sourcekit-lsp"], languages: [.swift],
-        initializationOptions: .object(["backgroundIndexing": .bool(false)]), environmentName: "SOURCEKIT_LSP",
-        searchesToolchain: true, resolvesDocumentationPages: true)
+        id: "sourcekit-lsp",
+        displayName: "sourcekit-lsp",
+        executableNames: ["sourcekit-lsp"],
+        languages: [.swift],
+        initializationOptions: .object(["backgroundIndexing": .bool(false)]),
+        environmentName: "SOURCEKIT_LSP",
+        searchesToolchain: true,
+        resolvesDocumentationPages: true
+    )
 
     /// Where the language toolchains install servers under the user's home, beyond the usual locations: npm's
     /// global prefix as its documentation sets it up, cargo's and `go install`'s.
@@ -229,32 +253,54 @@ extension LanguageServerDescriptor {
     /// typescript-language-server over stdio, for TypeScript and JavaScript; the nearest `tsconfig.json` wins over a
     /// nearer `package.json`.
     public static let typeScriptLanguageServer = LanguageServerDescriptor(
-        id: "typescript-language-server", displayName: "typescript-language-server",
-        executableNames: ["typescript-language-server"], arguments: ["--stdio"], languages: [.typescript, .javascript],
-        rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"], environmentName: "TYPESCRIPT_LANGUAGE_SERVER",
-        homeRelativeDirectories: userInstallDirectories, tuning: SessionTuning(initializeTimeout: .seconds(10)),
-        runtimeExecutableName: "node")
+        id: "typescript-language-server",
+        displayName: "typescript-language-server",
+        executableNames: ["typescript-language-server"],
+        arguments: ["--stdio"],
+        languages: [.typescript, .javascript],
+        rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"],
+        environmentName: "TYPESCRIPT_LANGUAGE_SERVER",
+        homeRelativeDirectories: userInstallDirectories,
+        tuning: SessionTuning(initializeTimeout: .seconds(10)),
+        runtimeExecutableName: "node"
+    )
 
     /// gopls, for Go; a `go.work` anywhere above wins over a nearer `go.mod`.
     public static let gopls = LanguageServerDescriptor(
-        id: "gopls", displayName: "gopls", executableNames: ["gopls"], languages: [.go],
-        rootMarkers: ["go.work", "go.mod"], environmentName: "GOPLS", homeRelativeDirectories: userInstallDirectories,
-        tuning: SessionTuning(initializeTimeout: .seconds(10)))
+        id: "gopls",
+        displayName: "gopls",
+        executableNames: ["gopls"],
+        languages: [.go],
+        rootMarkers: ["go.work", "go.mod"],
+        environmentName: "GOPLS",
+        homeRelativeDirectories: userInstallDirectories,
+        tuning: SessionTuning(initializeTimeout: .seconds(10))
+    )
 
     /// clangd, for C, C++ and Objective-C, from the toolchain; its hover sessions skip background indexing, which
     /// indexes the whole project. The nearest `compile_commands.json` wins over a nearer `.clangd`; without either, the
     /// root is the one the caller starts from, and clangd answers from its fallback flags, without the project's
     /// include paths and definitions.
     public static let clangd = LanguageServerDescriptor(
-        id: "clangd", displayName: "clangd", executableNames: ["clangd"], arguments: ["--background-index=false"],
-        languages: [.c, .cpp, .objectiveC], rootMarkers: ["compile_commands.json", ".clangd"],
-        environmentName: "CLANGD", searchesToolchain: true, tuning: SessionTuning(initializeTimeout: .seconds(10)))
+        id: "clangd",
+        displayName: "clangd",
+        executableNames: ["clangd"],
+        arguments: ["--background-index=false"],
+        languages: [.c, .cpp, .objectiveC],
+        rootMarkers: ["compile_commands.json", ".clangd"],
+        environmentName: "CLANGD",
+        searchesToolchain: true,
+        tuning: SessionTuning(initializeTimeout: .seconds(10))
+    )
 
     /// rust-analyzer, for Rust, from rustup's `~/.cargo/bin`, rooted at the nearest `Cargo.toml`. Its hover sessions
     /// neither build the project's build scripts and procedural macros nor prime the caches of every crate, which
     /// compile and index the project and its dependencies; `cargo check` never runs, since a hover saves nothing.
     public static let rustAnalyzer = LanguageServerDescriptor(
-        id: "rust-analyzer", displayName: "rust-analyzer", executableNames: ["rust-analyzer"], languages: [.rust],
+        id: "rust-analyzer",
+        displayName: "rust-analyzer",
+        executableNames: ["rust-analyzer"],
+        languages: [.rust],
         rootMarkers: ["Cargo.toml"],
         initializationOptions: .object([
             "cargo": .object(["buildScripts": .object(["enable": .bool(false)])]),
@@ -262,16 +308,24 @@ extension LanguageServerDescriptor {
             "cachePriming": .object(["enable": .bool(false)]),
             "checkOnSave": .bool(false)
         ]),
-        environmentName: "RUST_ANALYZER", homeRelativeDirectories: userInstallDirectories,
-        tuning: SessionTuning(initializeTimeout: .seconds(10)))
+        environmentName: "RUST_ANALYZER",
+        homeRelativeDirectories: userInstallDirectories,
+        tuning: SessionTuning(initializeTimeout: .seconds(10))
+    )
 
     /// basedpyright's language server over stdio, for Python; a `pyrightconfig.json` anywhere above wins over a
     /// nearer `pyproject.toml`. pip, pipx and uv install it in `~/.local/bin`, with the Node.js it runs on.
     public static let basedPyright = LanguageServerDescriptor(
-        id: "basedpyright", displayName: "basedpyright", executableNames: ["basedpyright-langserver"],
-        arguments: ["--stdio"], languages: [.python], rootMarkers: ["pyrightconfig.json", "pyproject.toml"],
-        environmentName: "BASEDPYRIGHT", homeRelativeDirectories: userInstallDirectories + [".local/bin"],
-        tuning: SessionTuning(initializeTimeout: .seconds(10)))
+        id: "basedpyright",
+        displayName: "basedpyright",
+        executableNames: ["basedpyright-langserver"],
+        arguments: ["--stdio"],
+        languages: [.python],
+        rootMarkers: ["pyrightconfig.json", "pyproject.toml"],
+        environmentName: "BASEDPYRIGHT",
+        homeRelativeDirectories: userInstallDirectories + [".local/bin"],
+        tuning: SessionTuning(initializeTimeout: .seconds(10))
+    )
 
     /// Every server hover knows, in no particular order: each language has one server at most.
     public static let all: [LanguageServerDescriptor] = [
@@ -280,7 +334,8 @@ extension LanguageServerDescriptor {
 
     /// The server among `servers` that answers for `language`; nil when none does.
     public static func serving(
-        _ language: Language, among servers: [LanguageServerDescriptor] = all
+        _ language: Language,
+        among servers: [LanguageServerDescriptor] = all
     ) -> LanguageServerDescriptor? {
         servers.first { $0.languages.contains(language) }
     }
@@ -292,14 +347,22 @@ extension LanguageServerSession.Configuration {
     /// A session of `descriptor`'s server, run from `serverExecutable` with `environment`, nil for the app's own, and
     /// with the server's arguments, options and tuning.
     public init(
-        descriptor: LanguageServerDescriptor, serverExecutable: URL, workspaceRoot: URL,
+        descriptor: LanguageServerDescriptor,
+        serverExecutable: URL,
+        workspaceRoot: URL,
         environment: [String: String]? = nil
     ) {
         self.init(
-            serverExecutable: serverExecutable, serverArguments: descriptor.arguments, workspaceRoot: workspaceRoot,
-            idleShutdown: descriptor.tuning.idleShutdown, initializeTimeout: descriptor.tuning.initializeTimeout,
-            requestTimeout: descriptor.tuning.requestTimeout, maximumRestarts: descriptor.tuning.maximumRestarts,
+            serverExecutable: serverExecutable,
+            serverArguments: descriptor.arguments,
+            workspaceRoot: workspaceRoot,
+            idleShutdown: descriptor.tuning.idleShutdown,
+            initializeTimeout: descriptor.tuning.initializeTimeout,
+            requestTimeout: descriptor.tuning.requestTimeout,
+            maximumRestarts: descriptor.tuning.maximumRestarts,
             openDocumentLimit: descriptor.tuning.openDocumentLimit,
-            initializationOptions: descriptor.initializationOptions, environment: environment)
+            initializationOptions: descriptor.initializationOptions,
+            environment: environment
+        )
     }
 }

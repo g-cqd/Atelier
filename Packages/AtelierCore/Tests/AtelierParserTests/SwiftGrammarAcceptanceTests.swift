@@ -17,8 +17,10 @@ struct SwiftGrammarAcceptanceTests {
         let grammar = try GrammarLoader.load(from: path)
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable,
-            productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("@Test\nclass Empty { }\n", externalScanner: SwiftExternalScanner())
 
@@ -32,8 +34,10 @@ struct SwiftGrammarAcceptanceTests {
         let grammar = try GrammarLoader.load(from: path)
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable,
-            productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let repository = URL(filePath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -64,7 +68,8 @@ struct SwiftGrammarAcceptanceTests {
             totalErrorBytes += counts.errorBytes
             print(
                 "SWIFT PARSE \(relative): \(counts.errors) ERROR nodes / \(counts.nodes) nodes, "
-                    + "\(counts.errorBytes) ERROR bytes / \(source.utf8.count) bytes in \(elapsed)")
+                    + "\(counts.errorBytes) ERROR bytes / \(source.utf8.count) bytes in \(elapsed)"
+            )
             if counts.errors > 0, seven.contains(relative) {
                 var pending = [tree.root]
                 while let node = pending.popLast() {
@@ -82,7 +87,8 @@ struct SwiftGrammarAcceptanceTests {
         }
         print(
             "SWIFT TOTAL: \(totalErrors) ERROR nodes / \(totalNodes) nodes, "
-                + "\(totalErrorBytes) ERROR bytes / \(totalBytes) bytes")
+                + "\(totalErrorBytes) ERROR bytes / \(totalBytes) bytes"
+        )
     }
 
     private func samplePaths(in repository: URL) throws -> [String] {
@@ -91,8 +97,9 @@ struct SwiftGrammarAcceptanceTests {
         var paths: [String] = []
         while let directory = pending.popLast() {
             for url in try FileManager.default.contentsOfDirectory(
-                at: directory, includingPropertiesForKeys: [.isDirectoryKey])
-            {
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey]
+            ) {
                 if try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true {
                     pending.append(url)
                 } else if url.pathExtension == "swift" {

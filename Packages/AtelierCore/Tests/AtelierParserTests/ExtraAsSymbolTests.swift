@@ -17,7 +17,8 @@ struct ExtraAsSymbolTests {
             ("item", .choice([.string("x"), .string("y")]))
         ],
         extras: [.pattern(#"\s"#), .symbol("comment")],
-        externals: [.symbol("comment")])
+        externals: [.symbol("comment")]
+    )
 
     @Test
     func `an extra the parse can take as a symbol separates two items`() throws {
@@ -39,7 +40,10 @@ struct ExtraAsSymbolTests {
     private static func parser() throws -> GLRParser {
         let compiled = try ParseTableCompiler.compile(grammar)
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 
     /// The types of the tree's tokens in order, extras and empty reductions left out.

@@ -18,7 +18,8 @@ struct DiagnosticsSidesTests {
     private static let tools: [DiagnosticTool: ToolLocation] = [.swiftlint: ToolLocation()]
     /// Every tool named, SwiftLint alone enabled: a tool the settings do not name runs.
     private static let onlySwiftLint = Dictionary(
-        uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) })
+        uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) }
+    )
     private static let debounce: Duration = .milliseconds(250)
     private let scratchDefaults = ScratchDefaults(tag: "sides")
 
@@ -26,18 +27,23 @@ struct DiagnosticsSidesTests {
         DiagnosticsSideTarget(
             content: .directory(root),
             files: files.map { .init(path: $0, contentHash: "h", url: root.appending(path: $0)) },
-            corpusFingerprint: "fp")
+            corpusFingerprint: "fp"
+        )
     }
 
     private static func ref(_ repository: URL, _ ref: String = "HEAD") -> DiagnosticsSideTarget {
         DiagnosticsSideTarget(
             content: .ref(repository: repository, ref: ref),
             files: [.init(path: "A.swift", contentHash: "h", url: nil)],
-            corpusFingerprint: "fp")
+            corpusFingerprint: "fp"
+        )
     }
 
     private static func plan(
-        _ sides: DiagnosticsSides, mode: AnalyzedSides, canExport: Bool = true, trusted: Bool = true
+        _ sides: DiagnosticsSides,
+        mode: AnalyzedSides,
+        canExport: Bool = true,
+        trusted: Bool = true
     ) -> DiagnosticsPlan {
         DiagnosticsPlan(sides: sides, mode: mode, tools: tools, canExport: canExport, isTrusted: { _ in trusted })
     }
@@ -47,7 +53,9 @@ struct DiagnosticsSidesTests {
     @Test
     func `the default mode plans the right side only`() {
         let plan = Self.plan(
-            .init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)), mode: .rightOnly)
+            .init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)),
+            mode: .rightOnly
+        )
 
         #expect(plan.runs.map(\.side) == [.right])
     }
@@ -55,7 +63,9 @@ struct DiagnosticsSidesTests {
     @Test
     func `left only plans the left side only`() {
         let plan = Self.plan(
-            .init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)), mode: .leftOnly)
+            .init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)),
+            mode: .leftOnly
+        )
 
         #expect(plan.runs.map(\.side) == [.left])
     }
@@ -84,7 +94,10 @@ struct DiagnosticsSidesTests {
     @Test
     func `a ref side is not planned in a repository the user does not trust, whatever the mode`() {
         let plan = Self.plan(
-            .init(left: Self.ref(Self.leftRoot), right: Self.folder(Self.rightRoot)), mode: .both, trusted: false)
+            .init(left: Self.ref(Self.leftRoot), right: Self.folder(Self.rightRoot)),
+            mode: .both,
+            trusted: false
+        )
 
         #expect(plan.runs.map(\.side) == [.right])
     }
@@ -117,7 +130,12 @@ struct DiagnosticsSidesTests {
         let clock = TestClock()
         let spy = TaskProviderSpy.tolerant()
         let model = DiagnosticsModel(
-            engine: runner, settings: settings, taskProvider: spy, clock: clock, debounce: Self.debounce)
+            engine: runner,
+            settings: settings,
+            taskProvider: spy,
+            clock: clock,
+            debounce: Self.debounce
+        )
         let exporter = RecordingExporter()
         model.treeExporter = exporter
         model.trust = RepositoryTrust(defaults: defaults)
@@ -142,7 +160,8 @@ struct DiagnosticsSidesTests {
     func `each side's findings stay on their own side`() async throws {
         let sut = try makeSUT(
             mode: .both,
-            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
+            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]]
+        )
 
         try await finishRun(of: sut) {
             sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
@@ -187,7 +206,9 @@ struct DiagnosticsSidesTests {
         let repository = try TrustedRepository()
         defer { repository.remove() }
         let sut = try makeSUT(
-            mode: .both, findings: [RecordingExporter.folder: [Self.finding(line: 3)], Self.rightRoot: []])
+            mode: .both,
+            findings: [RecordingExporter.folder: [Self.finding(line: 3)], Self.rightRoot: []]
+        )
         try await finishRun(of: sut) {
             sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
         }
@@ -220,7 +241,8 @@ struct DiagnosticsSidesTests {
     func `analyzing no side clears every finding at once`() async throws {
         let sut = try makeSUT(
             mode: .both,
-            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
+            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]]
+        )
         try await finishRun(of: sut) {
             sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
         }
@@ -236,7 +258,8 @@ struct DiagnosticsSidesTests {
     func `dropping the left side keeps the right side's findings`() async throws {
         let sut = try makeSUT(
             mode: .both,
-            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
+            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]]
+        )
         try await finishRun(of: sut) {
             sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
         }
@@ -266,8 +289,12 @@ struct DiagnosticsSidesTests {
         let runner = SideRecordingRunner(findingsByRoot: [:])
         let clock = TestClock()
         sut.diagnostics = DiagnosticsModel(
-            engine: runner, settings: sut.settings, taskProvider: harness.taskProvider, clock: clock,
-            debounce: Self.debounce)
+            engine: runner,
+            settings: sut.settings,
+            taskProvider: harness.taskProvider,
+            clock: clock,
+            debounce: Self.debounce
+        )
 
         let mark = clock.registrationMark()
         sut.updateAnalyzedSides()
@@ -279,11 +306,13 @@ struct DiagnosticsSidesTests {
         #expect(
             files[ModelTestHarness.leftURL] == [
                 .init(path: "A.swift", contentHash: "1", url: ModelTestHarness.leftURL.appending(path: "A.swift"))
-            ])
+            ]
+        )
         #expect(
             files[ModelTestHarness.rightURL] == [
                 .init(path: "A.swift", contentHash: "2", url: ModelTestHarness.rightURL.appending(path: "A.swift"))
-            ])
+            ]
+        )
     }
 
     @Test
@@ -299,7 +328,11 @@ struct DiagnosticsSidesTests {
         let clock = TestClock()
         sut.diagnostics = DiagnosticsModel(
             engine: SideRecordingRunner(findingsByRoot: [ModelTestHarness.leftURL: [Self.finding(line: 1)]]),
-            settings: sut.settings, taskProvider: harness.taskProvider, clock: clock, debounce: Self.debounce)
+            settings: sut.settings,
+            taskProvider: harness.taskProvider,
+            clock: clock,
+            debounce: Self.debounce
+        )
 
         let mark = clock.registrationMark()
         sut.updateAnalyzedSides()
@@ -329,7 +362,9 @@ private struct TrustedRepository {
 
     init() throws {
         root = FileManager.default.temporaryDirectory.appending(
-            path: "GitDiffViewerTests.trust.\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "GitDiffViewerTests.trust.\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
 
@@ -356,8 +391,12 @@ private actor SideRecordingRunner: DiagnosticsRunning {
     func run(_ tool: DiagnosticTool, request: DiagnosticsEngine.Request) async throws -> DiagnosticsEngine.ToolResult {
         requests.append(request)
         return DiagnosticsEngine.ToolResult(
-            tool: tool, findings: findingsByRoot[request.root] ?? [], status: .succeeded, duration: .zero,
-            fromCache: false)
+            tool: tool,
+            findings: findingsByRoot[request.root] ?? [],
+            status: .succeeded,
+            duration: .zero,
+            fromCache: false
+        )
     }
 }
 

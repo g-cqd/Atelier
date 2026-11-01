@@ -14,10 +14,16 @@ public protocol FileWatcherDelegate: AnyObject {
     func fileWatcherDidDetectExternalModification(bufferName: String)
     /// `replaced` is what the buffer let go of, for the delegate to free off the main actor.
     func fileWatcherDidReloadActiveBuffer(
-        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents)
+        buffer: DocumentBuffer,
+        content: String,
+        replaced: consuming DocumentBuffer.ReplacedContents
+    )
     /// `replaced` is what the buffer let go of, for the delegate to free off the main actor.
     func fileWatcherDidReloadInactiveBuffer(
-        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents)
+        buffer: DocumentBuffer,
+        content: String,
+        replaced: consuming DocumentBuffer.ReplacedContents
+    )
 }
 
 /// Keeps the open buffers in step with their files: the workspace's directory and every open file are watched, a
@@ -43,8 +49,11 @@ public final class FileWatcherIntegration {
     ///   - offloadFileRead: Runs the blocking read of a file that changed, on the app's `BlockingOffloadPool`.
     ///   - taskProvider: Runs the loop that reads the watcher's events.
     public init(
-        watcher: any FileWatching, workspace: WorkspaceSession, delegate: any FileWatcherDelegate,
-        offloadFileRead: @escaping BlockingFileRead, taskProvider: any TaskProvider = .default
+        watcher: any FileWatching,
+        workspace: WorkspaceSession,
+        delegate: any FileWatcherDelegate,
+        offloadFileRead: @escaping BlockingFileRead,
+        taskProvider: any TaskProvider = .default
     ) {
         self.watcher = watcher
         self.workspace = workspace
@@ -146,10 +155,16 @@ public final class FileWatcherIntegration {
         guard let delegate else { return }
         if isActive {
             delegate.fileWatcherDidReloadActiveBuffer(
-                buffer: buffer, content: loadedFile.content, replaced: consume replaced)
+                buffer: buffer,
+                content: loadedFile.content,
+                replaced: consume replaced
+            )
         } else {
             delegate.fileWatcherDidReloadInactiveBuffer(
-                buffer: buffer, content: loadedFile.content, replaced: consume replaced)
+                buffer: buffer,
+                content: loadedFile.content,
+                replaced: consume replaced
+            )
         }
     }
 
@@ -200,7 +215,9 @@ public final class WatchedFileMonitor {
     ///   - taskProvider: Runs the loop that reads the watcher's events.
     ///   - onChange: Runs on the main actor after each change to the file.
     public init(
-        path: String, watcher: any FileWatching, taskProvider: any TaskProvider = .default,
+        path: String,
+        watcher: any FileWatching,
+        taskProvider: any TaskProvider = .default,
         onChange: @escaping @MainActor () -> Void
     ) {
         self.path = path

@@ -64,7 +64,8 @@ struct CardListRefinementColourTests {
             lines.append(
                 index == changed
                     ? "    @Published var value\(index) = \(index) * 2"
-                    : "    @Published var value\(index) = \(index)")
+                    : "    @Published var value\(index) = \(index)"
+            )
             if index.isMultiple(of: 6) {
                 lines.append("    func handle\(index)() { value\(index) += 1 }")
             }
@@ -91,7 +92,9 @@ struct CardListRefinementColourTests {
                 FilePair(
                     path: newPath,
                     old: kind == 0 ? nil : SourceEntry(relativePath: oldPath, blobID: "o\(index)", size: 1),
-                    new: SourceEntry(relativePath: newPath, blobID: "n\(index)", size: 1)))
+                    new: SourceEntry(relativePath: newPath, blobID: "n\(index)", size: 1)
+                )
+            )
             if kind != 0 {
                 reader.blobContents["o\(index)"] = Self.viewModel(name, count: lines - 10, changedAt: 3)
                 left.append(SourceEntry(relativePath: oldPath, blobID: "o\(index)", size: 1))
@@ -109,13 +112,19 @@ struct CardListRefinementColourTests {
     ) {
         let taskProvider = TaskProviderSpy.tolerant()
         let sut = RenderPipeline(
-            preparer: DiffPreparer(reader: reader, taskProvider: taskProvider), taskProvider: taskProvider,
+            preparer: DiffPreparer(reader: reader, taskProvider: taskProvider),
+            taskProvider: taskProvider,
             options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(tiers: [LexicalTier()] + extraTiers, clock: ContinuousClock()))
+            decorator: DiffDecorator(tiers: [LexicalTier()] + extraTiers, clock: ContinuousClock())
+        )
         sut.render(
-            .cards(serveCards(count)), left: .directory(ModelTestHarness.leftURL),
-            right: .directory(ModelTestHarness.rightURL), granularity: .word, heuristics: DiffHeuristics(),
-            keepingPublished: false)
+            .cards(serveCards(count)),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         for card in sut.cards { sut.decorateDisplayed(card.rendered.id) }
         try await taskProvider.waitForAllTasks()
@@ -151,8 +160,11 @@ struct CardListRefinementColourTests {
             right.append(SourceEntry(relativePath: path, blobID: "n\(index)", size: 1))
             pairs.append(
                 FilePair(
-                    path: path, old: SourceEntry(relativePath: path, blobID: "o\(index)", size: 1),
-                    new: SourceEntry(relativePath: path, blobID: "n\(index)", size: 1)))
+                    path: path,
+                    old: SourceEntry(relativePath: path, blobID: "o\(index)", size: 1),
+                    new: SourceEntry(relativePath: path, blobID: "n\(index)", size: 1)
+                )
+            )
         }
         reader.entries[.directory(ModelTestHarness.leftURL)] = left
         reader.entries[.directory(ModelTestHarness.rightURL)] = right
@@ -166,13 +178,19 @@ struct CardListRefinementColourTests {
         let hanging = HangingTier(layer: .syntactic)
         let count = 24
         let sut = RenderPipeline(
-            preparer: DiffPreparer(reader: reader, taskProvider: taskProvider), taskProvider: taskProvider,
+            preparer: DiffPreparer(reader: reader, taskProvider: taskProvider),
+            taskProvider: taskProvider,
             options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(tiers: [LexicalTier(), hanging.tier], clock: clock))
+            decorator: DiffDecorator(tiers: [LexicalTier(), hanging.tier], clock: clock)
+        )
         sut.render(
-            .cards(serveModifiedCards(count)), left: .directory(ModelTestHarness.leftURL),
-            right: .directory(ModelTestHarness.rightURL), granularity: .word, heuristics: DiffHeuristics(),
-            keepingPublished: false)
+            .cards(serveModifiedCards(count)),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         for card in sut.cards { sut.decorateDisplayed(card.rendered.id) }
         // The lexer lands off the deadline's clock; the hanging tier's deadline, one per side, is the only sleeper.

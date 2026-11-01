@@ -57,7 +57,12 @@ package struct CommitScope: Sendable, Equatable {
     private let indexByPath: [String: Int]
 
     private init(
-        key: String, kind: Kind, left: ComparisonSource, right: ComparisonSource, files: [File], isSingleFile: Bool
+        key: String,
+        kind: Kind,
+        left: ComparisonSource,
+        right: ComparisonSource,
+        files: [File],
+        isSingleFile: Bool
     ) {
         var seen: Set<String> = []
         // A rename the net diff split into a deletion and an addition lists one change under two rows.
@@ -69,13 +74,19 @@ package struct CommitScope: Sendable, Equatable {
         self.files = unique
         self.isSingleFile = isSingleFile
         indexByPath = Dictionary(
-            unique.enumerated().map { ($1.pair.path, $0) }, uniquingKeysWith: { first, _ in first })
+            unique.enumerated().map { ($1.pair.path, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     /// A commit's own change to `rows`: its first parent on the left, the commit on the right, both read from the
     /// repository by the blob ids the listing recorded.
     package init(
-        key: String, commit: CommitGrouping.Commit, repository: URL, rows: [CommitGrouping.Row], isSingleFile: Bool
+        key: String,
+        commit: CommitGrouping.Commit,
+        repository: URL,
+        rows: [CommitGrouping.Row],
+        isSingleFile: Bool
     ) {
         // A root commit has no parent: every file of it is an addition, so its left side is never read.
         let parent = commit.parentIDs.first ?? commit.id
@@ -85,15 +96,25 @@ package struct CommitScope: Sendable, Equatable {
             }
         }
         self.init(
-            key: key, kind: .commit(commit), left: .gitRef(repository: repository, ref: parent),
-            right: .gitRef(repository: repository, ref: commit.id), files: files, isSingleFile: isSingleFile)
+            key: key,
+            kind: .commit(commit),
+            left: .gitRef(repository: repository, ref: parent),
+            right: .gitRef(repository: repository, ref: commit.id),
+            files: files,
+            isSingleFile: isSingleFile
+        )
     }
 
     /// The working tree's own change to `rows`: `head` on the left, the working tree on the right. A working-tree
     /// file's blob is the one its side's listing hashed, which `diff --raw` leaves out.
     package init(
-        key: String, head: String, repository: URL, workingTree: ComparisonSource, rows: [CommitGrouping.Row],
-        isSingleFile: Bool, workingTreeEntry: (String) -> SourceEntry?
+        key: String,
+        head: String,
+        repository: URL,
+        workingTree: ComparisonSource,
+        rows: [CommitGrouping.Row],
+        isSingleFile: Bool,
+        workingTreeEntry: (String) -> SourceEntry?
     ) {
         let files = rows.compactMap { row in
             row.change.map { change in
@@ -103,12 +124,18 @@ package struct CommitScope: Sendable, Equatable {
                         workingTreeEntry(change.path)
                             ?? SourceEntry(relativePath: change.path, blobID: change.newBlobID, size: 0)
                     },
-                    status: change.status)
+                    status: change.status
+                )
             }
         }
         self.init(
-            key: key, kind: .uncommitted(head: head), left: .gitRef(repository: repository, ref: head),
-            right: workingTree, files: files, isSingleFile: isSingleFile)
+            key: key,
+            kind: .uncommitted(head: head),
+            left: .gitRef(repository: repository, ref: head),
+            right: workingTree,
+            files: files,
+            isSingleFile: isSingleFile
+        )
     }
 
     /// The file the scope shows under `path`, the change's own path.

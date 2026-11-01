@@ -16,7 +16,11 @@ extension DiffViewerModel {
         makeWatcher: @escaping @Sendable () -> any WatchEventSource = { FileWatcher() }
     ) {
         let model = RepositoryFreshness(
-            taskProvider: taskProvider, isEnabled: settings.autoRefresh, clock: clock, makeWatcher: makeWatcher)
+            taskProvider: taskProvider,
+            isEnabled: settings.autoRefresh,
+            clock: clock,
+            makeWatcher: makeWatcher
+        )
         model.treeChangeFilter = { [weak self] paths in
             await self?.right.listingMayChange(at: paths) ?? false
         }

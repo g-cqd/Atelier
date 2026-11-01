@@ -28,7 +28,9 @@ final class TempTree: Sendable {
     /// Creates a subdirectory relative to `root`.
     func createDirectory(named name: String) throws {
         try FileManager.default.createDirectory(
-            atPath: directory.file(name), withIntermediateDirectories: true)
+            atPath: directory.file(name),
+            withIntermediateDirectories: true
+        )
     }
 
     deinit {

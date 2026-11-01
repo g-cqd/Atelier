@@ -11,7 +11,10 @@ import Testing
 private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
     let previous = state.activeBufferSnapshot()
     let mutation = TextOperations.deleteRange(
-        in: &state.textBuffer, at: &state.textCursor, selection: selection)
+        in: &state.textBuffer,
+        at: &state.textCursor,
+        selection: selection
+    )
     state.textDidChange(mutation, previousSnapshot: previous)
     state.clearSelection()
 }
@@ -134,7 +137,9 @@ struct WrapCacheIncrementalTests {
             sut.state,
             TextSelection(
                 anchor: TextPosition(row: 3, col: 0),
-                head: TextPosition(row: 4, col: 0)))
+                head: TextPosition(row: 4, col: 0)
+            )
+        )
 
         #expect(sut.state.wrapCache.lineWrapCounts.count == beforeCount - 1)
         #expect(sut.state.wrapCache.visualOffsets.count == beforeOffsetsCount - 1)
@@ -161,12 +166,15 @@ struct WrapCacheIncrementalTests {
             sut.state,
             TextSelection(
                 anchor: TextPosition(row: 2, col: 0),
-                head: TextPosition(row: 5, col: 0)))
+                head: TextPosition(row: 5, col: 0)
+            )
+        )
         insertText("merged", into: sut.state)
 
         #expect(
             sut.state.wrapCache.lineWrapCounts.count < beforeCount,
-            "deleting lines must shrink the wrap cache")
+            "deleting lines must shrink the wrap cache"
+        )
         // Counts match file line count.
         #expect(sut.state.wrapCache.lineWrapCounts.count == sut.state.fileLineCount)
 
@@ -190,12 +198,15 @@ struct WrapCacheIncrementalTests {
             sut.state,
             TextSelection(
                 anchor: TextPosition(row: 3, col: 0),
-                head: TextPosition(row: 4, col: 0)))
+                head: TextPosition(row: 4, col: 0)
+            )
+        )
         insertText("a\nb\nc\n", into: sut.state)
 
         #expect(
             sut.state.wrapCache.lineWrapCounts.count > beforeCount,
-            "inserting multiple lines must grow the wrap cache")
+            "inserting multiple lines must grow the wrap cache"
+        )
         #expect(sut.state.wrapCache.lineWrapCounts.count == sut.state.fileLineCount)
 
         let counts = sut.state.wrapCache.lineWrapCounts

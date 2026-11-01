@@ -41,7 +41,8 @@ extension GitClient {
     /// - Returns: What `body` returns.
     /// - Throws: ``GitError`` from git, an error from creating or writing the folder, or what `body` throws.
     public func withExportedTree<T: Sendable>(
-        _ tree: String, including includes: @Sendable (String) -> Bool,
+        _ tree: String,
+        including includes: @Sendable (String) -> Bool,
         _ body: @Sendable (URL) async throws -> T
     ) async throws -> T {
         let folder = try Self.makePrivateFolder()
@@ -60,7 +61,9 @@ extension GitClient {
     static let archiveBatchSize = 1_000
 
     private func export(
-        _ tree: String, including includes: @Sendable (String) -> Bool, into folder: URL
+        _ tree: String,
+        including includes: @Sendable (String) -> Bool,
+        into folder: URL
     ) async throws {
         let paths = Self.exportablePaths(try await self.tree(at: tree, isSupported: includes).map(\.relativePath))
         guard !paths.isEmpty else { return }
@@ -69,7 +72,8 @@ extension GitClient {
             let batch = paths[start ..< min(start + Self.archiveBatchSize, paths.count)]
             let archive = try await run(
                 configuration + ["archive", "--worktree-attributes", "--format=tar", try Self.checked(tree), "--"]
-                    + batch.map { ":(literal)\($0)" })
+                    + batch.map { ":(literal)\($0)" }
+            )
             try TarExtractor.extract(archive, into: folder)
         }
     }
@@ -233,7 +237,9 @@ enum TarExtractor {
             let record = data[(space + 1) ..< (index + length - 1)]
             if let equals = record.firstIndex(of: UInt8(ascii: "=")) {
                 records[String(decoding: record[..<equals], as: UTF8.self)] = String(
-                    decoding: record[(equals + 1)...], as: UTF8.self)
+                    decoding: record[(equals + 1)...],
+                    as: UTF8.self
+                )
             }
             index += length
         }
@@ -248,8 +254,10 @@ enum TarExtractor {
         else { throw Failure.unsafePath(path) }
         let file = components.reduce(folder) { $0.appending(path: $1) }
         try FileManager.default.createDirectory(
-            at: file.deletingLastPathComponent(), withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700])
+            at: file.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
         let descriptor = open(file.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
         guard descriptor >= 0 else {
             // Two paths that differ only in case land on one file on a case-insensitive volume; the first one stays.

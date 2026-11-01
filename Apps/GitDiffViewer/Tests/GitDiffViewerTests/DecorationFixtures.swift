@@ -11,23 +11,33 @@ enum DecorationFixtures {
     /// line's start: what a tier's update over those lines carries.
     static func byLine(_ tokens: [HighlightToken], text: String, lines: [Substring]) -> LineTokens {
         let request = TierRequest(
-            revision: revision(text, language: .swift), text: text,
-            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines), visibleLines: 0 ..< lines.count,
-            unit: .utf16)
+            revision: revision(text, language: .swift),
+            text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines),
+            visibleLines: 0 ..< lines.count,
+            unit: .utf16
+        )
         return request.lineTokens(tokens, lines: 0 ..< lines.count)
     }
 
     /// The layers a tier gives a side whose every line takes `tokens`, cut as ``byLine(_:text:lines:)`` cuts them.
     static func layers(
-        _ tokens: [HighlightToken], text: String, layer: HighlightLayer = .syntactic,
+        _ tokens: [HighlightToken],
+        text: String,
+        layer: HighlightLayer = .syntactic,
         over base: LayeredLineTokens? = nil
     ) -> LayeredLineTokens {
         let lines = DiffModel.lines(of: text)
         var layered = base ?? LayeredLineTokens(lineCount: lines.count)
         layered.apply(
             TierUpdate(
-                layer: layer, coverage: .complete, revision: revision(text, language: .swift),
-                lines: 0 ..< lines.count, tokens: byLine(tokens, text: text, lines: lines)))
+                layer: layer,
+                coverage: .complete,
+                revision: revision(text, language: .swift),
+                lines: 0 ..< lines.count,
+                tokens: byLine(tokens, text: text, lines: lines)
+            )
+        )
         return layered
     }
 
@@ -39,9 +49,12 @@ enum DecorationFixtures {
         let tier = LexicalTier()
         guard tier.supports(language) else { return layered }
         let request = TierRequest(
-            revision: revision(text, language: language), text: text,
-            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines), visibleLines: 0 ..< min(lines.count, 20),
-            unit: .utf16)
+            revision: revision(text, language: language),
+            text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines),
+            visibleLines: 0 ..< min(lines.count, 20),
+            unit: .utf16
+        )
         try? await tier.run(request) { layered.apply($0) }
         return layered
     }
@@ -63,9 +76,13 @@ enum DecorationFixtures {
                 let upper = min(start + token.range.upperBound, end)
                 guard upper > start + token.range.lowerBound else { continue }
                 result.addAttribute(
-                    .foregroundColor, value: rendered.palette.color(for: token.role),
+                    .foregroundColor,
+                    value: rendered.palette.color(for: token.role),
                     range: NSRange(
-                        location: start + token.range.lowerBound, length: upper - start - token.range.lowerBound))
+                        location: start + token.range.lowerBound,
+                        length: upper - start - token.range.lowerBound
+                    )
+                )
             }
         }
         let whole = NSRange(location: 0, length: rendered.attributed.length)
@@ -82,7 +99,9 @@ enum DecorationFixtures {
         -> [RenderedSide: NSAttributedString]
     {
         let decorations = colors(
-            old: await lexed(old, language: language), new: await lexed(new, language: language))
+            old: await lexed(old, language: language),
+            new: await lexed(new, language: language)
+        )
         var panes: [RenderedSide: NSAttributedString] = [:]
         for text in [diff.unified, diff.old, diff.new].compactMap(\.self) {
             panes[text.side] = painted(text, with: decorations)

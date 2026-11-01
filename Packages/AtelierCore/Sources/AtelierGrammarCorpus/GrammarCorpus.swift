@@ -28,7 +28,8 @@ public struct GrammarCorpus: Sendable, Equatable {
             // A macOS bundle keeps its resources in `Contents/Resources`; a flat one, at its root.
             for resources in [bundleURL.appending(path: "Contents/Resources", directoryHint: .isDirectory), bundleURL] {
                 let corpus = GrammarCorpus(
-                    grammarsDirectory: resources.appending(path: "Grammars", directoryHint: .isDirectory))
+                    grammarsDirectory: resources.appending(path: "Grammars", directoryHint: .isDirectory)
+                )
                 if FileManager.default.fileExists(atPath: corpus.manifestURL.path) {
                     return corpus
                 }

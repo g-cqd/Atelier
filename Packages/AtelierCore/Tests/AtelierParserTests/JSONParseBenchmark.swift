@@ -34,7 +34,8 @@ struct JSONParseBenchmark {
                 "JSON BENCH \(source.utf8.count) bytes: median \(Self.format(median)) ms, "
                     + "p10 \(Self.format(Self.percentile(samples, 0.1))) ms, "
                     + "p90 \(Self.format(Self.percentile(samples, 0.9))) ms, "
-                    + "\(Self.format(perKiB[size] ?? 0)) ms/KiB over \(runs) parses")
+                    + "\(Self.format(perKiB[size] ?? 0)) ms/KiB over \(runs) parses"
+            )
             #expect(source.utf8.count <= size)
         }
         // Printed, not asserted, as every timing here: linear growth keeps the cost per KiB flat, about 1x, where a

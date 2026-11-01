@@ -429,7 +429,9 @@ struct YAMLExternalScannerTests {
         #expect(
             !declined.scan(
                 &rejectedLexer,
-                validSymbols: Array(repeating: false, count: YAMLExternalScanner.externalNames.count)))
+                validSymbols: Array(repeating: false, count: YAMLExternalScanner.externalNames.count)
+            )
+        )
         var unchanged: [UInt8] = []
         declined.serialize(into: &unchanged)
         var before = YAMLExternalScanner()
@@ -596,7 +598,10 @@ struct YAMLExternalScannerTests {
         var lexer = StringScannerLexer("ordinary")
         #expect(
             !scanner.scan(
-                &lexer, validSymbols: Array(repeating: true, count: YAMLExternalScanner.externalNames.count)))
+                &lexer,
+                validSymbols: Array(repeating: true, count: YAMLExternalScanner.externalNames.count)
+            )
+        )
     }
 
     @Test

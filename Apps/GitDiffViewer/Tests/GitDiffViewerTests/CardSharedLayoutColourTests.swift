@@ -15,7 +15,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct CardSharedLayoutColourTests {
     private static let count = 600
     private static let tail = String(repeating: "long ", count: 32)
@@ -28,12 +29,19 @@ struct CardSharedLayoutColourTests {
     private static func diff(revealing expansions: [GapKey: GapExpansion] = [:]) -> RenderedDiff {
         let prepared = PreparedDiff(
             FileDiffInput(
-                title: "a.swift", oldText: old.joined(separator: "\n") + "\n",
-                newText: new.joined(separator: "\n") + "\n", language: .swift),
-            granularity: .word)
+                title: "a.swift",
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .swift
+            ),
+            granularity: .word
+        )
         return DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified]),
-            layout: .changes(context: 12, expansions: expansions), withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified]),
+            layout: .changes(context: 12, expansions: expansions),
+            withHeaders: false
+        )
     }
 
     @Test
@@ -42,7 +50,8 @@ struct CardSharedLayoutColourTests {
     {
         let decorations = DecorationFixtures.colors(
             old: await DecorationFixtures.lexed(Self.old.joined(separator: "\n") + "\n", language: .swift),
-            new: await DecorationFixtures.lexed(Self.new.joined(separator: "\n") + "\n", language: .swift))
+            new: await DecorationFixtures.lexed(Self.new.joined(separator: "\n") + "\n", language: .swift)
+        )
         let before = Self.diff()
         let shared = DecoratedCardInList(showing: before, decorations: decorations, sharesLayout: true)
         let own = DecoratedCardInList(showing: before, decorations: decorations, sharesLayout: false)
@@ -63,7 +72,9 @@ struct CardSharedLayoutColourTests {
     /// Expects `shared` to show rows its measure laid out, drawn byte for byte as `own` draws them, and in colour:
     /// unlike `plain`, which shows the same rows undecorated.
     private static func expectColoured(
-        _ shared: DecoratedCardInList, like own: DecoratedCardInList, unlike plain: DecoratedCardInList,
+        _ shared: DecoratedCardInList,
+        like own: DecoratedCardInList,
+        unlike plain: DecoratedCardInList,
         _ moment: String
     ) throws {
         let layout = try #require(shared.layouts.unified)
@@ -95,7 +106,8 @@ private final class DecoratedCardInList {
         self.decorations = decorations
         self.sharesLayout = sharesLayout
         body = NSHostingController(
-            rootView: Self.pane(rendered, decorations: decorations, sharesLayout: sharesLayout))
+            rootView: Self.pane(rendered, decorations: decorations, sharesLayout: sharesLayout)
+        )
         body.sizingOptions = []
         body.safeAreaRegions = []
         list = NSScrollView(frame: NSRect(x: 0, y: 0, width: Self.width, height: 300))
@@ -116,7 +128,10 @@ private final class DecoratedCardInList {
         StaticTextLayout.sharesLayoutWithView = sharesLayout
         defer { StaticTextLayout.sharesLayoutWithView = true }
         return EmbeddedDiffTextView(
-            layouts: CardLayouts(rendered: rendered), side: .unified, gutter: .dual, width: width,
+            layouts: CardLayouts(rendered: rendered),
+            side: .unified,
+            gutter: .dual,
+            width: width,
             wrapMode: .viewport
         )
         .decorated(with: decorations)

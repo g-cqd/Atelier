@@ -64,7 +64,8 @@ struct CommitGroupingBenchmark {
                 + "grouping \(Self.median(grouping)), sections \(Self.median(sections)), "
                 + "section comparison \(Self.median(comparing)), "
                 + "outline rebuild folded \(Self.median(folded.times)) (\(folded.rows) rows shown), "
-                + "unfolded \(Self.median(unfolded.times)) (\(unfolded.rows) rows shown)")
+                + "unfolded \(Self.median(unfolded.times)) (\(unfolded.rows) rows shown)"
+        )
     }
 
     @concurrent
@@ -78,16 +79,21 @@ struct CommitGroupingBenchmark {
         let paths = (0 ..< fileCount).map { "Sources/Module\($0 % 40)/File\($0).swift" }
         let comparison = Comparison(
             left: paths.map { SourceEntry(relativePath: $0, blobID: "old\($0)", size: 1) },
-            right: paths.map { SourceEntry(relativePath: $0, blobID: "new\($0)", size: 1) }, leftSource: nil,
-            rightSource: nil)
+            right: paths.map { SourceEntry(relativePath: $0, blobID: "new\($0)", size: 1) },
+            leftSource: nil,
+            rightSource: nil
+        )
         let commits = (0 ..< commitCount).reversed()
             .map { index in
                 GitCommitChanges(
-                    id: String(format: "%040x", index + 1), parentIDs: [String(format: "%040x", index)],
-                    authorName: "Tess", authorDate: Date(timeIntervalSince1970: TimeInterval(index)),
+                    id: String(format: "%040x", index + 1),
+                    parentIDs: [String(format: "%040x", index)],
+                    authorName: "Tess",
+                    authorDate: Date(timeIntervalSince1970: TimeInterval(index)),
                     subject: "Commit \(index)",
                     changes: (0 ..< filesPerCommit)
-                        .map { GitFileChange(status: .modified, path: paths[(index * 7 + $0 * 997) % fileCount]) })
+                        .map { GitFileChange(status: .modified, path: paths[(index * 7 + $0 * 997) % fileCount]) }
+                )
             }
         return (comparison, commits)
     }

@@ -52,8 +52,13 @@ public struct ThemeStyle: Sendable, Hashable {
     public var isStruckThrough = false
 
     public init(
-        foreground: ThemeColor? = nil, background: ThemeColor? = nil, font: FontDescriptor? = nil,
-        isBold: Bool = false, isItalic: Bool = false, isUnderlined: Bool = false, isStruckThrough: Bool = false
+        foreground: ThemeColor? = nil,
+        background: ThemeColor? = nil,
+        font: FontDescriptor? = nil,
+        isBold: Bool = false,
+        isItalic: Bool = false,
+        isUnderlined: Bool = false,
+        isStruckThrough: Bool = false
     ) {
         self.foreground = foreground
         self.background = background
@@ -79,8 +84,12 @@ public struct SyntaxTheme: Sendable, Hashable {
     public var roles: [HighlightRole: ThemeStyle]
 
     public init(
-        name: String = "", plainText: ThemeStyle = ThemeStyle(), background: ThemeColor? = nil,
-        selection: ThemeColor? = nil, font: FontDescriptor? = nil, lineHeightMultiple: Double? = nil,
+        name: String = "",
+        plainText: ThemeStyle = ThemeStyle(),
+        background: ThemeColor? = nil,
+        selection: ThemeColor? = nil,
+        font: FontDescriptor? = nil,
+        lineHeightMultiple: Double? = nil,
         roles: [HighlightRole: ThemeStyle] = [:]
     ) {
         self.name = name

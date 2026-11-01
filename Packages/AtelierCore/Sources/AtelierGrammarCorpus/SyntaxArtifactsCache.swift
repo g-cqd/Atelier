@@ -23,8 +23,13 @@ public struct SyntaxArtifacts: Sendable {
     public let grammarKey: String
 
     init(
-        parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule], query: Query,
-        needsExternalScanner: Bool, scannerType: (any GrammarExternalScanner.Type)?, grammarKey: String
+        parseTable: ParseTable,
+        lexTable: LexTable,
+        productions: [ProductionRule],
+        query: Query,
+        needsExternalScanner: Bool,
+        scannerType: (any GrammarExternalScanner.Type)?,
+        grammarKey: String
     ) {
         self.parseTable = parseTable
         self.lexTable = lexTable
@@ -123,7 +128,9 @@ public final class SyntaxArtifactsCache: Sendable {
     ///   - limits: How much of the tables the cache keeps; nil keeps every table it loads.
     ///   - onQueued: Called with a language whose load waits for another's to end; tests watch it.
     init(
-        registry: GrammarRegistry, grammarsDirectory: URL?, limits: Limits? = nil,
+        registry: GrammarRegistry,
+        grammarsDirectory: URL?,
+        limits: Limits? = nil,
         onQueued: @escaping @Sendable (String) -> Void
     ) {
         self.registry = registry
@@ -181,7 +188,8 @@ public final class SyntaxArtifactsCache: Sendable {
                 state.entries.compactMap { language, entry in
                     guard case .loaded = entry else { return nil }
                     return language
-                })
+                }
+            )
         }
     }
 
@@ -239,7 +247,8 @@ public final class SyntaxArtifactsCache: Sendable {
             switch outcome {
                 case .loaded(let loaded, let tableBytes):
                     state.entries[language] = .loaded(
-                        Loaded(artifacts: loaded, tableBytes: tableBytes, lastUse: state.uses, pins: pinning ? 1 : 0))
+                        Loaded(artifacts: loaded, tableBytes: tableBytes, lastUse: state.uses, pins: pinning ? 1 : 0)
+                    )
                     artifacts = loaded
                 case .oversized(let tableBytes):
                     state.entries[language] = .oversized(tableBytes: tableBytes)
@@ -308,6 +317,27 @@ public final class SyntaxArtifactsCache: Sendable {
         }
     }
 
+    /// The artifacts of a grammar that needs an external scanner none is bundled for: its query, and empty tables a session
+    /// never reads, flagged for capability reporting.
+    private static func withoutTables(query: Query, grammarKey: String) -> SyntaxArtifacts {
+        SyntaxArtifacts(
+            parseTable: ParseTable(
+                stateCount: 0,
+                symbols: [],
+                terminals: [],
+                nonTerminals: [],
+                actions: [],
+                gotos: []
+            ),
+            lexTable: LexTable(),
+            productions: [],
+            query: query,
+            needsExternalScanner: true,
+            scannerType: nil,
+            grammarKey: grammarKey
+        )
+    }
+
     /// Loads `language`'s artifacts: its query, its grammar and its tables, from the disk cache or, unless
     /// `cachedOnly`, compiled. With limits, tables whose disk cache file is larger than ``Limits/maxTableBytes`` are
     /// never decoded; tables compiled now are measured once stored, and dropped when too large.
@@ -347,18 +377,7 @@ public final class SyntaxArtifactsCache: Sendable {
         // (bash's especially) can take gigabytes: store empty tables and keep the flag for capability reporting.
         if needsExternals && scannerType == nil {
             if cachedOnly { return .unavailable }
-            let empty = SyntaxArtifacts(
-                parseTable: ParseTable(
-                    stateCount: 0, symbols: [], terminals: [], nonTerminals: [],
-                    actions: [], gotos: []),
-                lexTable: LexTable(),
-                productions: [],
-                query: query,
-                needsExternalScanner: true,
-                scannerType: nil,
-                grammarKey: grammarKey
-            )
-            return .loaded(empty, tableBytes: 0)
+            return .loaded(Self.withoutTables(query: query, grammarKey: grammarKey), tableBytes: 0)
         }
 
         if let limits, let stored = try? registry.cachedTableBytes(for: entry.name, grammarsPath: grammarsPath),

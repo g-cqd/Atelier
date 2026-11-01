@@ -35,8 +35,11 @@ extension DiffViewerModel {
         let generation = diagnosticsGeneration
         diagnosticsTask = taskProvider.task {
             let sides = await Self.diagnosticsSides(
-                changedPaths: changedPaths, comparison: comparison, left: (leftContent, leftEntries),
-                right: (rightContent, rightEntries))
+                changedPaths: changedPaths,
+                comparison: comparison,
+                left: (leftContent, leftEntries),
+                right: (rightContent, rightEntries)
+            )
             guard generation == diagnosticsGeneration else { return }
             diagnostics.comparisonChanged(sides)
         }
@@ -59,26 +62,35 @@ extension DiffViewerModel {
     /// fingerprint of the changeset, computed off the main actor.
     @concurrent
     private static func diagnosticsSides(
-        changedPaths: [String], comparison: Comparison,
+        changedPaths: [String],
+        comparison: Comparison,
         left: (content: DiagnosticsSideTarget.Content?, entries: [String: SourceEntry]),
         right: (content: DiagnosticsSideTarget.Content?, entries: [String: SourceEntry])
     ) async -> DiagnosticsSides {
         assert(!isOnMainThread(), "diagnosticsSides must run off the main actor")
         let rightPaths = changedPaths.map { comparison.counterpartPath(of: $0, in: .left) }
         let fingerprint = changesetFingerprint(
-            leftPaths: changedPaths, rightPaths: rightPaths, leftEntries: left.entries, rightEntries: right.entries)
+            leftPaths: changedPaths,
+            rightPaths: rightPaths,
+            leftEntries: left.entries,
+            rightEntries: right.entries
+        )
         return DiagnosticsSides(
             left: left.content.map {
                 target($0, paths: changedPaths, entries: left.entries, fingerprint: fingerprint)
             },
             right: right.content.map {
                 target($0, paths: rightPaths, entries: right.entries, fingerprint: fingerprint)
-            })
+            }
+        )
     }
 
     /// One side's target over the changed `paths` it holds that are Swift sources.
     nonisolated private static func target(
-        _ content: DiagnosticsSideTarget.Content, paths: [String], entries: [String: SourceEntry], fingerprint: String
+        _ content: DiagnosticsSideTarget.Content,
+        paths: [String],
+        entries: [String: SourceEntry],
+        fingerprint: String
     ) -> DiagnosticsSideTarget {
         let root: URL? = if case .directory(let root) = content { root } else { nil }
         let files = paths.filter { $0.hasSuffix(".swift") }
@@ -86,7 +98,10 @@ extension DiffViewerModel {
                 guard let entry = entries[path] else { return nil }
                 // A file too large to hash falls back to its size, enough to notice a length change.
                 return DiagnosticsEngine.FileTarget(
-                    path: path, contentHash: entry.blobID ?? "size:\(entry.size)", url: root?.appending(path: path))
+                    path: path,
+                    contentHash: entry.blobID ?? "size:\(entry.size)",
+                    url: root?.appending(path: path)
+                )
             }
         return DiagnosticsSideTarget(content: content, files: files, corpusFingerprint: fingerprint)
     }
@@ -94,7 +109,9 @@ extension DiffViewerModel {
     /// A hash of every changed path with both sides' content hashes, in a stable order: a change on either side,
     /// a configuration file included, makes another fingerprint.
     nonisolated private static func changesetFingerprint(
-        leftPaths: [String], rightPaths: [String], leftEntries: [String: SourceEntry],
+        leftPaths: [String],
+        rightPaths: [String],
+        leftEntries: [String: SourceEntry],
         rightEntries: [String: SourceEntry]
     ) -> String {
         let lines = zip(leftPaths, rightPaths)

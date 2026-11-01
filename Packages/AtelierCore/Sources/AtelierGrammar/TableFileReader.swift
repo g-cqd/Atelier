@@ -89,7 +89,8 @@ struct TableFileReader {
 
     /// A count, then that many elements read by `element`, each at least `minimumSize` bytes long.
     mutating func array<Element>(
-        minimumSize: Int, _ element: (inout TableFileReader) throws(TableFileError) -> Element
+        minimumSize: Int,
+        _ element: (inout TableFileReader) throws(TableFileError) -> Element
     ) throws(TableFileError) -> [Element] {
         let elementCount = try count(minimumSize: minimumSize)
         var elements: [Element] = []
@@ -146,7 +147,10 @@ extension TableFileReader {
             try reader.readProduction()
         }
         return ParseTableCompiler.CompilationResult(
-            parseTable: parseTable, lexTable: lexTable, productions: productions)
+            parseTable: parseTable,
+            lexTable: lexTable,
+            productions: productions
+        )
     }
 
     private mutating func readParseTable() throws(TableFileError) -> ParseTable {
@@ -182,9 +186,18 @@ extension TableFileReader {
             }
         }
         return ParseTable(
-            stateCount: stateCount, symbols: symbols, terminals: terminals, nonTerminals: nonTerminals,
-            actions: actions, gotos: gotos, externalNames: externalNames, externalSymbols: externalSymbols,
-            validExternals: validExternals, externalIsExtra: externalIsExtra, lostShifts: lostShifts)
+            stateCount: stateCount,
+            symbols: symbols,
+            terminals: terminals,
+            nonTerminals: nonTerminals,
+            actions: actions,
+            gotos: gotos,
+            externalNames: externalNames,
+            externalSymbols: externalSymbols,
+            validExternals: validExternals,
+            externalIsExtra: externalIsExtra,
+            lostShifts: lostShifts
+        )
     }
 
     private mutating func readActions() throws(TableFileError) -> ParseActionTable {
@@ -198,8 +211,12 @@ extension TableFileReader {
             try reader.action(nested: false)
         }
         let table = ParseActionTable(
-            columnCount: columnCount, rowCount: rowCount, rowOfState: rowOfState, cells: cells,
-            indirectActions: indirectActions)
+            columnCount: columnCount,
+            rowCount: rowCount,
+            rowOfState: rowOfState,
+            cells: cells,
+            indirectActions: indirectActions
+        )
         guard table.isWellFormed else { throw .malformed("an action cell or state row past the table") }
         return table
     }
@@ -222,7 +239,8 @@ extension TableFileReader {
                 return .conflict(
                     try array(minimumSize: 1) { (reader: inout Self) throws(TableFileError) in
                         try reader.action(nested: true)
-                    })
+                    }
+                )
             default:
                 throw .malformed("an unknown action, or a conflict within a conflict")
         }
@@ -236,8 +254,12 @@ extension TableFileReader {
         guard !overflow else { throw .truncated }
         let cells = try rawU32s(count: cellCount)
         let table = ParseGotoTable(
-            columnCount: columnCount, rowCount: rowCount, rowOfState: rowOfState, cells: cells,
-            indirectTargets: try ints())
+            columnCount: columnCount,
+            rowCount: rowCount,
+            rowOfState: rowOfState,
+            cells: cells,
+            indirectTargets: try ints()
+        )
         guard table.isWellFormed else { throw .malformed("a GOTO cell or state row past the table") }
         return table
     }
@@ -257,8 +279,13 @@ extension TableFileReader {
             guard aliases.updateValue(alias, forKey: step) == nil else { throw .malformed("an alias listed twice") }
         }
         return ProductionRule(
-            name: name, symbolCount: symbolCount, symbols: symbols, fields: fields, aliases: aliases,
-            dynamicPrecedence: try int())
+            name: name,
+            symbolCount: symbolCount,
+            symbols: symbols,
+            fields: fields,
+            aliases: aliases,
+            dynamicPrecedence: try int()
+        )
     }
 }
 
@@ -304,11 +331,21 @@ extension TableFileReader {
         }
         let modeSource: LexModeSource? = try bool() ? readModeSource() : nil
         return LexTable(
-            states: states, keywords: keywords, commentPatterns: commentPatterns, tokens: tokens,
-            automaton: automaton, modeStarts: modeStarts, stateModes: stateModes, errorMode: errorMode,
-            wordToken: wordToken, keywordTokens: keywordTokens, modeValidTokens: modeValidTokens,
-            modeEmptyTokens: modeEmptyTokens, modeEmptyAfterSeparator: modeEmptyAfterSeparator,
-            modeSource: modeSource)
+            states: states,
+            keywords: keywords,
+            commentPatterns: commentPatterns,
+            tokens: tokens,
+            automaton: automaton,
+            modeStarts: modeStarts,
+            stateModes: stateModes,
+            errorMode: errorMode,
+            wordToken: wordToken,
+            keywordTokens: keywordTokens,
+            modeValidTokens: modeValidTokens,
+            modeEmptyTokens: modeEmptyTokens,
+            modeEmptyAfterSeparator: modeEmptyAfterSeparator,
+            modeSource: modeSource
+        )
     }
 
     /// A map of names to integers; a name listed twice is malformed.
@@ -335,8 +372,12 @@ extension TableFileReader {
         let (boundCount, overflow) = Int(setStarts.last ?? 0).multipliedReportingOverflow(by: 2)
         guard !overflow else { throw .truncated }
         let automaton = LexAutomaton(
-            accepts: accepts, groupStarts: groupStarts, groups: groups, setStarts: setStarts,
-            bounds: try rawU32s(count: boundCount))
+            accepts: accepts,
+            groupStarts: groupStarts,
+            groups: groups,
+            setStarts: setStarts,
+            bounds: try rawU32s(count: boundCount)
+        )
         guard automaton.isWellFormed else { throw .malformed("a lexer group or set past the automaton") }
         return automaton
     }
@@ -353,8 +394,11 @@ extension TableFileReader {
                         throw .malformed("a token automaton's ranges out of order")
                     }
                     return .advance(
-                        characters, next: try reader.int(), precedence: try reader.int(),
-                        isSeparator: try reader.bool())
+                        characters,
+                        next: try reader.int(),
+                        precedence: try reader.int(),
+                        isSeparator: try reader.bool()
+                    )
                 case 1:
                     return .split(try reader.ints())
                 case 2:
@@ -370,11 +414,14 @@ extension TableFileReader {
         guard nullableTokens.count == nullable.count else { throw .malformed("a nullable token listed twice") }
         let priorities = try array(minimumSize: 17) { (reader: inout Self) throws(TableFileError) in
             LexTokenPriority(
-                completionPrecedence: try reader.int(), implicitPrecedence: try reader.int(),
-                isImmediate: try reader.bool())
+                completionPrecedence: try reader.int(),
+                implicitPrecedence: try reader.int(),
+                isImmediate: try reader.bool()
+            )
         }
         return LexModeSource(
             nfa: TokenNFA(states: states, owners: owners, starts: starts, nullableTokens: nullableTokens),
-            priorities: priorities)
+            priorities: priorities
+        )
     }
 }

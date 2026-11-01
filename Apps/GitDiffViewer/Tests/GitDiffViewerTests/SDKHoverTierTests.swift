@@ -26,9 +26,14 @@ private final class ResolutionSpy: Sendable {
         try? await gate.wait()
         let service = LanguageServerSession(
             configuration: LanguageServerSession.Configuration(
-                serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: probeDirectory))
+                serverExecutable: URL(filePath: "/usr/bin/false"),
+                workspaceRoot: probeDirectory
+            )
+        )
         return SDKHoverTier.Resolved(
-            provider: SDKDocumentationProvider(service: service), probeDirectory: probeDirectory)
+            provider: SDKDocumentationProvider(service: service),
+            probeDirectory: probeDirectory
+        )
     }
 
     deinit { try? FileManager.default.removeItem(at: probeDirectory) }
@@ -43,7 +48,8 @@ struct SDKHoverTierTests {
     /// The calls are tasks awaited within the failure bound, and the gate opens on every way out: a call waits on the
     /// resolution, which waits on the gate, so an `async let` call would be awaited forever once `awaitingEntry` threw.
     private func twoConcurrentFirstCalls(
-        _ spy: ResolutionSpy, awaitingEntry: @Sendable () async throws -> Void
+        _ spy: ResolutionSpy,
+        awaitingEntry: @Sendable () async throws -> Void
     ) async throws -> (first: SDKDocumentationProvider?, second: SDKDocumentationProvider?) {
         let tier = SDKHoverTier(taskProvider: TaskProviderSpy.tolerant()) { await spy.resolve() }
         defer { spy.gate.open() }

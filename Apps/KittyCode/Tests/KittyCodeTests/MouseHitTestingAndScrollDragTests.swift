@@ -66,7 +66,8 @@ struct MouseHitTestingAndScrollDragTests {
                 == TextSelection(
                     anchor: TextPosition(row: 0, col: 6),
                     head: TextPosition(row: 0, col: 10)
-                ))
+                )
+        )
     }
 
     @Test

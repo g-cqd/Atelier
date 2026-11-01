@@ -18,7 +18,10 @@ extension DiffViewerModel {
     /// Reads the repository and both sides' listings, each indexed as it lands, all off the main actor, which only
     /// installs the result. `threadProbe` runs as the prologue starts and as each side's index is built.
     nonisolated static func loadSides(
-        in url: URL, leftRef: String, rightRef: String?, reader: any SourceReading,
+        in url: URL,
+        leftRef: String,
+        rightRef: String?,
+        reader: any SourceReading,
         threadProbe: (@Sendable () -> Void)? = nil
     ) async
         -> LoadedSides?
@@ -32,8 +35,13 @@ extension DiffViewerModel {
         async let rightListing = SideState.listing(of: rightSource, reader: reader, threadProbe: threadProbe)
         async let rightBadgeStates = SideState.readBadgeStates(of: rightSource, reader: reader)
         let loaded = LoadedSides(
-            info: info, left: leftSource, right: rightSource, leftListing: try? await leftListing,
-            rightListing: try? await rightListing, rightBadgeStates: await rightBadgeStates)
+            info: info,
+            left: leftSource,
+            right: rightSource,
+            leftListing: try? await leftListing,
+            rightListing: try? await rightListing,
+            rightBadgeStates: await rightBadgeStates
+        )
         PhaseTrace.log("prologue loaded")
         return loaded
     }

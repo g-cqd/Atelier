@@ -20,7 +20,9 @@ struct DiagnosticsEngineTests {
     /// An executable file at `url` for discovery to find; the fake runner never spawns it.
     static func makeExecutable(at url: URL) throws {
         try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try "#!/bin/sh\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
@@ -35,11 +37,16 @@ struct DiagnosticsEngineTests {
     }
 
     static func request(
-        root: URL, files: [DiagnosticsEngine.FileTarget], corpusFingerprint: String? = nil,
-        tool: DiagnosticTool, customPath: String
+        root: URL,
+        files: [DiagnosticsEngine.FileTarget],
+        corpusFingerprint: String? = nil,
+        tool: DiagnosticTool,
+        customPath: String
     ) -> DiagnosticsEngine.Request {
         DiagnosticsEngine.Request(
-            root: root, files: files, corpusFingerprint: corpusFingerprint,
+            root: root,
+            files: files,
+            corpusFingerprint: corpusFingerprint,
             tools: [tool: ToolLocation(customPath: customPath)]
         )
     }
@@ -56,9 +63,17 @@ struct DiagnosticsEngineTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "hash-1",
+            url: root.appending(path: "A.swift")
+        )
         let request = Self.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: .swiftlint,
+            customPath: executable.path
+        )
 
         let first = try await engine.run(.swiftlint, request: request)
         let second = try await engine.run(.swiftlint, request: request)
@@ -88,14 +103,20 @@ struct DiagnosticsEngineTests {
         let first = try await engine.run(
             .arcleak,
             request: Self.request(
-                root: root, files: [DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "hash-1", url: url)],
-                tool: .arcleak, customPath: executable.path)
+                root: root,
+                files: [DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "hash-1", url: url)],
+                tool: .arcleak,
+                customPath: executable.path
+            )
         )
         let second = try await engine.run(
             .arcleak,
             request: Self.request(
-                root: root, files: [DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "hash-2", url: url)],
-                tool: .arcleak, customPath: executable.path)
+                root: root,
+                files: [DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "hash-2", url: url)],
+                tool: .arcleak,
+                customPath: executable.path
+            )
         )
 
         #expect(!first.fromCache)
@@ -116,9 +137,17 @@ struct DiagnosticsEngineTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "hash-1",
+            url: root.appending(path: "A.swift")
+        )
         let request = Self.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: .swiftlint,
+            customPath: executable.path
+        )
 
         let configURL = root.appending(path: ".swiftlint.yml")
         try "one".write(to: configURL, atomically: true, encoding: .utf8)
@@ -162,7 +191,12 @@ struct DiagnosticsEngineTests {
         let full = try await engine.run(
             .swiftlint,
             request: Self.request(
-                root: root, files: both, corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+                root: root,
+                files: both,
+                corpusFingerprint: "fp-1",
+                tool: .swiftlint,
+                customPath: executable.path
+            )
         )
         #expect(full.findings.count == 2)
         #expect(!full.fromCache)
@@ -170,7 +204,12 @@ struct DiagnosticsEngineTests {
         let onlyA = try await engine.run(
             .swiftlint,
             request: Self.request(
-                root: root, files: [both[0]], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+                root: root,
+                files: [both[0]],
+                corpusFingerprint: "fp-1",
+                tool: .swiftlint,
+                customPath: executable.path
+            )
         )
         #expect(onlyA.fromCache)
         #expect(onlyA.findings.map(\.file) == ["A.swift"])
@@ -184,14 +223,21 @@ struct DiagnosticsEngineTests {
         let root = URL(filePath: temp.file("root"))
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: [:])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: [:]
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
         // dolly is not a real, installed tool, so no rung of discovery's search finds it.
         let request = DiagnosticsEngine.Request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tools: [:])
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tools: [:]
+        )
         let result = try await engine.run(.dolly, request: request)
         #expect(result.status == .toolMissing)
         #expect(result.findings.isEmpty)
@@ -231,7 +277,12 @@ struct DiagnosticsEngineTests {
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
         let request = Self.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: .swiftlint,
+            customPath: executable.path
+        )
         let result = try await engine.run(.swiftlint, request: request)
         guard case .failed = result.status else {
             Issue.record("expected .failed, got \(result.status)")
@@ -251,7 +302,12 @@ struct DiagnosticsEngineTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let request = Self.request(
-            root: root, files: [], corpusFingerprint: nil, tool: .dolly, customPath: executable.path)
+            root: root,
+            files: [],
+            corpusFingerprint: nil,
+            tool: .dolly,
+            customPath: executable.path
+        )
         let result = try await engine.run(.dolly, request: request)
         #expect(result.status == .skipped("requires a working tree"))
         #expect(runner.specs.isEmpty)
@@ -317,7 +373,12 @@ struct DiagnosticsEngineTests {
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
         let request = Self.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: .swiftlint,
+            customPath: executable.path
+        )
 
         let task = Task {
             try await engine.run(.swiftlint, request: request)

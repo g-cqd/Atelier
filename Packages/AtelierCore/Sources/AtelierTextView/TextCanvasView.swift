@@ -209,7 +209,11 @@ public final class TextCanvasView: NSView {
         guard let clipView = enclosingScrollView?.contentView else { return }
         clipView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
-            self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: clipView)
+            self,
+            selector: #selector(scrolled),
+            name: NSView.boundsDidChangeNotification,
+            object: clipView
+        )
     }
 
     @objc private func scrolled() {
@@ -239,7 +243,9 @@ public final class TextCanvasView: NSView {
         guard
             let geometry =
                 try? TextTypesetter.layoutSynchronously(
-                    row ..< row.advanced(by: 1), of: text, configuration: configuration
+                    row ..< row.advanced(by: 1),
+                    of: text,
+                    configuration: configuration
                 )
                 .first
         else { return RowGeometry(height: Float(configuration.resolvedLineHeight), lines: []) }
@@ -324,9 +330,14 @@ public final class TextCanvasView: NSView {
         pendingTasks[index] = Task { [weak self] in
             guard
                 let tile = try? await TextTypesetter.render(
-                    RowIndex(rows.lowerBound) ..< RowIndex(rows.upperBound), of: snapshot,
-                    decorations: decorationsSnapshot, configuration: snapshotConfiguration,
-                    appearance: snapshotAppearance, colorSpace: colorSpace, scale: scale)
+                    RowIndex(rows.lowerBound) ..< RowIndex(rows.upperBound),
+                    of: snapshot,
+                    decorations: decorationsSnapshot,
+                    configuration: snapshotConfiguration,
+                    appearance: snapshotAppearance,
+                    colorSpace: colorSpace,
+                    scale: scale
+                )
             else { return }
             self?.apply(tile: tile, tileIndex: index, generation: currentGeneration)
         }

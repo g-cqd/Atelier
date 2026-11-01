@@ -42,7 +42,10 @@ package enum PaneSplit {
 
     /// The ratio a drag of the divider `translation` points towards the new pane gives, from `start`, clamped.
     package static func ratio(
-        draggingFrom start: Double, by translation: CGFloat, length: CGFloat, covered: CGFloat = 0
+        draggingFrom start: Double,
+        by translation: CGFloat,
+        length: CGFloat,
+        covered: CGFloat = 0
     ) -> Double {
         let shared = sharedLength(of: length, covered: covered)
         guard shared > 0, translation.isFinite else { return clamped(start, length: length, covered: covered) }

@@ -11,8 +11,10 @@ import Testing
 /// Joins NUL-terminated `status --porcelain=v2 -z` records the way git emits them.
 private func porcelain(_ records: [String]) -> ProcessOutput {
     ProcessOutput(
-        terminationStatus: 0, standardOutput: Data((records.joined(separator: "\u{0}") + "\u{0}").utf8),
-        standardError: Data())
+        terminationStatus: 0,
+        standardOutput: Data((records.joined(separator: "\u{0}") + "\u{0}").utf8),
+        standardError: Data()
+    )
 }
 
 @Suite
@@ -112,19 +114,28 @@ struct KittyGitTests {
     func `line decorations come from the shared diff: modified, added, and deletions anchored below`() {
         #expect(
             GitStatusProvider.lineDecorations(
-                base: ["alpha", "beta", "gamma"], current: ["alpha", "delta", "epsilon", "gamma"], addedColor: .added
+                base: ["alpha", "beta", "gamma"],
+                current: ["alpha", "delta", "epsilon", "gamma"],
+                addedColor: .added
             )
-            .markers == [1: .modified, 2: .added])
+            .markers == [1: .modified, 2: .added]
+        )
         #expect(
             GitStatusProvider.lineDecorations(
-                base: ["alpha", "beta", "gamma"], current: ["alpha", "gamma"], addedColor: .added
+                base: ["alpha", "beta", "gamma"],
+                current: ["alpha", "gamma"],
+                addedColor: .added
             )
-            .markers == [1: .deleted])
+            .markers == [1: .deleted]
+        )
         #expect(
             GitStatusProvider.lineDecorations(
-                base: ["alpha", "beta", "gamma"], current: ["alpha", "beta"], addedColor: .added
+                base: ["alpha", "beta", "gamma"],
+                current: ["alpha", "beta"],
+                addedColor: .added
             )
-            .markers == [1: .deleted])
+            .markers == [1: .deleted]
+        )
         #expect(GitStatusProvider.lineDecorations(base: [], current: [], addedColor: .added).isEmpty)
         #expect(GitStatusProvider.lineDecorations(base: ["a"], current: ["a"], addedColor: .added).isEmpty)
     }
@@ -134,11 +145,15 @@ struct KittyGitTests {
         let decorations = GitStatusProvider.lineDecorations(
             base: ["let total = price * count", "unchanged", "wholly different line"],
             current: ["let total = price * quantity", "unchanged", "nothing in common here at all"],
-            addedColor: .added)
+            addedColor: .added
+        )
         #expect(decorations.markers == [0: .modified, 2: .modified])
         #expect(decorations.emphasis == [0: [20 ... 27]])
         let accented = GitStatusProvider.lineDecorations(
-            base: ["café au lait"], current: ["café au thé"], addedColor: .added)
+            base: ["café au lait"],
+            current: ["café au thé"],
+            addedColor: .added
+        )
         #expect(accented.emphasis == [0: [8 ... 10]])
     }
 
@@ -184,7 +199,9 @@ struct KittyGitTests {
         await provider.refresh()
         // The buffer holds the file with its line breaks normalized to LF.
         let decorations = await provider.lineDecorations(
-            for: "/project/tracked.txt", lines: ["one", "TWO", "three", ""])
+            for: "/project/tracked.txt",
+            lines: ["one", "TWO", "three", ""]
+        )
         #expect(decorations.markers == [1: .modified])
     }
 
@@ -192,7 +209,8 @@ struct KittyGitTests {
     func `Added line decorations mark every visible line and empty input yields none`() {
         #expect(
             GitStatusProvider.addedLineDecorations(for: ["alpha", "beta", ""], color: .untracked).markers
-                == [0: .untracked, 1: .untracked, 2: .untracked])
+                == [0: .untracked, 1: .untracked, 2: .untracked]
+        )
         #expect(GitStatusProvider.addedLineDecorations(for: [], color: .added).isEmpty)
     }
 }

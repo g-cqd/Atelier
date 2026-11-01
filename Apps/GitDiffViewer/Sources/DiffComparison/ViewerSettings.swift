@@ -494,7 +494,9 @@ package final class ViewerSettings {
         semanticColor = defaults.object(forKey: Key.semanticColor) as? Bool ?? true
         grammarColorOff = Set(defaults.stringArray(forKey: Key.grammarColorOff) ?? [])
         settingObserver = NotificationCenter.default.addObserver(
-            forName: Self.settingChangedNotification, object: nil, queue: .main
+            forName: Self.settingChangedNotification,
+            object: nil,
+            queue: .main
         ) { [weak self] notification in
             guard let poster = notification.object else { return }
             guard let key = notification.userInfo?[Self.settingChangedKey] as? String else { return }

@@ -19,8 +19,11 @@ struct HoverPanelLifetimeTests {
     func `panes coming and going hold no hover panel until one is hovered`() throws {
         let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).unified)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         defer { window.close() }
         let before = HoverDocPanel.liveCount
@@ -45,8 +48,11 @@ struct HoverPanelLifetimeTests {
         let taskProvider = TaskProviderSpy.tolerant()
         let clock = TestClock()
         let controller = DocHoverController(
-            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300),
-            panel: HoverDocPanel(ordersWindowIn: false))
+            clock: clock,
+            taskProvider: taskProvider,
+            debounce: .milliseconds(300),
+            panel: HoverDocPanel(ordersWindowIn: false)
+        )
         controller.resolve = { _ in HoverDocument(summary: NSAttributedString(string: "docs")) }
         controller.attach(to: textView) { rendered }
         #expect(controller.panelForTests == nil)
@@ -77,8 +83,11 @@ struct HoverPanelLifetimeTests {
             layoutManager.ensureLayout(for: layoutManager.documentRange)
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 200), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView?.addSubview(textView)
         return (textView, window)
@@ -89,6 +98,7 @@ struct HoverPanelLifetimeTests {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
         return NSPoint(
             x: DiffPaneMetrics.lineFragmentPadding + (CGFloat(column) + 0.5) * charWidth,
-            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight)
+            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight
+        )
     }
 }

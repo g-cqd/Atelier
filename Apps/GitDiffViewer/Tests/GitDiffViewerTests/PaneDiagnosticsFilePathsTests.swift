@@ -26,7 +26,10 @@ struct PaneDiagnosticsFilePathsTests {
         try await harness.load(sut)
         sut.settings.diagnosticsEnabled = true
         sut.diagnostics = DiagnosticsModel(
-            engine: SilentDiagnosticsRunner(), settings: sut.settings, taskProvider: harness.taskProvider)
+            engine: SilentDiagnosticsRunner(),
+            settings: sut.settings,
+            taskProvider: harness.taskProvider
+        )
         let texts = sut.renderedFiles.compactMap { $0.rendered.unified ?? $0.rendered.new }
         try #require(texts.count == paths.count)
         let panes = texts.map { _ in PaneDiagnostics() }

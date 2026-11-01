@@ -79,7 +79,8 @@ extension GLRParser {
                             if actions.contains(where: \.takesToken) { return true }
                             for case .reduce(let rule, let count, let nonTerminal) in actions.reversed() {
                                 alternatives.append(
-                                    Alternative(states: states, rule: rule, count: count, nonTerminal: nonTerminal))
+                                    Alternative(states: states, rule: rule, count: count, nonTerminal: nonTerminal)
+                                )
                             }
                             break explore
                     }

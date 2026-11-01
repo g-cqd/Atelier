@@ -17,7 +17,12 @@ public func renderSearchPanel(
 
     let bgCell = Cell(character: " ", style: colorScheme.treeBg)
     pipeline.buffer.fill(
-        row: rect.y, col: rect.x, width: rect.width, height: rect.height, cell: bgCell)
+        row: rect.y,
+        col: rect.x,
+        width: rect.width,
+        height: rect.height,
+        cell: bgCell
+    )
 
     let maxCol = rect.x + rect.width
     var currentRow = rect.y
@@ -36,8 +41,11 @@ public func renderSearchPanel(
         let displayQuery = String(query.suffix(availWidth))
         pipeline.buffer.write(prefix, row: currentRow, col: rect.x, style: colorScheme.treeBg)
         pipeline.buffer.write(
-            displayQuery, row: currentRow, col: rect.x + prefix.count,
-            style: colorScheme.editorText)
+            displayQuery,
+            row: currentRow,
+            col: rect.x + prefix.count,
+            style: colorScheme.editorText
+        )
 
         if state.mode == .searchPanel, state.searchPanelFocus == .findField {
             let displayLen = min(query.count, availWidth)
@@ -55,8 +63,11 @@ public func renderSearchPanel(
         let displayText = String(replaceText.suffix(availWidth))
         pipeline.buffer.write(prefix, row: currentRow, col: rect.x, style: colorScheme.treeBg)
         pipeline.buffer.write(
-            displayText, row: currentRow, col: rect.x + prefix.count,
-            style: colorScheme.editorText)
+            displayText,
+            row: currentRow,
+            col: rect.x + prefix.count,
+            style: colorScheme.editorText
+        )
 
         if state.mode == .searchPanel, state.searchPanelFocus == .replaceField {
             let displayLen = min(replaceText.count, availWidth)
@@ -74,11 +85,23 @@ public func renderSearchPanel(
         let reLabel = isRegex ? "[.*]" : " .* "
         let scopeLabel = state.searchTarget == .workspace ? "[WS]" : "[F] "
         pipeline.buffer.write(
-            aaLabel, row: currentRow, col: rect.x + 1, style: colorScheme.lineNumber)
+            aaLabel,
+            row: currentRow,
+            col: rect.x + 1,
+            style: colorScheme.lineNumber
+        )
         pipeline.buffer.write(
-            reLabel, row: currentRow, col: rect.x + 6, style: colorScheme.lineNumber)
+            reLabel,
+            row: currentRow,
+            col: rect.x + 6,
+            style: colorScheme.lineNumber
+        )
         pipeline.buffer.write(
-            scopeLabel, row: currentRow, col: rect.x + 11, style: colorScheme.lineNumber)
+            scopeLabel,
+            row: currentRow,
+            col: rect.x + 11,
+            style: colorScheme.lineNumber
+        )
         currentRow += 1
     }
 
@@ -91,8 +114,11 @@ public func renderSearchPanel(
             summary = inFileSearchSummary(state.inFileSearch)
         }
         pipeline.buffer.write(
-            summary, row: currentRow, col: rect.x + 1,
-            style: colorScheme.lineNumber)
+            summary,
+            row: currentRow,
+            col: rect.x + 1,
+            style: colorScheme.lineNumber
+        )
         currentRow += 1
     }
 
@@ -103,14 +129,22 @@ public func renderSearchPanel(
     if availRows > 0 {
         if state.searchTarget == .workspace {
             renderWorkspaceResults(
-                pipeline: pipeline, state: state, rect: rect,
-                startRow: resultsStartRow, availRows: availRows,
-                colorScheme: colorScheme)
+                pipeline: pipeline,
+                state: state,
+                rect: rect,
+                startRow: resultsStartRow,
+                availRows: availRows,
+                colorScheme: colorScheme
+            )
         } else {
             renderInFileResults(
-                pipeline: pipeline, state: state, rect: rect,
-                startRow: resultsStartRow, availRows: availRows,
-                colorScheme: colorScheme)
+                pipeline: pipeline,
+                state: state,
+                rect: rect,
+                startRow: resultsStartRow,
+                availRows: availRows,
+                colorScheme: colorScheme
+            )
         }
     }
 
@@ -176,11 +210,20 @@ private func renderInFileResults(
         if isSelected || isActive {
             let rowBgCell = Cell(character: " ", style: rowStyle)
             pipeline.buffer.fill(
-                row: displayRow, col: rect.x, width: rect.width, height: 1, cell: rowBgCell)
+                row: displayRow,
+                col: rect.x,
+                width: rect.width,
+                height: 1,
+                cell: rowBgCell
+            )
         }
 
         pipeline.buffer.write(
-            lineNum, row: displayRow, col: rect.x + 1, style: colorScheme.lineNumber)
+            lineNum,
+            row: displayRow,
+            col: rect.x + 1,
+            style: colorScheme.lineNumber
+        )
 
         let snippetCol = rect.x + 1 + lineNum.count
         pipeline.buffer.write(snippet, row: displayRow, col: snippetCol, style: rowStyle)
@@ -202,7 +245,11 @@ private func renderInFileResults(
                     let endIdx = min(highlightEnd, chars.count)
                     let matchText = String(chars[startIdx ..< endIdx])
                     pipeline.buffer.write(
-                        matchText, row: displayRow, col: snippetCol + highlightStart, style: matchStyle)
+                        matchText,
+                        row: displayRow,
+                        col: snippetCol + highlightStart,
+                        style: matchStyle
+                    )
                 }
             }
         }
@@ -221,7 +268,11 @@ private func renderWorkspaceResults(
     guard !state.workspaceSearchResults.isEmpty else {
         if state.isSearchingWorkspace {
             pipeline.buffer.write(
-                "Searching...", row: startRow, col: rect.x + 1, style: colorScheme.lineNumber)
+                "Searching...",
+                row: startRow,
+                col: rect.x + 1,
+                style: colorScheme.lineNumber
+            )
         }
         return
     }
@@ -244,10 +295,19 @@ private func renderWorkspaceResults(
             if isSelected {
                 let rowBgCell = Cell(character: " ", style: headerStyle)
                 pipeline.buffer.fill(
-                    row: displayRow, col: rect.x, width: rect.width, height: 1, cell: rowBgCell)
+                    row: displayRow,
+                    col: rect.x,
+                    width: rect.width,
+                    height: 1,
+                    cell: rowBgCell
+                )
             }
             pipeline.buffer.write(
-                headerText, row: displayRow, col: rect.x + 1, style: headerStyle)
+                headerText,
+                row: displayRow,
+                col: rect.x + 1,
+                style: headerStyle
+            )
             displayedRows += 1
         }
         flatIndex += 1
@@ -275,12 +335,21 @@ private func renderWorkspaceResults(
                 if isSelected {
                     let rowBgCell = Cell(character: " ", style: rowStyle)
                     pipeline.buffer.fill(
-                        row: displayRow, col: rect.x, width: rect.width, height: 1, cell: rowBgCell)
+                        row: displayRow,
+                        col: rect.x,
+                        width: rect.width,
+                        height: 1,
+                        cell: rowBgCell
+                    )
                 }
 
                 let snippetCol = rect.x + 1 + lineNum.count
                 pipeline.buffer.write(
-                    lineNum, row: displayRow, col: rect.x + 1, style: colorScheme.lineNumber)
+                    lineNum,
+                    row: displayRow,
+                    col: rect.x + 1,
+                    style: colorScheme.lineNumber
+                )
                 pipeline.buffer.write(snippet, row: displayRow, col: snippetCol, style: rowStyle)
 
                 // Highlight matched span within snippet
@@ -303,8 +372,11 @@ private func renderWorkspaceResults(
                             let eIdx = min(hEnd, chars.count)
                             let matchText = String(chars[sIdx ..< eIdx])
                             pipeline.buffer.write(
-                                matchText, row: displayRow, col: snippetCol + hStart,
-                                style: matchStyle)
+                                matchText,
+                                row: displayRow,
+                                col: snippetCol + hStart,
+                                style: matchStyle
+                            )
                         }
                     }
                 }

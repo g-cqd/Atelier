@@ -36,8 +36,13 @@ package final class HoverDocumentationModel {
         package let newBlobID: String?
 
         package init(
-            index: Int, leftPath: String, rightPath: String?, oldText: String, newText: String,
-            oldBlobID: String?, newBlobID: String?
+            index: Int,
+            leftPath: String,
+            rightPath: String?,
+            oldText: String,
+            newText: String,
+            oldBlobID: String?,
+            newBlobID: String?
         ) {
             self.index = index
             self.leftPath = leftPath
@@ -116,7 +121,8 @@ package final class HoverDocumentationModel {
     package init(
         lspRegistry: LanguageServerRegistry?,
         languageServers: [LanguageServerDescriptor] = LanguageServerDescriptor.all,
-        taskProvider: any TaskProvider = .default, index: DocCommentIndex = DocCommentIndex(),
+        taskProvider: any TaskProvider = .default,
+        index: DocCommentIndex = DocCommentIndex(),
         symbolKinds: SyntaxFactsStore? = nil
     ) {
         self.lspRegistry = lspRegistry
@@ -135,8 +141,11 @@ package final class HoverDocumentationModel {
     /// flight; one identical to the last does nothing. With no files, hovers answer nothing and the index keeps what
     /// it holds for the next feed, which a reload makes with the same files.
     package func comparisonChanged(
-        root givenRoot: URL?, files: [FileEntry], corpusReader: (any SourceReading)? = nil,
-        corpusSource: ComparisonSource? = nil, corpusEntries: [GitTreeEntry] = []
+        root givenRoot: URL?,
+        files: [FileEntry],
+        corpusReader: (any SourceReading)? = nil,
+        corpusSource: ComparisonSource? = nil,
+        corpusEntries: [GitTreeEntry] = []
     ) {
         guard isEnabled else { return }
         filesByIndex = Dictionary(uniqueKeysWithValues: files.map { ($0.index, $0) })
@@ -147,15 +156,21 @@ package final class HoverDocumentationModel {
         }
         let corpus = corpusReader.flatMap { reader in corpusSource.map { (reader: reader, source: $0) } }
         let identity = HoverFeed.Identity(
-            root: repositoryRoot, files: files, corpusSource: corpus?.source,
-            corpusEntries: corpus == nil ? [] : corpusEntries)
+            root: repositoryRoot,
+            files: files,
+            corpusSource: corpus?.source,
+            corpusEntries: corpus == nil ? [] : corpusEntries
+        )
         if let identity, identity == lastFeed { return }
         lastFeed = identity
         stopFeeding()
         let index = index
         let feed = HoverFeed(
-            root: repositoryRoot, files: files, corpusEntries: corpus == nil ? [] : corpusEntries,
-            indexes: { path in index.indexes(Language(fileExtension: URL(filePath: path).pathExtension)) })
+            root: repositoryRoot,
+            files: files,
+            corpusEntries: corpus == nil ? [] : corpusEntries,
+            indexes: { path in index.indexes(Language(fileExtension: URL(filePath: path).pathExtension)) }
+        )
         let changesetTask = taskProvider.task(priority: .utility) { () async throws in
             try await index.keepOnly(feed.scope)
             try await index.upsert(feed.changeset)
@@ -185,7 +200,8 @@ package final class HoverDocumentationModel {
                     chunk.compactMap { file in
                         contents[file.entry.relativePath]
                             .map { DocIndexFile(uri: file.uri, content: $0, blobID: file.entry.blobID, sides: .both) }
-                    })
+                    }
+                )
             }
         }
     }
@@ -236,7 +252,8 @@ package final class HoverDocumentationModel {
         if let blobID, let offset = Self.utf8Offset(in: content, line: line, utf16Column: utf16Column),
             let kinds = symbolKinds?
                 .symbolKinds(
-                    for: SourceRevision(documentID: path, language: language, key: .content(blobID)))
+                    for: SourceRevision(documentID: path, language: language, key: .content(blobID))
+                )
         {
             spanKind = kinds.kind(atUTF8: offset)
         }
@@ -298,7 +315,9 @@ private struct HoverFeed: Sendable {
 
         /// Nil when a file has a side with text but no blob id, whose text can change unseen: such a feed always runs.
         init?(
-            root: URL?, files: [HoverDocumentationModel.FileEntry], corpusSource: ComparisonSource?,
+            root: URL?,
+            files: [HoverDocumentationModel.FileEntry],
+            corpusSource: ComparisonSource?,
             corpusEntries: [GitTreeEntry]
         ) {
             guard !files.contains(where: \.hasUnhashedSide) else { return nil }
@@ -331,7 +350,9 @@ private struct HoverFeed: Sendable {
     /// The documents of `files` and `corpusEntries` whose path `indexes` accepts, which the index reads by language;
     /// the new side's files under `root` when it is on disk.
     init(
-        root: URL?, files: [HoverDocumentationModel.FileEntry], corpusEntries: [GitTreeEntry],
+        root: URL?,
+        files: [HoverDocumentationModel.FileEntry],
+        corpusEntries: [GitTreeEntry],
         indexes: (String) -> Bool
     ) {
         var changeset: [String: DocIndexFile] = [:]
@@ -344,8 +365,12 @@ private struct HoverFeed: Sendable {
         for file in files {
             add(path: file.leftPath, blobID: file.oldBlobID, text: file.oldText, onDiskRoot: nil, side: .old)
             add(
-                path: file.rightPath ?? file.leftPath, blobID: file.newBlobID, text: file.newText, onDiskRoot: root,
-                side: .new)
+                path: file.rightPath ?? file.leftPath,
+                blobID: file.newBlobID,
+                text: file.newText,
+                onDiskRoot: root,
+                side: .new
+            )
         }
         var scope = changeset.mapValues(\.sides)
         var corpus: [CorpusFile] = []
@@ -364,7 +389,9 @@ private struct HoverFeed: Sendable {
     /// The files the index reads outside the changeset within the corpus size cap, at most the corpus count cap of
     /// them.
     private static func corpusCandidates(
-        entries: [GitTreeEntry], excluding changed: Set<String>, indexes: (String) -> Bool
+        entries: [GitTreeEntry],
+        excluding changed: Set<String>,
+        indexes: (String) -> Bool
     ) -> [GitTreeEntry] {
         var candidates: [GitTreeEntry] = []
         for entry in entries where candidates.count < HoverDocumentationModel.maxCorpusFiles {

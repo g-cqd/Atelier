@@ -26,7 +26,8 @@ public struct GrammarManifest: Sendable, Equatable {
         self.entries = normalizedEntries
         entriesByLanguage = Dictionary(normalizedEntries.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         entriesByExtension = normalizedEntries.reduce(into: [String: GrammarRegistry.LanguageEntry]()) {
-            result, entry in
+            result,
+            entry in
             for fileExtension in entry.extensions {
                 result[fileExtension] = entry
             }

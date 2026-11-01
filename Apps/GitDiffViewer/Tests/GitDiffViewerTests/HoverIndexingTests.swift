@@ -18,7 +18,9 @@ struct HoverIndexingTests {
     /// ever reads `rest.swift`. With `editsLineFifteen`, the new side of `a.swift` differs at line 15, so its gaps sit
     /// next to a change and offer drag handles.
     private func makeLoadedSUT(
-        showsHover: Bool = true, isolatesChanges: Bool = false, editsLineFifteen: Bool = false
+        showsHover: Bool = true,
+        isolatesChanges: Bool = false,
+        editsLineFifteen: Bool = false
     ) async throws -> DiffViewerModel {
         let sut = harness.makeSUT()
         sut.settings.showsHoverDocumentation = showsHover

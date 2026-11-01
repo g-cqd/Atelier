@@ -17,20 +17,30 @@ struct RegexReplaceTests {
         state.fileContent = lines
         state.mode = .editor
         var search = EditorState.InFileSearch(
-            query: pattern, pattern: nil, matches: [], activeMatchIndex: -1, isCaseSensitive: true, isRegex: true,
-            isWholeWord: false)
+            query: pattern,
+            pattern: nil,
+            matches: [],
+            activeMatchIndex: -1,
+            isCaseSensitive: true,
+            isRegex: true,
+            isWholeWord: false
+        )
         executeSearch(&search, lines: lines)
         search.resultRequest = InFileSearchRequest(
             query: SearchQuery(text: pattern, isCaseSensitive: true, isRegex: true),
             bufferID: state.bufferManager.activeBuffer.map(ObjectIdentifier.init),
             documentVersion: state.bufferManager.activeBuffer?.documentVersion ?? 0,
-            contentHash: state.textBuffer.contentHash)
+            contentHash: state.textBuffer.contentHash
+        )
         search.activeMatchIndex = 0
         search.replaceText = template
         search.showReplace = true
         state.inFileSearch = search
         let pipeline = RenderPipeline(
-            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)), columns: 80, rows: 24)
+            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),
+            columns: 80,
+            rows: 24
+        )
         return (state, pipeline)
     }
 

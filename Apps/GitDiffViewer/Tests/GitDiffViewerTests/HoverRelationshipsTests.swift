@@ -54,7 +54,8 @@ struct HoverRelationshipsTests {
 
     @Test(arguments: cases)
     func `a declaration's inheritance clause makes Quick Help's groups`(
-        declaration: String, expected: [HoverRelationship]
+        declaration: String,
+        expected: [HoverRelationship]
     ) {
         #expect(HoverRelationships.relationships(fromDeclaration: declaration) == expected)
     }
@@ -62,7 +63,9 @@ struct HoverRelationshipsTests {
     @Test
     func `the SDK's Bool document conforms to what its declaration says`() {
         let document = HoverDocument.build(
-            from: HoverContent(markdown: HoverFixtures.sdkBool, source: .sdk), palette: .system)
+            from: HoverContent(markdown: HoverFixtures.sdkBool, source: .sdk),
+            palette: .system
+        )
         #expect(document.relationships == [HoverRelationship(kind: .conformsTo, names: ["Sendable"])])
     }
 }
@@ -80,7 +83,9 @@ struct HoverRelationshipsPanelTests {
     @Test
     func `the Relationships section follows the discussion, a titled group of names each`() throws {
         let document = HoverDocument.build(
-            from: HoverContent(markdown: HoverFixtures.sdkBool, source: .sdk), palette: .system)
+            from: HoverContent(markdown: HoverFixtures.sdkBool, source: .sdk),
+            palette: .system
+        )
 
         let texts = try Self.shownTexts(of: document)
 
@@ -92,7 +97,8 @@ struct HoverRelationshipsPanelTests {
     func `a declaration with nothing else shows no Relationships section`() throws {
         let document = HoverDocument.build(
             from: HoverContent(markdown: "```swift\nstruct Config : Codable\n```\n", source: .languageServer),
-            palette: .system)
+            palette: .system
+        )
         #expect(!document.relationships.isEmpty)
 
         #expect(try Self.shownTexts(of: document).isEmpty)

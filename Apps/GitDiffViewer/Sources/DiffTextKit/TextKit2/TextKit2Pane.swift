@@ -63,8 +63,12 @@ package final class TextKit2Pane: DiffTextPane {
         coordinator.wrapColumn = options.wrapColumn
         coordinator.scrollsPastEnd = options.scrollsPastEnd
         DiffTextViewCoordinator.configureWrapping(
-            options.wrapsLines, column: options.wrapColumn, font: options.font, textView: textView,
-            scrollView: scrollView)
+            options.wrapsLines,
+            column: options.wrapColumn,
+            font: options.font,
+            textView: textView,
+            scrollView: scrollView
+        )
 
         let gutterView = DiffGutterView(clipView: scrollView.contentView)
         gutterView.source = TextKit2RowGeometry(textView: textView, coordinator: coordinator)
@@ -76,7 +80,10 @@ package final class TextKit2Pane: DiffTextPane {
         gutterView.showsScopeRibbon = options.showsScopeRibbon
         if options.showsScopeRibbon { coordinator.scopeHover.attach(to: textView, gutter: gutterView) }
         let minimapView = Self.makeMinimap(
-            following: scrollView, coordinator: coordinator, showing: options.showsMinimap)
+            following: scrollView,
+            coordinator: coordinator,
+            showing: options.showsMinimap
+        )
 
         coordinator.textView = textView
         coordinator.followLayout()
@@ -94,7 +101,11 @@ package final class TextKit2Pane: DiffTextPane {
         self.textView = textView
         self.gutterView = gutterView
         paneView = DiffPaneView(
-            gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
+            gutterView: gutterView,
+            scrollView: scrollView,
+            contentView: scrollView,
+            minimapView: minimapView
+        )
     }
 
     /// Makes the pane's decoration store colour the text as TextKit lays it out.
@@ -105,7 +116,9 @@ package final class TextKit2Pane: DiffTextPane {
 
     /// Sizes and places the text again as the pane's clip view resizes or scrolls, and as the text view resizes.
     private static func observe(
-        _ scrollView: NSScrollView, textView: NSTextView, for coordinator: DiffTextViewCoordinator
+        _ scrollView: NSScrollView,
+        textView: NSTextView,
+        for coordinator: DiffTextViewCoordinator
     ) {
         scrollView.contentView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -132,7 +145,9 @@ package final class TextKit2Pane: DiffTextPane {
     /// The pane's minimap: it shows the rows `scrollView` shows, redraws as it scrolls, and scrolls it to a row
     /// clicked, centred.
     private static func makeMinimap(
-        following scrollView: NSScrollView, coordinator: DiffTextViewCoordinator, showing: Bool
+        following scrollView: NSScrollView,
+        coordinator: DiffTextViewCoordinator,
+        showing: Bool
     ) -> MinimapView {
         let minimapView = MinimapView()
         minimapView.scrollView = scrollView

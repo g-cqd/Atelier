@@ -18,11 +18,20 @@ struct ResizablePanesTests {
     private let scratchDefaults = ScratchDefaults(tag: "resizablePanes")
 
     private func makeSUT(
-        _ layout: PaneLayout, text: PaneText = .lines(60), wrapsLines: Bool = false, underBars: CGFloat = 0,
+        _ layout: PaneLayout,
+        text: PaneText = .lines(60),
+        wrapsLines: Bool = false,
+        underBars: CGFloat = 0,
         ratio: Binding<Double>? = nil
     ) -> HostedPanes {
         HostedPanes(
-            showing: text, layout: layout, wrapsLines: wrapsLines, size: Self.size, underBars: underBars, ratio: ratio)
+            showing: text,
+            layout: layout,
+            wrapsLines: wrapsLines,
+            size: Self.size,
+            underBars: underBars,
+            ratio: ratio
+        )
     }
 
     @Test(arguments: splitLayouts)

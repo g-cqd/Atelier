@@ -17,13 +17,24 @@ extension DiffViewerModel {
         switch group.kind {
             case .commit(let commit):
                 return CommitScope(
-                    key: key, commit: commit, repository: range.repository, rows: rows, isSingleFile: path != nil)
+                    key: key,
+                    commit: commit,
+                    repository: range.repository,
+                    rows: rows,
+                    isSingleFile: path != nil
+                )
             case .uncommitted:
                 guard let head = commitGroups.tipCommit, let workingTree = right.source else { return nil }
                 let comparison = comparison
                 return CommitScope(
-                    key: key, head: head, repository: range.repository, workingTree: workingTree, rows: rows,
-                    isSingleFile: path != nil, workingTreeEntry: { comparison.rightEntries[$0] })
+                    key: key,
+                    head: head,
+                    repository: range.repository,
+                    workingTree: workingTree,
+                    rows: rows,
+                    isSingleFile: path != nil,
+                    workingTreeEntry: { comparison.rightEntries[$0] }
+                )
             case .earlier:
                 return nil
         }
@@ -49,8 +60,13 @@ extension DiffViewerModel {
         }
         PhaseTrace.log("render \(target.pairs.count) files of a commit group")
         pipeline.render(
-            target, left: scope.left, right: scope.right, granularity: settings.granularity,
-            heuristics: settings.diffHeuristics, keepingPublished: keepingPublished)
+            target,
+            left: scope.left,
+            right: scope.right,
+            granularity: settings.granularity,
+            heuristics: settings.diffHeuristics,
+            keepingPublished: keepingPublished
+        )
     }
 
     /// Sets ``commitScope`` only when it changes, so a render of the same selection invalidates nothing.

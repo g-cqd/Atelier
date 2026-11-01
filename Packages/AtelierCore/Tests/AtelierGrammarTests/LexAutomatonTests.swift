@@ -52,8 +52,13 @@ struct LexAutomatonTests {
     func `A token of higher precedence stops a longer match of a lower one`(text: String, range: Range<Int>) throws {
         let quote = LexicalToken(name: "\"\\\"\"", rule: .string("\""), implicitPrecedence: 2)
         let content = LexicalToken(
-            name: "string_content", rule: .prec(1, .pattern(#"[^\\"\n]+"#)), isImmediate: true, isNamed: true,
-            completionPrecedence: 1, implicitPrecedence: 1)
+            name: "string_content",
+            rule: .prec(1, .pattern(#"[^\\"\n]+"#)),
+            isImmediate: true,
+            isNamed: true,
+            completionPrecedence: 1,
+            implicitPrecedence: 1
+        )
         let comment = LexicalToken(name: "comment", rule: .pattern("//.*"), isNamed: true, isExtra: true)
         let table = try Self.table([quote, content, comment], separators: [.pattern(#"\s"#)])
 
@@ -82,7 +87,8 @@ struct LexAutomatonTests {
             { () -> Int? in
                 if case .shift(let state) = compiled.parseTable.actions[0, a] { return state }
                 return nil
-            }())
+            }()
+        )
         let mode = compiled.lexTable.stateModes[afterA]
         let start = compiled.lexTable.modeStarts[mode]
 
@@ -103,7 +109,10 @@ struct LexAutomatonTests {
         valid: [Int]? = nil
     ) throws -> LexTable {
         try LexTableCompiler.compile(
-            tokens: tokens, separators: separators, validTokens: [valid ?? Array(tokens.indices)])
+            tokens: tokens,
+            separators: separators,
+            validTokens: [valid ?? Array(tokens.indices)]
+        )
     }
 
     /// The token the automaton reads first from `text` in the mode of parse state 0: the last it accepted before it

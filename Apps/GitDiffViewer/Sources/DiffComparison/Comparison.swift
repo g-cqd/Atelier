@@ -47,13 +47,22 @@ package struct Comparison: Sendable, Equatable {
     package static let empty = Comparison(left: [], right: [], leftSource: nil, rightSource: nil)
 
     package init(
-        left: [SourceEntry], right: [SourceEntry], leftSource: ComparisonSource?, rightSource: ComparisonSource?,
-        leftIgnored: [SourceEntry] = [], rightIgnored: [SourceEntry] = [], gitRenames: [String: String] = [:]
+        left: [SourceEntry],
+        right: [SourceEntry],
+        leftSource: ComparisonSource?,
+        rightSource: ComparisonSource?,
+        leftIgnored: [SourceEntry] = [],
+        rightIgnored: [SourceEntry] = [],
+        gitRenames: [String: String] = [:]
     ) {
         leftEntries = Dictionary(
-            (left + leftIgnored).map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
+            (left + leftIgnored).map { ($0.relativePath, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         rightEntries = Dictionary(
-            (right + rightIgnored).map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
+            (right + rightIgnored).map { ($0.relativePath, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         ignoredPaths = Set(leftIgnored.map(\.relativePath)).union(rightIgnored.map(\.relativePath))
         if leftSource?.isSingleFile == true, rightSource?.isSingleFile == true,
             let leftPath = left.first?.relativePath, let rightPath = right.first?.relativePath
@@ -176,7 +185,10 @@ package struct Comparison: Sendable, Equatable {
 
     package func pair(for leftPath: String) -> FilePair {
         FilePair(
-            path: leftPath, old: leftEntries[leftPath], new: rightEntries[counterpartPath(of: leftPath, in: .left)])
+            path: leftPath,
+            old: leftEntries[leftPath],
+            new: rightEntries[counterpartPath(of: leftPath, in: .left)]
+        )
     }
 
     /// The path a file is shown under: its destination when it was renamed.

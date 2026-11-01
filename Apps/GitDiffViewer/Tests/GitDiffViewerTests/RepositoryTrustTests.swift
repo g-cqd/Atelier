@@ -10,7 +10,9 @@ private final class ScratchDirectories {
 
     init() throws {
         parent = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-trust-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-trust-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
     }
 
@@ -154,7 +156,9 @@ struct RepositoryTrustTests {
         let root = try #require(LanguageServerRegistry.canonicalRoot(try scratch.directory("repository")))
         let defaults = scratchDefaults.defaults
         defaults.set(
-            [root.path(percentEncoded: false).trimmingSuffix("/"): "always"], forKey: RepositoryTrust.storageKey)
+            [root.path(percentEncoded: false).trimmingSuffix("/"): "always"],
+            forKey: RepositoryTrust.storageKey
+        )
 
         let trust = RepositoryTrust(defaults: defaults)
 

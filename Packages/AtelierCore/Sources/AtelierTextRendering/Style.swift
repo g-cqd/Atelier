@@ -65,7 +65,10 @@ public struct TextStyle: Hashable, Sendable {
     public var features: [FontFeature]
 
     public init(
-        foreground: ColorRef, weight: FontWeight? = nil, isItalic: Bool = false, features: [FontFeature] = []
+        foreground: ColorRef,
+        weight: FontWeight? = nil,
+        isItalic: Bool = false,
+        features: [FontFeature] = []
     ) {
         self.foreground = foreground
         self.weight = weight

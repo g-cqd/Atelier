@@ -27,8 +27,12 @@ struct ModelTestHarness {
 
     func makeSUT() -> DiffViewerModel {
         DiffViewerModel(
-            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: reader, taskProvider: taskProvider,
-            uptime: uptime.provider, clock: clock)
+            settings: ViewerSettings(defaults: scratchDefaults.defaults),
+            reader: reader,
+            taskProvider: taskProvider,
+            uptime: uptime.provider,
+            clock: clock
+        )
     }
 
     func entry(_ path: String, _ blob: String) -> SourceEntry {

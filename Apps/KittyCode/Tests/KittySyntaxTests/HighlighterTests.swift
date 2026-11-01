@@ -72,7 +72,8 @@ struct HighlighterTests {
                 StyledSpan(text: "fghij", style: functionNameStyle),
                 StyledSpan(text: "klmnopqrst", style: functionStyle),
                 StyledSpan(text: "uvw", style: keywordStyle)
-            ])
+            ]
+        )
     }
 
     @Test
@@ -111,7 +112,9 @@ struct HighlighterTests {
         theme.setStyle(commentStyle, for: "comment")
         let comment = SyntaxNode(type: "comment", byteRange: 0 ..< 7, isNamed: true)
         let tree = SyntaxTree(
-            root: SyntaxNode(type: "source", children: [comment], byteRange: 0 ..< 7), source: "// note")
+            root: SyntaxNode(type: "source", children: [comment], byteRange: 0 ..< 7),
+            source: "// note"
+        )
         let query = try QueryParser.parse("(comment) @comment @spell")
         let highlighter = Highlighter(theme: theme)
         let matches = QueryMatcher.execute(query: query, tree: tree)
@@ -119,7 +122,8 @@ struct HighlighterTests {
         #expect(
             highlighter.highlight(source: tree.source, tree: tree, query: query) == [
                 StyledSpan(text: "// note", style: commentStyle)
-            ])
+            ]
+        )
         let roles = CaptureRoles(captureNames: query.captureNames)
         #expect(highlighter.buildTokens(matches: matches, roles: roles).map(\.role) == [.comment])
     }
@@ -134,7 +138,8 @@ struct HighlighterTests {
         #expect(session.isGrammarBacked)
         #expect(
             session.highlightDocument(source: source)
-                == LanguageHighlighter.highlightDocument(source: source, language: "json"))
+                == LanguageHighlighter.highlightDocument(source: source, language: "json")
+        )
     }
 
     @Test
@@ -161,7 +166,8 @@ struct HighlighterTests {
     func `prewarm leaves an uncached grammar for the first opened file`() async {
         let language = "uncached_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         GrammarRegistry.shared.register(
-            GrammarRegistry.LanguageEntry(name: language, extensions: [], path: "json"))
+            GrammarRegistry.LanguageEntry(name: language, extensions: [], path: "json")
+        )
 
         let warmed = await LanguageHighlighter.prewarmArtifacts(for: [language])
 

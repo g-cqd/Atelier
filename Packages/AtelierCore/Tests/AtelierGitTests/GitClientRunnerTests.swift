@@ -15,7 +15,11 @@ struct GitClientRunnerTests {
     func `every run carries the hardening variables, the repository and the arguments`() async throws {
         let runner = FakeProcessRunner.gated(always: .success("abc123\n"))
         let client = GitClient(
-            repository: Self.repository, runner: runner, timeout: .seconds(10), gate: GitConfigGate())
+            repository: Self.repository,
+            runner: runner,
+            timeout: .seconds(10),
+            gate: GitConfigGate()
+        )
         let resolved = try await client.resolve(ref: "main")
         #expect(resolved == "abc123")
         let spec = try #require(runner.commandSpecs.first)
@@ -23,7 +27,8 @@ struct GitClientRunnerTests {
             spec.arguments
                 == GitIsolation.strictConfigurationFlags + [
                     "rev-parse", "--verify", "--quiet", "--end-of-options", "main^{commit}"
-                ])
+                ]
+        )
         #expect(spec.currentDirectory == Self.repository)
         #expect(spec.environment == GitIsolation.strict.environment)
         #expect(spec.timeout == .seconds(10))
@@ -78,7 +83,11 @@ struct GitClientRunnerTests {
         let runner = FakeProcessRunner.gated(always: .success("/repo\n"))
 
         _ = await GitClient.repositoryRoot(
-            containing: Self.repository, runner: runner, timeout: .seconds(7), gate: GitConfigGate())
+            containing: Self.repository,
+            runner: runner,
+            timeout: .seconds(7),
+            gate: GitConfigGate()
+        )
 
         #expect(!runner.specs.isEmpty)
         #expect(runner.specs.allSatisfy { $0.timeout == .seconds(7) })
@@ -118,14 +127,19 @@ struct GitClientRunnerTests {
         #expect(String(decoding: text, as: UTF8.self) == "let a = 1\n")
         #expect(
             show.commandSpecs.first?.arguments.suffix(2)
-                == ["show", "--end-of-options", "HEAD:Sources/a.swift"].suffix(2))
+                == ["show", "--end-of-options", "HEAD:Sources/a.swift"].suffix(2)
+        )
     }
 
     @Test
     func `an inheriting client keeps the caller's environment and passes no configuration flags`() async throws {
         let runner = FakeProcessRunner.gated(always: .success("abc\n"))
         let client = GitClient(
-            repository: Self.repository, runner: runner, isolation: .inheriting, gate: GitConfigGate())
+            repository: Self.repository,
+            runner: runner,
+            isolation: .inheriting,
+            gate: GitConfigGate()
+        )
         _ = try await client.resolve(ref: "main")
         let spec = try #require(runner.commandSpecs.first)
         #expect(spec.arguments.first == "rev-parse")
@@ -148,7 +162,8 @@ struct GitClientRunnerTests {
     @Test
     func `remotes runs remote -v`() async throws {
         let runner = FakeProcessRunner.gated(
-            always: .success("origin\tgit@x:y.git (fetch)\norigin\tgit@x:y.git (push)\n"))
+            always: .success("origin\tgit@x:y.git (fetch)\norigin\tgit@x:y.git (push)\n")
+        )
         let client = GitClient(repository: Self.repository, runner: runner, gate: GitConfigGate())
         let remotes = try await client.remotes()
         #expect(remotes == [GitRemote(name: "origin", fetchURL: "git@x:y.git")])
@@ -164,7 +179,8 @@ struct GitClientRunnerTests {
         #expect(counts.behind == 5)
         #expect(
             runner.commandSpecs.last?.arguments.suffix(5)
-                == ["rev-list", "--left-right", "--count", "--end-of-options", "main...origin/main"])
+                == ["rev-list", "--left-right", "--count", "--end-of-options", "main...origin/main"]
+        )
     }
 
     @Test
@@ -187,7 +203,8 @@ struct GitClientRunnerTests {
             spec.arguments.suffix(6) == [
                 "fetch", "--prune", "--no-recurse-submodules", "--end-of-options",
                 "git@github.com:aemi/atelier.git", "refs/heads/main:refs/remotes/origin/main"
-            ])
+            ]
+        )
     }
 
     @Test
@@ -207,7 +224,11 @@ struct GitClientRunnerTests {
     {
         let runner = FakeProcessRunner.gated(always: .success(""))
         let client = GitClient(
-            repository: Self.repository, runner: runner, timeout: .seconds(5), isolation: .strict, gate: GitConfigGate()
+            repository: Self.repository,
+            runner: runner,
+            timeout: .seconds(5),
+            isolation: .strict,
+            gate: GitConfigGate()
         )
         try await client.fetch(timeout: .seconds(45))
         let spec = try #require(runner.commandSpecs.first)
@@ -215,7 +236,8 @@ struct GitClientRunnerTests {
         #expect(spec.environment == GitIsolation.networking.environment)
         #expect(
             Array(spec.arguments.prefix(GitIsolation.networkingConfigurationFlags.count))
-                == GitIsolation.networkingConfigurationFlags)
+                == GitIsolation.networkingConfigurationFlags
+        )
         #expect(!spec.arguments.contains("core.sshCommand=/usr/bin/false"))
         #expect(spec.arguments.contains("core.sshCommand=ssh"))
     }

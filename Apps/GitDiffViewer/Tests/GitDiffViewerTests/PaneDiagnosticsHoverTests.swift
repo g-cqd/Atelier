@@ -26,13 +26,18 @@ struct PaneDiagnosticsHoverTests {
                 case .card:
                     let prepared = PreparedDiff(
                         FileDiffInput(title: "c.swift", oldText: text, newText: text, language: .plain),
-                        granularity: .word)
+                        granularity: .word
+                    )
                     return try #require(
                         DiffRenderer.render(
-                            prepared: [prepared], options: DiffRenderer.Options(sides: [.new]), layout: .full,
-                            withHeaders: false, firstFileIndex: 2
+                            prepared: [prepared],
+                            options: DiffRenderer.Options(sides: [.new]),
+                            layout: .full,
+                            withHeaders: false,
+                            firstFileIndex: 2
                         )
-                        .new)
+                        .new
+                    )
             }
         }
 
@@ -43,8 +48,16 @@ struct PaneDiagnosticsHoverTests {
 
     private static func finding(rule: String, column: Int?, endColumn: Int?) -> Finding {
         Finding(
-            tool: .swiftlint, ruleID: rule, message: "message \(rule)", file: "c.swift", line: 1, column: column,
-            endLine: column == nil ? nil : 1, endColumn: endColumn, severity: .warning)
+            tool: .swiftlint,
+            ruleID: rule,
+            message: "message \(rule)",
+            file: "c.swift",
+            line: 1,
+            column: column,
+            endLine: column == nil ? nil : 1,
+            endColumn: endColumn,
+            severity: .warning
+        )
     }
 
     /// A resolver over `findings` on line 1, whose documentation is a document titled "doc".
@@ -53,16 +66,25 @@ struct PaneDiagnosticsHoverTests {
     ) {
         let rendered = try view.rendered(text)
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none,
-            right: SideFindings(paths: [view.fileIndex: "c.swift"], findings: ["c.swift": findings]))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: [view.fileIndex: "c.swift"], findings: ["c.swift": findings])
+        )
         let resolve = PaneDiagnostics.hoverResolver(
             overlay: DiagnosticOverlay(rows: rows),
-            documentation: { _ in HoverDocument(title: "doc") })
+            documentation: { _ in HoverDocument(title: "doc") }
+        )
         let row = try #require(rendered.rows.firstIndex { $0.newNumber == 1 })
         let hit = { (column: Int) in
             HoverHit(
-                fileIndex: view.fileIndex, side: .new, line: 0, utf16Column: column, row: row, anchorRect: .zero,
-                identifierRange: NSRange(location: column, length: 1))
+                fileIndex: view.fileIndex,
+                side: .new,
+                line: 0,
+                utf16Column: column,
+                row: row,
+                anchorRect: .zero,
+                identifierRange: NSRange(location: column, length: 1)
+            )
         }
         return (resolve, hit)
     }

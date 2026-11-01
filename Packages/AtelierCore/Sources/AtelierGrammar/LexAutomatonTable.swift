@@ -116,7 +116,8 @@ public struct LexAutomaton: Sendable, RandomAccessCollection {
     /// Calls `body` with each move of `state` that reads a scalar below `limit`, in no particular order, clipped to
     /// `limit`: for a lexer to lay out its direct table of the moves on ASCII.
     public func forEachMove(
-        from state: Int, below limit: UInt32,
+        from state: Int,
+        below limit: UInt32,
         _ body: (_ lower: UInt32, _ upper: UInt32, _ target: Int, _ skips: Bool)
             -> Void
     ) {

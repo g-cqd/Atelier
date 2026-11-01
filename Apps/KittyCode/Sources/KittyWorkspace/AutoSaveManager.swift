@@ -98,9 +98,15 @@ public final class AutoSaveManager {
     /// the buffer is updated back on the main actor, even if this manager is gone by then.
     private func saveInBackground(_ buffer: DocumentBuffer) {
         let save = BackgroundSave(
-            path: buffer.filePath, version: buffer.documentVersion, dateBeforeSave: buffer.lastModifiedDate,
+            path: buffer.filePath,
+            version: buffer.documentVersion,
+            dateBeforeSave: buffer.lastModifiedDate,
             saved: BufferEditSnapshot(
-                textBuffer: buffer.textBuffer, textCursor: buffer.textCursor, lineEnding: buffer.lineEnding))
+                textBuffer: buffer.textBuffer,
+                textCursor: buffer.textCursor,
+                lineEnding: buffer.lineEnding
+            )
+        )
         let data = Data(TextDocument.serializedText(from: buffer.textBuffer.text, lineEnding: buffer.lineEnding).utf8)
         let path = save.path
         let offloadDiskWrite = offloadDiskWrite
@@ -118,15 +124,23 @@ public final class AutoSaveManager {
             }
             guard let buffer else { return }
             await Self.finish(
-                save, of: buffer, outcome: outcome, integration: integration, reportFailure: reportFailure)
+                save,
+                of: buffer,
+                outcome: outcome,
+                integration: integration,
+                reportFailure: reportFailure
+            )
         }
     }
 
     /// Records a background save's outcome on `buffer`. The buffer counts as saved only if nothing changed it while
     /// its file was written; the new modification date is kept unless a save or reload recorded its own meanwhile.
     private static func finish(
-        _ save: BackgroundSave, of buffer: DocumentBuffer, outcome: Result<Date?, any Error>,
-        integration: FileWatcherIntegration?, reportFailure: @MainActor (String) -> Void
+        _ save: BackgroundSave,
+        of buffer: DocumentBuffer,
+        outcome: Result<Date?, any Error>,
+        integration: FileWatcherIntegration?,
+        reportFailure: @MainActor (String) -> Void
     ) async {
         buffer.isSavingInBackground = false
         switch outcome {

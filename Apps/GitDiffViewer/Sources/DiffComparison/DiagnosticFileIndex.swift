@@ -16,7 +16,8 @@ package enum DiagnosticFileIndex {
             uniqueKeysWithValues: pairs.enumerated()
                 .compactMap { index, pair in
                     pair.old.map { (index, $0.relativePath) }
-                })
+                }
+        )
     }
 }
 

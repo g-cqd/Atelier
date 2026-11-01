@@ -63,7 +63,11 @@ extension DiffGutterView {
         var frames: [Int: NSRect] = [:]
         forEachRow(in: rect) { _, _, rowIndex, _, baseline in
             frames[rowIndex] = NSRect(
-                x: 0, y: numberTop(baseline: baseline), width: bounds.width, height: font.ascender - font.descender)
+                x: 0,
+                y: numberTop(baseline: baseline),
+                width: bounds.width,
+                height: font.ascender - font.descender
+            )
         }
         return frames
     }

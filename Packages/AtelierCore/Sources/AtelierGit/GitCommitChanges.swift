@@ -15,7 +15,11 @@ public struct GitCommitChanges: Sendable, Hashable, Identifiable {
     public let changes: [GitFileChange]
 
     public init(
-        id: String, parentIDs: [String], authorName: String, authorDate: Date, subject: String,
+        id: String,
+        parentIDs: [String],
+        authorName: String,
+        authorDate: Date,
+        subject: String,
         changes: [GitFileChange]
     ) {
         self.id = id
@@ -52,7 +56,11 @@ public struct GitFileChange: Sendable, Hashable {
     public let newBlobID: String?
 
     public init(
-        status: Status, path: String, oldPath: String? = nil, oldBlobID: String? = nil, newBlobID: String? = nil
+        status: Status,
+        path: String,
+        oldPath: String? = nil,
+        oldBlobID: String? = nil,
+        newBlobID: String? = nil
     ) {
         self.status = status
         self.path = path

@@ -27,12 +27,17 @@ struct GrammarTierTests {
 
     /// A JSON request for `text`, keyed by `content`, with `visibleLines` on screen, all of them by default.
     private static func request(
-        _ text: String, content: String = UUID().uuidString, visibleLines: Range<Int>? = nil
+        _ text: String,
+        content: String = UUID().uuidString,
+        visibleLines: Range<Int>? = nil
     ) -> TierRequest {
         let lines = lineRanges(of: text)
         return TierRequest(
-            revision: SourceRevision(documentID: "a.json", language: .json, key: .content(content)), text: text,
-            lineRanges: lines, visibleLines: visibleLines ?? 0 ..< lines.count)
+            revision: SourceRevision(documentID: "a.json", language: .json, key: .content(content)),
+            text: text,
+            lineRanges: lines,
+            visibleLines: visibleLines ?? 0 ..< lines.count
+        )
     }
 
     /// Runs `tier` on `request`, answering the updates it emitted.
@@ -59,11 +64,14 @@ struct GrammarTierTests {
         defer { cache.remove() }
         let artifacts = SyntaxArtifactsCache(
             registry: GrammarRegistry(cacheDirectory: cache.url, bundledManifest: try corpus.manifest()),
-            grammarsDirectory: corpus.grammarsDirectory)
+            grammarsDirectory: corpus.grammarsDirectory
+        )
         let text = "{\n  \"a\": 1,\n  \"b\": true\n}"
 
         let updates = try await Self.run(
-            GrammarTier(artifacts: artifacts), Self.request(text, visibleLines: 1 ..< 2))
+            GrammarTier(artifacts: artifacts),
+            Self.request(text, visibleLines: 1 ..< 2)
+        )
 
         #expect(updates.map(\.lines) == [1 ..< 2, 2 ..< 4, 0 ..< 1])
         #expect(updates.allSatisfy { $0.layer == .structural && $0.coverage == .complete })
@@ -93,8 +101,13 @@ struct GrammarTierTests {
             throw ParseError.cancelled(atToken: 0)
         }
         let tier = GrammarTier(
-            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .milliseconds(250), pool: nil,
-            cpuTime: cpuTime, parse: parse)
+            artifacts: fixture.artifacts(),
+            record: GrammarTierRecord(),
+            deadline: .milliseconds(250),
+            pool: nil,
+            cpuTime: cpuTime,
+            parse: parse
+        )
 
         let failure = await Self.failure { _ = try await Self.run(tier, Self.request("hello")) }
 
@@ -111,7 +124,10 @@ struct GrammarTierTests {
         defer { pool.shutdown() }
         let threadName = Mutex("")
         let tier = GrammarTier(
-            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .milliseconds(250), pool: pool,
+            artifacts: fixture.artifacts(),
+            record: GrammarTierRecord(),
+            deadline: .milliseconds(250),
+            pool: pool,
             cpuTime: GrammarTier.threadCPUTime
         ) { engine, text, isCancelled in
             var name = [CChar](repeating: 0, count: 64)
@@ -155,7 +171,10 @@ struct GrammarTierTests {
         let record = GrammarTierRecord()
         let parses = Mutex(0)
         let tier = GrammarTier(
-            artifacts: artifacts, record: record, deadline: .milliseconds(250), pool: nil,
+            artifacts: artifacts,
+            record: record,
+            deadline: .milliseconds(250),
+            pool: nil,
             cpuTime: GrammarTier.threadCPUTime
         ) { engine, text, isCancelled in
             parses.withLock { $0 += 1 }
@@ -201,7 +220,9 @@ struct GrammarTierTests {
         defer { fixture.remove() }
         let compiles = Counter()
         let artifacts = SyntaxArtifactsCache(
-            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory)
+            registry: fixture.registry(counting: compiles),
+            grammarsDirectory: fixture.grammarsDirectory
+        )
         let tier = GrammarTier(artifacts: artifacts)
         let text = String(repeating: "a", count: GrammarEngine.maxSourceBytes + 1)
 
@@ -210,7 +231,9 @@ struct GrammarTierTests {
         #expect(
             failure
                 == .failed(
-                    "\(GrammarEngine.maxSourceBytes + 1) bytes are past the grammar's \(GrammarEngine.maxSourceBytes)"))
+                    "\(GrammarEngine.maxSourceBytes + 1) bytes are past the grammar's \(GrammarEngine.maxSourceBytes)"
+                )
+        )
         #expect(compiles.value == 0)
         #expect(artifacts.artifacts(for: "json") == nil)
     }
@@ -224,8 +247,13 @@ struct GrammarTierTests {
             SyntaxTree(root: SyntaxNode(type: "_start", children: [], byteRange: 0 ..< text.utf8.count), source: text)
         }
         let tier = GrammarTier(
-            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .seconds(10), pool: nil,
-            cpuTime: GrammarTier.threadCPUTime, parse: parse)
+            artifacts: fixture.artifacts(),
+            record: GrammarTierRecord(),
+            deadline: .seconds(10),
+            pool: nil,
+            cpuTime: GrammarTier.threadCPUTime,
+            parse: parse
+        )
 
         let failure = await Self.failure { _ = try await Self.run(tier, Self.request("x")) }
 
@@ -242,8 +270,13 @@ struct GrammarTierTests {
             return SyntaxTree(root: SyntaxNode(type: "source", children: [error], byteRange: 0 ..< 100), source: text)
         }
         let tier = GrammarTier(
-            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .seconds(10), pool: nil,
-            cpuTime: GrammarTier.threadCPUTime, parse: parse)
+            artifacts: fixture.artifacts(),
+            record: GrammarTierRecord(),
+            deadline: .seconds(10),
+            pool: nil,
+            cpuTime: GrammarTier.threadCPUTime,
+            parse: parse
+        )
         let text = String(repeating: "x", count: 100)
 
         let failure = await Self.failure { _ = try await Self.run(tier, Self.request(text)) }

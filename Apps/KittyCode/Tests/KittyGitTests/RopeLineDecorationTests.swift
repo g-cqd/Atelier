@@ -53,7 +53,9 @@ import Testing
             LineDiff.diffLines(old: Rope(old), new: Rope(new))
                 == LineDiff.diffLines(
                     old: SubstringLines(DiffModel.lines(of: old) + [""]),
-                    new: SubstringLines(DiffModel.lines(of: new) + [""])))
+                    new: SubstringLines(DiffModel.lines(of: new) + [""])
+                )
+        )
     }
 
     @Test func `rope decorations equal line array decorations`() {
@@ -61,17 +63,25 @@ import Testing
         let current = ["let total = price * quantity", "added", "unchanged", "last"]
         let expected = GitStatusProvider.lineDecorations(base: old, current: current, addedColor: .added)
         let actual = GitStatusProvider.lineDecorations(
-            baseLines: old.map { Substring($0) }, currentRope: Rope(current.joined(separator: "\n")),
-            addedColor: .added)
+            baseLines: old.map { Substring($0) },
+            currentRope: Rope(current.joined(separator: "\n")),
+            addedColor: .added
+        )
         #expect(actual == expected)
     }
 
     @Test func `invalid UTF8 rope bytes compare as the displayed text`() {
         let rope = Rope(bytes: Data([0xFF]))
         let expected = GitStatusProvider.lineDecorations(
-            base: ["�"], current: rope.allLines, addedColor: .added)
+            base: ["�"],
+            current: rope.allLines,
+            addedColor: .added
+        )
         let actual = GitStatusProvider.lineDecorations(
-            baseLines: ["�"], currentRope: rope, addedColor: .added)
+            baseLines: ["�"],
+            currentRope: rope,
+            addedColor: .added
+        )
         #expect(actual == expected)
     }
 
@@ -79,7 +89,10 @@ import Testing
         let runner = FakeProcessRunner.gated { spec in
             if spec.arguments.contains("--porcelain=v2") {
                 return ProcessOutput(
-                    terminationStatus: 0, standardOutput: Data("? large.txt\0".utf8), standardError: Data())
+                    terminationStatus: 0,
+                    standardOutput: Data("? large.txt\0".utf8),
+                    standardError: Data()
+                )
             }
             return .success("")
         }

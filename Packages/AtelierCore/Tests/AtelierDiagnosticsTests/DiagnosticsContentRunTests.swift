@@ -16,9 +16,12 @@ struct DiagnosticsContentRunTests {
         -> DiagnosticsEngine.Request
     {
         DiagnosticsEngine.Request(
-            root: root, files: [.init(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))],
-            corpusFingerprint: identity, tools: [tool: ToolLocation(customPath: executable.path)],
-            contentIdentity: identity)
+            root: root,
+            files: [.init(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))],
+            corpusFingerprint: identity,
+            tools: [tool: ToolLocation(customPath: executable.path)],
+            contentIdentity: identity
+        )
     }
 
     @Test
@@ -33,14 +36,20 @@ struct DiagnosticsContentRunTests {
         let engine = DiagnosticsEngine(
             runner: runner,
             discovery: DiagnosticsEngineTests.discovery(
-                runner: runner, executable: executable, home: URL(filePath: temp.file("home"))))
+                runner: runner,
+                executable: executable,
+                home: URL(filePath: temp.file("home"))
+            )
+        )
         let ran = try await engine.run(
             .swiftlint,
-            request: Self.contentRequest(root: first, identity: "tree-1", tool: .swiftlint, executable: executable))
+            request: Self.contentRequest(root: first, identity: "tree-1", tool: .swiftlint, executable: executable)
+        )
 
         let again = try await engine.run(
             .swiftlint,
-            request: Self.contentRequest(root: second, identity: "tree-1", tool: .swiftlint, executable: executable))
+            request: Self.contentRequest(root: second, identity: "tree-1", tool: .swiftlint, executable: executable)
+        )
 
         #expect(again.fromCache)
         #expect(again.findings == ran.findings)
@@ -58,16 +67,25 @@ struct DiagnosticsContentRunTests {
         let engine = DiagnosticsEngine(
             runner: runner,
             discovery: DiagnosticsEngineTests.discovery(
-                runner: runner, executable: executable, home: URL(filePath: temp.file("home"))))
+                runner: runner,
+                executable: executable,
+                home: URL(filePath: temp.file("home"))
+            )
+        )
         let ran = try await engine.run(
             .swiftlint,
-            request: Self.contentRequest(root: export, identity: "tree-1", tool: .swiftlint, executable: executable))
+            request: Self.contentRequest(root: export, identity: "tree-1", tool: .swiftlint, executable: executable)
+        )
 
         let known = await engine.cachedResult(
             .swiftlint,
             request: Self.contentRequest(
-                root: URL(filePath: temp.file("not-exported-yet")), identity: "tree-1", tool: .swiftlint,
-                executable: executable))
+                root: URL(filePath: temp.file("not-exported-yet")),
+                identity: "tree-1",
+                tool: .swiftlint,
+                executable: executable
+            )
+        )
 
         #expect(known?.fromCache == true)
         #expect(known?.findings == ran.findings)
@@ -84,14 +102,20 @@ struct DiagnosticsContentRunTests {
         let engine = DiagnosticsEngine(
             runner: runner,
             discovery: DiagnosticsEngineTests.discovery(
-                runner: runner, executable: executable, home: URL(filePath: temp.file("home"))))
+                runner: runner,
+                executable: executable,
+                home: URL(filePath: temp.file("home"))
+            )
+        )
         _ = try await engine.run(
             .swiftlint,
-            request: Self.contentRequest(root: export, identity: "tree-1", tool: .swiftlint, executable: executable))
+            request: Self.contentRequest(root: export, identity: "tree-1", tool: .swiftlint, executable: executable)
+        )
 
         let known = await engine.cachedResult(
             .swiftlint,
-            request: Self.contentRequest(root: export, identity: "tree-2", tool: .swiftlint, executable: executable))
+            request: Self.contentRequest(root: export, identity: "tree-2", tool: .swiftlint, executable: executable)
+        )
 
         #expect(known == nil)
     }
@@ -108,15 +132,25 @@ struct DiagnosticsContentRunTests {
         let engine = DiagnosticsEngine(
             runner: runner,
             discovery: DiagnosticsEngineTests.discovery(
-                runner: runner, executable: executable, home: URL(filePath: temp.file("home"))))
+                runner: runner,
+                executable: executable,
+                home: URL(filePath: temp.file("home"))
+            )
+        )
         _ = try await engine.run(
             .swiftFormat,
-            request: Self.contentRequest(root: export, identity: "tree-1", tool: .swiftFormat, executable: executable))
+            request: Self.contentRequest(root: export, identity: "tree-1", tool: .swiftFormat, executable: executable)
+        )
 
         let known = await engine.cachedResult(
             .swiftFormat,
             request: Self.contentRequest(
-                root: URL(filePath: temp.file("gone")), identity: "tree-1", tool: .swiftFormat, executable: executable))
+                root: URL(filePath: temp.file("gone")),
+                identity: "tree-1",
+                tool: .swiftFormat,
+                executable: executable
+            )
+        )
 
         guard case .skipped = known?.status else {
             Issue.record("expected a cached skip, got \(String(describing: known?.status))")
@@ -128,9 +162,12 @@ struct DiagnosticsContentRunTests {
     // MARK: - The session's run on content put on disk
 
     private static let request = DiagnosticsEngine.Request(
-        root: URL(filePath: "/nowhere"), files: [.init(path: "A.swift", contentHash: "a", url: nil)],
-        corpusFingerprint: "tree-1", tools: [.swiftlint: ToolLocation(), .arcleak: ToolLocation()],
-        contentIdentity: "tree-1")
+        root: URL(filePath: "/nowhere"),
+        files: [.init(path: "A.swift", contentHash: "a", url: nil)],
+        corpusFingerprint: "tree-1",
+        tools: [.swiftlint: ToolLocation(), .arcleak: ToolLocation()],
+        contentIdentity: "tree-1"
+    )
 
     @Test
     func `every tool the cache answers reports without the files being put on disk`() async throws {
@@ -174,7 +211,9 @@ struct DiagnosticsContentRunTests {
     }
 
     private static func analyze(
-        _ request: DiagnosticsEngine.Request, with runner: ContentRunner, materializations: Materializations
+        _ request: DiagnosticsEngine.Request,
+        with runner: ContentRunner,
+        materializations: Materializations
     ) async -> [DiagnosticsSession.Update] {
         let updates = Mutex<[DiagnosticsSession.Update]>([])
         await DiagnosticsSession(engine: runner)
@@ -218,13 +257,23 @@ private actor ContentRunner: DiagnosticsRunning {
     func run(_ tool: DiagnosticTool, request: DiagnosticsEngine.Request) async throws -> DiagnosticsEngine.ToolResult {
         roots.append(request.root)
         return DiagnosticsEngine.ToolResult(
-            tool: tool, findings: [], status: .succeeded, duration: .zero, fromCache: false)
+            tool: tool,
+            findings: [],
+            status: .succeeded,
+            duration: .zero,
+            fromCache: false
+        )
     }
 
     func cachedResult(_ tool: DiagnosticTool, request: DiagnosticsEngine.Request) async -> DiagnosticsEngine.ToolResult?
     {
         guard cached.contains(tool) else { return nil }
         return DiagnosticsEngine.ToolResult(
-            tool: tool, findings: [], status: .succeeded, duration: .zero, fromCache: true)
+            tool: tool,
+            findings: [],
+            status: .succeeded,
+            duration: .zero,
+            fromCache: true
+        )
     }
 }

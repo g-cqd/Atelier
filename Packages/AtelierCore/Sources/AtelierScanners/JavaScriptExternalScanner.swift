@@ -92,7 +92,9 @@ public struct JavaScriptExternalScanner: GrammarExternalScanner {
 
     /// When `consume` is false, consume only enough to check if a comment permits a semicolon.
     private static func scanWhitespaceAndComments(
-        _ lexer: inout some ScannerLexer, scannedComment: inout Bool, consume: Bool
+        _ lexer: inout some ScannerLexer,
+        scannedComment: inout Bool,
+        consume: Bool
     ) -> WhitespaceResult {
         var sawBlockNewline = false
         while true {
@@ -138,7 +140,9 @@ public struct JavaScriptExternalScanner: GrammarExternalScanner {
     }
 
     private static func scanAutomaticSemicolon(
-        _ lexer: inout some ScannerLexer, commentCondition: Bool, scannedComment: inout Bool
+        _ lexer: inout some ScannerLexer,
+        commentCondition: Bool,
+        scannedComment: inout Bool
     ) -> Bool {
         lexer.resultSymbol = TokenType.automaticSemicolon.rawValue
         lexer.markEnd()
@@ -284,7 +288,8 @@ public struct JavaScriptExternalScanner: GrammarExternalScanner {
         if validSymbols[TokenType.automaticSemicolon.rawValue] {
             var scannedComment = false
             let result = Self.scanAutomaticSemicolon(
-                &lexer, commentCondition: !validSymbols[TokenType.logicalOr.rawValue],
+                &lexer,
+                commentCondition: !validSymbols[TokenType.logicalOr.rawValue],
                 scannedComment: &scannedComment
             )
             if !result && !scannedComment && validSymbols[TokenType.ternaryQmark.rawValue]

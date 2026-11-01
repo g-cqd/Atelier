@@ -9,12 +9,25 @@ import Testing
 @Suite(.mainActorLane)
 struct DiagnosticRowMapperTests {
     private func finding(
-        line: Int, column: Int? = nil, endLine: Int? = nil, endColumn: Int? = nil,
-        severity: Finding.Severity = .warning, file: String = "a.swift", ruleID: String = "rule"
+        line: Int,
+        column: Int? = nil,
+        endLine: Int? = nil,
+        endColumn: Int? = nil,
+        severity: Finding.Severity = .warning,
+        file: String = "a.swift",
+        ruleID: String = "rule"
     ) -> Finding {
         Finding(
-            tool: .swiftlint, ruleID: ruleID, message: "message", file: file, line: line, column: column,
-            endLine: endLine, endColumn: endColumn, severity: severity)
+            tool: .swiftlint,
+            ruleID: ruleID,
+            message: "message",
+            file: file,
+            line: line,
+            column: column,
+            endLine: endLine,
+            endColumn: endColumn,
+            severity: severity
+        )
     }
 
     @Test
@@ -25,7 +38,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 2)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let row = try #require(rows[1])
         #expect(row.severity == .warning)
@@ -38,7 +54,11 @@ struct DiagnosticRowMapperTests {
         let old = "line1\nline2AAAA\nline3\n"
         let new = "line1\nline2BBBB\nline3\n"
         let diff = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
+            oldText: old,
+            newText: new,
+            language: .plain,
+            layout: .changes(context: 0, expansions: [:])
+        )
         let rendered = try #require(diff.new)
         // The leading gap that hid "line1" takes no row: row 0 is line 2.
         #expect(rendered.rows[0].newNumber == 2)
@@ -46,7 +66,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 1)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         #expect(rows.isEmpty)
     }
@@ -59,7 +82,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 1, column: 5)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let squiggle = try #require(rows[0]?.squiggles.first)
         #expect(squiggle.start == 4)
@@ -74,7 +100,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 1, column: 999)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let squiggle = try #require(rows[0]?.squiggles.first)
         #expect(squiggle.start == "let x = 1".count)
@@ -88,7 +117,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 1, column: 5, endLine: 1, endColumn: 14)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let squiggle = try #require(rows[0]?.squiggles.first)
         #expect(squiggle.start == 4)
@@ -103,7 +135,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 1, column: 5, endLine: 2, endColumn: 3)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let squiggle = try #require(rows[0]?.squiggles.first)
         #expect(squiggle.end == nil)
@@ -117,7 +152,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 1)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let row = try #require(rows[0])
         #expect(row.squiggles.isEmpty)
@@ -131,7 +169,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["b.swift": [finding(line: 1, file: "b.swift")]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         #expect(rows.isEmpty)
     }
@@ -149,7 +190,10 @@ struct DiagnosticRowMapperTests {
         ]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         let row = try #require(rows[0])
         #expect(row.count == 2)
@@ -167,7 +211,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 3)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         #expect(rows.isEmpty)
     }
@@ -181,7 +228,10 @@ struct DiagnosticRowMapperTests {
         let findings = ["a.swift": [finding(line: 3)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         #expect(rows.isEmpty)
     }
@@ -220,8 +270,10 @@ struct DiagnosticRowMapperTests {
         let both = ["a.swift": [finding(line: 2)]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: SideFindings(paths: [0: "a.swift"], findings: both),
-            right: SideFindings(paths: [0: "a.swift"], findings: both))
+            for: rendered,
+            left: SideFindings(paths: [0: "a.swift"], findings: both),
+            right: SideFindings(paths: [0: "a.swift"], findings: both)
+        )
 
         #expect(rows.values.map(\.count) == [1])
     }
@@ -229,17 +281,28 @@ struct DiagnosticRowMapperTests {
     @Test
     func `a finding under a different file index than the row's is absent`() throws {
         let file1 = PreparedDiff(
-            FileDiffInput(title: "a.swift", oldText: "x\n", newText: "x\n", language: .plain), granularity: .word)
+            FileDiffInput(title: "a.swift", oldText: "x\n", newText: "x\n", language: .plain),
+            granularity: .word
+        )
         let file2 = PreparedDiff(
-            FileDiffInput(title: "b.swift", oldText: "y\n", newText: "y\n", language: .plain), granularity: .word)
+            FileDiffInput(title: "b.swift", oldText: "y\n", newText: "y\n", language: .plain),
+            granularity: .word
+        )
         let diff = DiffRenderer.render(
-            prepared: [file1, file2], options: DiffRenderer.Options(sides: [.new]), layout: .full, withHeaders: true)
+            prepared: [file1, file2],
+            options: DiffRenderer.Options(sides: [.new]),
+            layout: .full,
+            withHeaders: true
+        )
         let rendered = try #require(diff.new)
         let paths = [0: "a.swift", 1: "b.swift"]
         let findings = ["b.swift": [finding(line: 1, file: "b.swift")]]
 
         let rows = DiagnosticRowMapper.rows(
-            for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+            for: rendered,
+            left: .none,
+            right: SideFindings(paths: paths, findings: findings)
+        )
 
         // Only the row belonging to file 1 ("b.swift") should be annotated, never file 0's row on the same line.
         for (rowIndex, row) in rows {

@@ -59,8 +59,12 @@ struct SwiftColorRefinementBenchmark {
         var colourOnlyCPU: [Double] = []
         var refined = LayeredLineTokens(lineCount: 0)
         let request = TierRequest(
-            revision: SourceRevision(documentID: "sample.swift", language: .swift, key: .content("sample")), text: text,
-            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines), visibleLines: 0 ..< 80, unit: .utf16)
+            revision: SourceRevision(documentID: "sample.swift", language: .swift, key: .content("sample")),
+            text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines),
+            visibleLines: 0 ..< 80,
+            unit: .utf16
+        )
         /// Runs the tier through the job, returning the side's layers.
         func refine(_ tier: SwiftSyntaxTier) async -> LayeredLineTokens {
             let updates = Mutex([TierUpdate]())
@@ -93,7 +97,8 @@ struct SwiftColorRefinementBenchmark {
         let layoutManager = try #require(textView.textLayoutManager)
         var fragments: [NSTextLayoutFragment] = []
         _ = layoutManager.enumerateTextLayoutFragments(
-            from: layoutManager.documentRange.location, options: .ensuresLayout
+            from: layoutManager.documentRange.location,
+            options: .ensuresLayout
         ) { fragment in
             fragments.append(fragment)
             return true
@@ -130,7 +135,8 @@ struct SwiftColorRefinementBenchmark {
                 + "colour alone; \(screen.count) rows, application median "
                 + "\(Self.median(applicationCPU)) ms CPU, \(Self.median(application)) ms wall "
                 + "(budget \(Self.applicationBudget)), of which the landing's own \(Self.median(landingCPU)) ms CPU; "
-                + "the lexer finds \(lexical) tokens")
+                + "the lexer finds \(lexical) tokens"
+        )
         #expect(Self.median(tierCPU) <= Self.tierBudget)
         #expect(Self.median(applicationCPU) <= Self.applicationBudget)
     }

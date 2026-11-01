@@ -18,7 +18,10 @@ public struct LexicalTier: AtelierHighlighting.HighlightTier {
     ///   earlier line opened.
     public func run(_ request: TierRequest, emit: (TierUpdate) async -> Void) async throws {
         _ = await ProgressiveHighlighting.run(
-            request, lexer: LexicalLineLexer(language: request.revision.language), emit: emit)
+            request,
+            lexer: LexicalLineLexer(language: request.revision.language),
+            emit: emit
+        )
         try Task.checkCancellation()
     }
 }

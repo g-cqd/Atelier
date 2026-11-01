@@ -34,7 +34,9 @@ struct GrammarRegistryCacheTests {
                     callers.record(1)
                     _ = try await callers.wait(forAtLeast: 16, timeout: .seconds(10))
                     let result = try await registry.compiledResult(
-                        for: "tiny", grammarsPath: fixture.grammarsPath)
+                        for: "tiny",
+                        grammarsPath: fixture.grammarsPath
+                    )
                     return result.parseTable.stateCount
                 }
             }

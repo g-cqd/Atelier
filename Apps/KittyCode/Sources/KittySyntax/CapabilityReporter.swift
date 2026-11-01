@@ -58,7 +58,8 @@ public enum CapabilityReporter: Sendable {
         }
 
         let unsupportedFeatures = analysis.requirements.queryFeatures.subtracting(
-            hostCapabilities.supportedQueryFeatures)
+            hostCapabilities.supportedQueryFeatures
+        )
         if !unsupportedFeatures.isEmpty {
             blockers.append(
                 "Unsupported query features: \(unsupportedFeatures.map(\.rawValue).sorted().joined(separator: ", "))"

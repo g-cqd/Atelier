@@ -52,7 +52,8 @@ struct GitArchiveTests {
         let client = lab.client()
 
         let folder = try await client.withExportedTree(
-            try await client.treeID(of: "HEAD"), including: Self.swiftAndYAML
+            try await client.treeID(of: "HEAD"),
+            including: Self.swiftAndYAML
         ) { $0 }
 
         #expect(!FileManager.default.fileExists(atPath: folder.path))
@@ -178,7 +179,9 @@ struct GitArchiveTests {
         defer { lab.cleanup() }
         try lab.commit(["A.swift": "let a = 1\n"])
         try FileManager.default.createSymbolicLink(
-            atPath: lab.root.appending(path: "Link.swift").path, withDestinationPath: "/etc/hosts")
+            atPath: lab.root.appending(path: "Link.swift").path,
+            withDestinationPath: "/etc/hosts"
+        )
         try lab.git("add", "Link.swift")
         try lab.git("commit", "-q", "-m", "link")
         let client = lab.client()
@@ -251,7 +254,9 @@ struct GitArchiveTests {
         }
         #expect(
             !FileManager.default.fileExists(
-                atPath: folder.deletingLastPathComponent().appending(path: "escape.swift").path))
+                atPath: folder.deletingLastPathComponent().appending(path: "escape.swift").path
+            )
+        )
     }
 
     @Test
@@ -342,7 +347,9 @@ private struct ArchiveLab {
         GitClient(
             repository: root,
             runner: EnvironmentAddingRunner(base: HardenedProcessRunner(pool: pool), variables: environment),
-            timeout: .seconds(30), gate: GitConfigGate())
+            timeout: .seconds(30),
+            gate: GitConfigGate()
+        )
     }
 
     /// Writes `files` and commits them all.
@@ -350,7 +357,9 @@ private struct ArchiveLab {
         for (path, contents) in files {
             let url = root.appending(path: path)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try contents.write(to: url, atomically: true, encoding: .utf8)
         }
         try git("add", "-A")

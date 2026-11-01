@@ -23,7 +23,10 @@ struct TableFileParseTests {
         let compiled = try (language == "json" ? BundledGrammarFixture.json : BundledGrammarFixture.css).get()
         let read = try ParseTableCompiler.CompilationResult(tableFile: compiled.tableFile())
         let compiledParser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let readParser = GLRParser(parseTable: read.parseTable, lexTable: read.lexTable, productions: read.productions)
 
         for input in inputs {

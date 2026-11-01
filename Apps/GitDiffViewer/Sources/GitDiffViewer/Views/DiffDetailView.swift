@@ -89,19 +89,28 @@ struct DiffDetailView: View {
                 ProgressView("Comparing…")
             case .error(let error):
                 ContentUnavailableView(
-                    "Cannot compare", systemImage: "exclamationmark.triangle", description: Text(error))
+                    "Cannot compare",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(error)
+                )
             case .noChanges:
                 ContentUnavailableView(
-                    "No changes", systemImage: "checkmark.circle",
-                    description: Text("Every file under the selection is identical on both sides."))
+                    "No changes",
+                    systemImage: "checkmark.circle",
+                    description: Text("Every file under the selection is identical on both sides.")
+                )
             case .noSelection:
                 ContentUnavailableView(
-                    "No file selected", systemImage: "doc.text.magnifyingglass",
-                    description: Text("Select a file in either explorer."))
+                    "No file selected",
+                    systemImage: "doc.text.magnifyingglass",
+                    description: Text("Select a file in either explorer.")
+                )
             case .noSources:
                 ContentUnavailableView(
-                    "No sources", systemImage: "folder.badge.questionmark",
-                    description: Text("Pick the two sides to compare."))
+                    "No sources",
+                    systemImage: "folder.badge.questionmark",
+                    description: Text("Pick the two sides to compare.")
+                )
         }
     }
 
@@ -180,18 +189,36 @@ private struct SplitDiffView: View {
     var body: some View {
         ResizablePanes(axis: isStacked ? .vertical : .horizontal, ratio: ratio, covered: isStacked ? barsHeight : 0) {
             DiagnosticDiffTextView(
-                model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
-                wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
-                syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath,
+                model: model,
+                rendered: old,
+                gutter: .old,
+                keepsScrollPosition: keepsScrollPosition,
+                wrapsLines: wrapsLines,
+                wrapColumn: wrapColumn,
+                showsMinimap: showsMinimap,
+                syncsScrolling: syncsScrolling,
+                scrollRequest: scrollRequest,
+                splitController: controller,
+                onGapDrag: onGapDrag,
+                onDisplayed: onDisplayed,
+                scrollMemoryPath: scrollMemoryPath,
                 underBars: underBars
             )
         } trailing: {
             DiagnosticDiffTextView(
-                model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
-                wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
-                syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath,
+                model: model,
+                rendered: new,
+                gutter: .new,
+                keepsScrollPosition: keepsScrollPosition,
+                wrapsLines: wrapsLines,
+                wrapColumn: wrapColumn,
+                showsMinimap: showsMinimap,
+                syncsScrolling: syncsScrolling,
+                scrollRequest: scrollRequest,
+                splitController: controller,
+                onGapDrag: onGapDrag,
+                onDisplayed: onDisplayed,
+                scrollMemoryPath: scrollMemoryPath,
                 underBars: isStacked ? 0 : underBars
             )
         }

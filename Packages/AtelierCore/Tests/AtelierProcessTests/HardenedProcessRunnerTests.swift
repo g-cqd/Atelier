@@ -10,7 +10,11 @@ import Testing
 struct HardenedProcessRunnerTests {
     private static func shell(_ script: String, timeout: Duration? = nil, input: Data? = nil) -> ProcessSpec {
         ProcessSpec(
-            executable: URL(filePath: "/bin/sh"), arguments: ["-c", script], standardInput: input, timeout: timeout)
+            executable: URL(filePath: "/bin/sh"),
+            arguments: ["-c", script],
+            standardInput: input,
+            timeout: timeout
+        )
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -54,8 +58,10 @@ struct HardenedProcessRunnerTests {
         defer { pool.shutdown() }
         let runner = HardenedProcessRunner(pool: pool)
         let spec = ProcessSpec(
-            executable: URL(filePath: "/bin/sh"), arguments: ["-c", "printf '%s|%s' \"$HOME\" \"$ATELIER_PROBE\""],
-            environment: .inherited(overriding: ["ATELIER_PROBE": "set"]))
+            executable: URL(filePath: "/bin/sh"),
+            arguments: ["-c", "printf '%s|%s' \"$HOME\" \"$ATELIER_PROBE\""],
+            environment: .inherited(overriding: ["ATELIER_PROBE": "set"])
+        )
         let output = try await runner.run(spec)
         let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
         #expect(String(decoding: output.standardOutput, as: UTF8.self) == "\(home)|set")

@@ -8,14 +8,29 @@ import Testing
 @Suite
 struct SymbolDuplicateNameTests {
     private static let first = SymbolMappingEntry(
-        name: "folder", visibility: .publicSymbol, assetGlyphIndex: 1, codepoint: 0x100215)
+        name: "folder",
+        visibility: .publicSymbol,
+        assetGlyphIndex: 1,
+        codepoint: 0x100215
+    )
     private static let second = SymbolMappingEntry(
-        name: "folder", visibility: .privateSymbol, assetGlyphIndex: 2, codepoint: 0x100216)
+        name: "folder",
+        visibility: .privateSymbol,
+        assetGlyphIndex: 2,
+        codepoint: 0x100216
+    )
 
     private static func record(_ entry: SymbolMappingEntry) -> SymbolRecord {
         SymbolRecord(
-            name: entry.name, visibility: entry.visibility, assetGlyphIndex: entry.assetGlyphIndex,
-            codepoint: entry.codepoint, glyph: entry.glyph, availability: nil, categories: [], searchTerms: [])
+            name: entry.name,
+            visibility: entry.visibility,
+            assetGlyphIndex: entry.assetGlyphIndex,
+            codepoint: entry.codepoint,
+            glyph: entry.glyph,
+            availability: nil,
+            categories: [],
+            searchTerms: []
+        )
     }
 
     private static func temporaryMappingURL() -> URL {
@@ -50,7 +65,11 @@ struct SymbolDuplicateNameTests {
     func `discovery keeps the first record of a name listed twice`() {
         let trash = SymbolMappingEntry(name: "trash", visibility: .publicSymbol, assetGlyphIndex: 3, codepoint: nil)
         let trashAgain = SymbolMappingEntry(
-            name: "trash", visibility: .publicSymbol, assetGlyphIndex: 9, codepoint: nil)
+            name: "trash",
+            visibility: .publicSymbol,
+            assetGlyphIndex: 9,
+            codepoint: nil
+        )
         let records = [Self.first, trash, Self.second, trashAgain].map(Self.record)
 
         let unique = SymbolDiscovery.removingDuplicateNames(records)

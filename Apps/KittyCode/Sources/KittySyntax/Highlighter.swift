@@ -73,7 +73,10 @@ public final class Highlighter: Sendable {
     }
 
     private func buildSpans(
-        source: String, captureNames: [String], matches: [QueryMatch], scratch: HighlightScratch
+        source: String,
+        captureNames: [String],
+        matches: [QueryMatch],
+        scratch: HighlightScratch
     ) -> [StyledSpan] {
         if let spans = source.utf8.withContiguousStorageIfAvailable({ utf8 in
             buildSpans(source: source, utf8: utf8, captureNames: captureNames, matches: matches, scratch: scratch)

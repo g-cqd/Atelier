@@ -24,8 +24,11 @@ struct SelectionEditingTests {
         let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
-            filePath: "/test.txt", fileName: "test.txt",
-            content: fileContent.joined(separator: "\n"), language: nil)
+            filePath: "/test.txt",
+            fileName: "test.txt",
+            content: fileContent.joined(separator: "\n"),
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),
@@ -36,7 +39,9 @@ struct SelectionEditingTests {
     }
 
     private func setSelection(
-        _ state: EditorState, from: (row: Int, col: Int), to: (row: Int, col: Int)
+        _ state: EditorState,
+        from: (row: Int, col: Int),
+        to: (row: Int, col: Int)
     ) {
         state.selection = TextSelection(
             anchor: TextPosition(row: from.row, col: from.col),
@@ -52,8 +57,10 @@ struct SelectionEditingTests {
         setSelection(sut.state, from: (0, 0), to: (0, 5))
 
         _ = handleEvent(
-            event: .key(KeyEvent(keyCode: Key.enter.rawValue)), state: sut.state,
-            pipeline: sut.pipeline)
+            event: .key(KeyEvent(keyCode: Key.enter.rawValue)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
 
         #expect(sut.state.fileContent == ["", " world"])
         #expect(!sut.state.hasActiveSelection)
@@ -65,8 +72,10 @@ struct SelectionEditingTests {
         setSelection(sut.state, from: (0, 0), to: (0, 5))
 
         _ = handleEvent(
-            event: .key(KeyEvent(keyCode: Key.backspace.rawValue)), state: sut.state,
-            pipeline: sut.pipeline)
+            event: .key(KeyEvent(keyCode: Key.backspace.rawValue)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
 
         #expect(sut.state.fileContent == [" world"])
         #expect(!sut.state.hasActiveSelection)

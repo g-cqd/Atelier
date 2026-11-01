@@ -28,13 +28,19 @@ private final class Compositor {
         let device = try #require(MTLCreateSystemDefaultDevice())
         queue = try #require(device.makeCommandQueue())
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+            pixelFormat: .bgra8Unorm,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .shared
         texture = try #require(device.makeTexture(descriptor: descriptor))
         let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         renderer = CARenderer(
-            mtlTexture: texture, options: [kCARendererColorSpace: colorSpace, kCARendererMetalCommandQueue: queue])
+            mtlTexture: texture,
+            options: [kCARendererColorSpace: colorSpace, kCARendererMetalCommandQueue: queue]
+        )
     }
 }
 

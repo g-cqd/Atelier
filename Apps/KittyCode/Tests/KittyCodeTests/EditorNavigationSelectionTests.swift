@@ -22,8 +22,11 @@ struct EditorNavigationSelectionTests {
         let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
-            filePath: "/test.txt", fileName: "test.txt",
-            content: "hello world\nsecond line\nthird line", language: nil)
+            filePath: "/test.txt",
+            fileName: "test.txt",
+            content: "hello world\nsecond line\nthird line",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),
@@ -34,7 +37,9 @@ struct EditorNavigationSelectionTests {
     }
 
     private func keyEvent(
-        _ keyCode: UInt32, modifiers: KeyModifiers = [], eventType: KeyEventType = .press
+        _ keyCode: UInt32,
+        modifiers: KeyModifiers = [],
+        eventType: KeyEventType = .press
     ) -> InputEvent {
         .key(KeyEvent(keyCode: keyCode, modifiers: modifiers, eventType: eventType))
     }

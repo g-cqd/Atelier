@@ -26,7 +26,8 @@ struct UnviableTokenTests {
             ("text", .pattern(#"[^"]+"#))
         ],
         extras: [.pattern(#"\s"#)],
-        externals: [.symbol("MARK")])
+        externals: [.symbol("MARK")]
+    )
 
     @Test
     func `a token only another context can take is read again as one the stack can take`() throws {
@@ -45,7 +46,8 @@ struct UnviableTokenTests {
             ("string", .seq([.string("\""), .symbol("text"), .string("\"")])),
             ("text", .pattern(#"[^"]+"#))
         ],
-        extras: [.pattern(#"\s"#)])
+        extras: [.pattern(#"\s"#)]
+    )
 
     @Test
     func `the error mode leaves out a token that starts as a separator does`() throws {
@@ -69,7 +71,10 @@ struct UnviableTokenTests {
     private static func parser(_ grammar: GrammarDefinition) throws -> GLRParser {
         let compiled = try ParseTableCompiler.compile(grammar)
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 }
 

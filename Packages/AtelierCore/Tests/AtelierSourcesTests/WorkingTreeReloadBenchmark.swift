@@ -58,6 +58,7 @@ struct WorkingTreeReloadBenchmark {
             first load \(first), reload median \(Self.median(walls)), min \(walls.min() ?? .zero), \
             max \(walls.max() ?? .zero); median CPU per reload: loader \(Self.median(loaderCPU)), \
             git \(Self.median(gitCPU))
-            """)
+            """
+        )
     }
 }

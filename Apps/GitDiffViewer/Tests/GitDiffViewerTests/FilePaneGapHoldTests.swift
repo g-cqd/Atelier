@@ -100,13 +100,18 @@ private final class HeldFilePane {
         let rendered = try #require(Self.render([:]))
         host = NSHostingView(rootView: Self.pane(rendered, onGapDrag: nil, underBars: underBars))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         controller = GapDragController(
-            taskProvider: taskProvider, clock: clock,
+            taskProvider: taskProvider,
+            clock: clock,
             expansion: { [weak self] key in self?.expansions[key] ?? GapExpansion() },
-            apply: { [weak self] expansion, key in self?.reveal(expansion, for: key) })
+            apply: { [weak self] expansion, key in self?.reveal(expansion, for: key) }
+        )
         host.rootView = Self.pane(rendered, onGapDrag: drag, underBars: underBars)
         settle()
     }
@@ -118,17 +123,28 @@ private final class HeldFilePane {
         new[9] = "let value10 = ten"
         new[39] = "let value40 = forty"
         let diff = DiffRenderer.render(
-            oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-            language: .plain, layout: .changes(context: 2, expansions: expansions))
+            oldText: old.joined(separator: "\n") + "\n",
+            newText: new.joined(separator: "\n") + "\n",
+            language: .plain,
+            layout: .changes(context: 2, expansions: expansions)
+        )
         return diff.unified
     }
 
     private static func pane(
-        _ rendered: RenderedText, onGapDrag: ((GapDragEvent) -> Void)?, underBars: CGFloat
+        _ rendered: RenderedText,
+        onGapDrag: ((GapDragEvent) -> Void)?,
+        underBars: CGFloat
     ) -> DiffTextView {
         DiffTextView(
-            rendered: rendered, gutter: .dual, keepsScrollPosition: true, wrapsLines: false, showsMinimap: false,
-            onGapDrag: onGapDrag, underBars: underBars)
+            rendered: rendered,
+            gutter: .dual,
+            keepsScrollPosition: true,
+            wrapsLines: false,
+            showsMinimap: false,
+            onGapDrag: onGapDrag,
+            underBars: underBars
+        )
     }
 
     private var drag: (GapDragEvent) -> Void {
@@ -182,8 +198,16 @@ private final class HeldFilePane {
         let gutter = gutter
         guard
             let event = NSEvent.mouseEvent(
-                with: type, location: gutter.convert(point, to: nil), modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+                with: type,
+                location: gutter.convert(point, to: nil),
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
         else { return }
         switch type {
             case .leftMouseDown: gutter.mouseDown(with: event)

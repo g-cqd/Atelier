@@ -43,7 +43,10 @@ struct GLRParserPrecedenceTests {
     private static func grouping(of source: String) throws -> String {
         let compiled = try ParseTableCompiler.compile(ArithmeticGrammar.definition())
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let tree = try parser.parse(source)
         #expect(!tree.root.containsError)
         return try rendered(tree.root, source: source)

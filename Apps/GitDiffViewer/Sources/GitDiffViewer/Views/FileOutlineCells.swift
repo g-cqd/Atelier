@@ -83,11 +83,16 @@ final class FileCellView: NSTableCellView {
     }
 
     func configure(
-        node: PathNode, glyph: ChangeGlyph?, scheme: BadgeScheme, state: BadgeChangeState, detail: String? = nil
+        node: PathNode,
+        glyph: ChangeGlyph?,
+        scheme: BadgeScheme,
+        state: BadgeChangeState,
+        detail: String? = nil
     ) {
         imageView?.image = NSImage(
             systemSymbolName: node.isDirectory ? "folder" : "doc.text",
-            accessibilityDescription: node.isDirectory ? "Folder" : "File")
+            accessibilityDescription: node.isDirectory ? "Folder" : "File"
+        )
         textField?.stringValue = node.name
         badge.glyph = glyph
         badge.isDimmed = node.isDirectory
@@ -140,7 +145,8 @@ final class CommitSectionCellView: NSTableCellView {
         count.stringValue = files > 0 ? "\(files)" : ""
         toolTip = tooltip
         setAccessibilityLabel(
-            [title, files == 1 ? "1 file" : "\(files) files", tooltip].compactMap(\.self).joined(separator: ", "))
+            [title, files == 1 ? "1 file" : "\(files) files", tooltip].compactMap(\.self).joined(separator: ", ")
+        )
     }
 }
 

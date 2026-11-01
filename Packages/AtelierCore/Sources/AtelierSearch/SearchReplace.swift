@@ -39,8 +39,12 @@ public func applyReplacements(
         while end < ordered.count, ordered[end].row == row { end += 1 }
         if row >= 0, row < lines.count {
             let replaced = rewritten(
-                lines[row], replacing: ordered[start ..< end], pattern: pattern, template: replacement,
-                deadline: deadline)
+                lines[row],
+                replacing: ordered[start ..< end],
+                pattern: pattern,
+                template: replacement,
+                deadline: deadline
+            )
             result[row] = replaced.line
             count += replaced.count
         }
@@ -51,7 +55,10 @@ public func applyReplacements(
 
 /// `line` with `matches`, sorted by column, replaced in one pass from its start, and how many were replaced.
 private func rewritten(
-    _ line: String, replacing matches: ArraySlice<SearchMatch>, pattern: SearchPattern, template: String,
+    _ line: String,
+    replacing matches: ArraySlice<SearchMatch>,
+    pattern: SearchPattern,
+    template: String,
     deadline: ContinuousClock.Instant
 ) -> (line: String, count: Int) {
     let texts = replacements(for: matches, in: line, pattern: pattern, template: template, deadline: deadline)
@@ -81,7 +88,10 @@ private func rewritten(
 /// for a regular expression, `template` expanded from the expression's match that starts and ends at the same columns
 /// of `line`, or nil when it has none there or the budget runs out first.
 private func replacements(
-    for matches: some Collection<SearchMatch>, in line: String, pattern: SearchPattern, template: String,
+    for matches: some Collection<SearchMatch>,
+    in line: String,
+    pattern: SearchPattern,
+    template: String,
     deadline: ContinuousClock.Instant
 ) -> [String?] {
     guard case .regex(let regex) = pattern else { return matches.map { _ in template } }
@@ -128,7 +138,9 @@ private func captureGroup(at index: Int, in match: NSTextCheckingResult, text: S
 ///   given `$12` with 5 capture groups, the result is `<group 1>` followed by `"2"`.
 /// - A trailing `$` or `$` followed by a non-digit, non-`$` character is emitted literally.
 private func expandReplacementTemplate(
-    _ template: String, using match: NSTextCheckingResult, in text: String
+    _ template: String,
+    using match: NSTextCheckingResult,
+    in text: String
 ) -> String {
     let groupCount = match.numberOfRanges
     var result = ""

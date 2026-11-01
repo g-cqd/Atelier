@@ -50,7 +50,8 @@ public enum SARIFDecoder {
                         file: paths.relativePath(of: relatedURI),
                         line: relatedPhysical["region"]["startLine"].int ?? 1,
                         message: relatedLocation["message"]["text"].string
-                    ))
+                    )
+                )
             }
         return Finding(
             tool: tool,

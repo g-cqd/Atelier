@@ -15,7 +15,9 @@ public enum TextTypesetter {
     /// - Complexity: O(bytes in rows). Throws only on cancellation.
     @concurrent
     public static func layout(
-        _ rows: Range<RowIndex>, of text: StyledText, configuration: LayoutConfiguration
+        _ rows: Range<RowIndex>,
+        of text: StyledText,
+        configuration: LayoutConfiguration
     ) async throws(CancellationError) -> [RowGeometry] {
         try layoutSynchronously(rows, of: text, configuration: configuration)
     }
@@ -24,7 +26,9 @@ public enum TextTypesetter {
     /// needs an immediate answer off an `async` boundary — a gutter, a minimap or hover hit-testing reading geometry
     /// from the main actor — can call it directly instead of awaiting a child task for cheap, bounded ranges.
     public static func layoutSynchronously(
-        _ rows: Range<RowIndex>, of text: StyledText, configuration: LayoutConfiguration
+        _ rows: Range<RowIndex>,
+        of text: StyledText,
+        configuration: LayoutConfiguration
     ) throws(CancellationError) -> [RowGeometry] {
         let baseFont = Self.font(for: text.styles.font, weight: nil, isItalic: false)
         var fontCache: [FontKey: CTFont] = [FontKey(font: text.styles.font, weight: nil, isItalic: false): baseFont]
@@ -37,8 +41,14 @@ public enum TextTypesetter {
             let row = RowIndex(rawRow)
             let rowText = RowText(bytes: text.bytes(ofRow: row))
             let attributed = Self.attributedString(
-                rowText: rowText, runs: text.runs[row], sheet: text.styles, fontCache: &fontCache, includeColor: false,
-                appearance: .light, bidi: configuration.bidi)
+                rowText: rowText,
+                runs: text.runs[row],
+                sheet: text.styles,
+                fontCache: &fontCache,
+                includeColor: false,
+                appearance: .light,
+                bidi: configuration.bidi
+            )
             let typesetter = CTTypesetterCreateWithAttributedString(attributed)
             let breaks = Self.breakLines(typesetter: typesetter, length: rowText.utf16Count, wrapWidth: wrapWidth)
             var lines: [VisualLine] = []
@@ -57,20 +67,64 @@ public enum TextTypesetter {
     @concurrent
     // swiftlint:disable:next function_parameter_count
     public static func render(
-        _ rows: Range<RowIndex>, of text: StyledText, decorations: [DecorationLayer],
-        configuration: LayoutConfiguration, appearance: Appearance, colorSpace: CGColorSpace, scale: Double
+        _ rows: Range<RowIndex>,
+        of text: StyledText,
+        decorations: [DecorationLayer],
+        configuration: LayoutConfiguration,
+        appearance: Appearance,
+        colorSpace: CGColorSpace,
+        scale: Double
     ) async throws(CancellationError) -> RenderedTile {
         try renderSynchronously(
-            rows, of: text, decorations: decorations, configuration: configuration, appearance: appearance,
-            colorSpace: colorSpace, scale: scale)
+            rows,
+            of: text,
+            decorations: decorations,
+            configuration: configuration,
+            appearance: appearance,
+            colorSpace: colorSpace,
+            scale: scale
+        )
+    }
+
+    /// A bitmap of `width` by `height` points at `scale`, drawn into with a flipped, top-left origin so a row's `y` matches
+    /// document coordinates.
+    private static func bitmap(
+        width totalWidth: Double,
+        height totalHeight: Double,
+        scale: Double,
+        colorSpace: CGColorSpace
+    ) throws(CancellationError) -> CGContext {
+        let pixelWidth = max(Int((totalWidth * scale).rounded(.up)), 1)
+        let pixelHeight = max(Int((totalHeight * scale).rounded(.up)), 1)
+        guard
+            let context = CGContext(
+                data: nil,
+                width: pixelWidth,
+                height: pixelHeight,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else { throw CancellationError() }
+        context.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+        // A flipped, top-left origin so row `y` matches document coordinates.
+        context.translateBy(x: 0, y: CGFloat(totalHeight))
+        context.scaleBy(x: 1, y: -1)
+        return context
     }
 
     /// ``render(_:of:decorations:configuration:appearance:colorSpace:scale:)``'s synchronous core; see
     /// ``layoutSynchronously(_:of:configuration:)``.
     // swiftlint:disable:next function_parameter_count
     public static func renderSynchronously(
-        _ rows: Range<RowIndex>, of text: StyledText, decorations: [DecorationLayer],
-        configuration: LayoutConfiguration, appearance: Appearance, colorSpace: CGColorSpace, scale: Double
+        _ rows: Range<RowIndex>,
+        of text: StyledText,
+        decorations: [DecorationLayer],
+        configuration: LayoutConfiguration,
+        appearance: Appearance,
+        colorSpace: CGColorSpace,
+        scale: Double
     ) throws(CancellationError) -> RenderedTile {
         let baseFont = Self.font(for: text.styles.font, weight: nil, isItalic: false)
         var fontCache: [FontKey: CTFont] = [FontKey(font: text.styles.font, weight: nil, isItalic: false): baseFont]
@@ -90,8 +144,14 @@ public enum TextTypesetter {
             let row = RowIndex(rawRow)
             let rowText = RowText(bytes: text.bytes(ofRow: row))
             let attributed = Self.attributedString(
-                rowText: rowText, runs: text.runs[row], sheet: text.styles, fontCache: &fontCache, includeColor: true,
-                appearance: appearance, bidi: configuration.bidi)
+                rowText: rowText,
+                runs: text.runs[row],
+                sheet: text.styles,
+                fontCache: &fontCache,
+                includeColor: true,
+                appearance: appearance,
+                bidi: configuration.bidi
+            )
             let typesetter = CTTypesetterCreateWithAttributedString(attributed)
             let breaks = Self.breakLines(typesetter: typesetter, length: rowText.utf16Count, wrapWidth: wrapWidth)
             rowTops.append(y)
@@ -106,24 +166,15 @@ public enum TextTypesetter {
                 y += lineHeight
             }
             geometry.append(
-                RowGeometry(height: Float(lineHeight) * Float(max(visualLines.count, 1)), lines: visualLines))
+                RowGeometry(height: Float(lineHeight) * Float(max(visualLines.count, 1)), lines: visualLines)
+            )
             drawLines.append(lines)
             rowTexts.append(rowText)
         }
         let totalHeight = max(y, 1)
 
         let scale = max(scale, 1)
-        let pixelWidth = max(Int((totalWidth * scale).rounded(.up)), 1)
-        let pixelHeight = max(Int((totalHeight * scale).rounded(.up)), 1)
-        guard
-            let context = CGContext(
-                data: nil, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8, bytesPerRow: 0,
-                space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { throw CancellationError() }
-        context.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
-        // A flipped, top-left origin so row `y` matches document coordinates.
-        context.translateBy(x: 0, y: CGFloat(totalHeight))
-        context.scaleBy(x: 1, y: -1)
+        let context = try Self.bitmap(width: totalWidth, height: totalHeight, scale: scale, colorSpace: colorSpace)
 
         let environment = PaintEnvironment(totalWidth: totalWidth, lineHeight: lineHeight, appearance: appearance)
         for layer in decorations.sorted(by: { $0.zIndex < $1.zIndex }) {
@@ -132,8 +183,11 @@ public enum TextTypesetter {
             {
                 guard let paints = layer.paints[RowIndex(rawRow)] else { continue }
                 let target = RowPaintTarget(
-                    top: rowTops[index], height: Double(geometry[index].height), lines: drawLines[index],
-                    rowText: rowTexts[index])
+                    top: rowTops[index],
+                    height: Double(geometry[index].height),
+                    lines: drawLines[index],
+                    rowText: rowTexts[index]
+                )
                 for paint in paints { Self.draw(paint, row: target, in: environment, context: context) }
             }
         }
@@ -228,8 +282,13 @@ extension TextTypesetter {
 
     // swiftlint:disable:next function_parameter_count
     private static func attributedString(
-        rowText: RowText, runs: ArraySlice<LineRuns.Run>, sheet: StyleSheet, fontCache: inout [FontKey: CTFont],
-        includeColor: Bool, appearance: Appearance, bidi: BidiPolicy
+        rowText: RowText,
+        runs: ArraySlice<LineRuns.Run>,
+        sheet: StyleSheet,
+        fontCache: inout [FontKey: CTFont],
+        includeColor: Bool,
+        appearance: Appearance,
+        bidi: BidiPolicy
     ) -> CFAttributedString {
         guard let mutable = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else {
             preconditionFailure("the default allocator could not create an attributed string")
@@ -242,7 +301,11 @@ extension TextTypesetter {
         let fullRange = CFRange(location: 0, length: rowText.utf16Count)
         if bidi == .forceLeftToRight {
             CFAttributedStringSetAttribute(
-                mutable, fullRange, kCTParagraphStyleAttributeName, Self.leftToRightParagraphStyle())
+                mutable,
+                fullRange,
+                kCTParagraphStyleAttributeName,
+                Self.leftToRightParagraphStyle()
+            )
         }
         let plainStyle = sheet[StyleID(0)] ?? TextStyle(foreground: .fixed(RGBA(red: 0, green: 0, blue: 0)))
 
@@ -257,8 +320,11 @@ extension TextTypesetter {
         CFAttributedStringSetAttribute(mutable, fullRange, kCTFontAttributeName, resolvedFont(plainStyle))
         if includeColor {
             CFAttributedStringSetAttribute(
-                mutable, fullRange, kCTForegroundColorAttributeName,
-                Self.cgColor(plainStyle.foreground.resolved(for: appearance)))
+                mutable,
+                fullRange,
+                kCTForegroundColorAttributeName,
+                Self.cgColor(plainStyle.foreground.resolved(for: appearance))
+            )
         }
         for run in runs {
             guard let style = sheet[run.style] else { continue }
@@ -271,8 +337,11 @@ extension TextTypesetter {
             }
             if includeColor {
                 CFAttributedStringSetAttribute(
-                    mutable, range, kCTForegroundColorAttributeName,
-                    Self.cgColor(style.foreground.resolved(for: appearance)))
+                    mutable,
+                    range,
+                    kCTForegroundColorAttributeName,
+                    Self.cgColor(style.foreground.resolved(for: appearance))
+                )
             }
         }
         return mutable
@@ -282,14 +351,20 @@ extension TextTypesetter {
     private static func leftToRightParagraphStyle() -> CTParagraphStyle {
         withUnsafePointer(to: CTWritingDirection.leftToRight) { direction in
             let setting = CTParagraphStyleSetting(
-                spec: .baseWritingDirection, valueSize: MemoryLayout<CTWritingDirection>.size, value: direction)
+                spec: .baseWritingDirection,
+                valueSize: MemoryLayout<CTWritingDirection>.size,
+                value: direction
+            )
             return CTParagraphStyleCreate([setting], 1)
         }
     }
 
     private static func cgColor(_ rgba: RGBA) -> CGColor {
         CGColor(
-            srgbRed: CGFloat(rgba.red), green: CGFloat(rgba.green), blue: CGFloat(rgba.blue), alpha: CGFloat(rgba.alpha)
+            srgbRed: CGFloat(rgba.red),
+            green: CGFloat(rgba.green),
+            blue: CGFloat(rgba.blue),
+            alpha: CGFloat(rgba.alpha)
         )
     }
 
@@ -327,7 +402,11 @@ extension TextTypesetter {
         let startByte = rowText.byteOffset(atUTF16: range.location)
         let endByte = rowText.byteOffset(atUTF16: range.location + range.length)
         return VisualLine(
-            bytes: ByteOffset(startByte) ..< ByteOffset(endByte), carets: carets, baseline: baseline, width: width)
+            bytes: ByteOffset(startByte) ..< ByteOffset(endByte),
+            carets: carets,
+            baseline: baseline,
+            width: width
+        )
     }
 
     // MARK: Decoration paint
@@ -348,10 +427,17 @@ extension TextTypesetter {
     }
 
     private static func draw(
-        _ paint: DecorationLayer.Paint, row: RowPaintTarget, in environment: PaintEnvironment, context: CGContext
+        _ paint: DecorationLayer.Paint,
+        row: RowPaintTarget,
+        in environment: PaintEnvironment,
+        context: CGContext
     ) {
         let rowRect = CGRect(
-            x: 0, y: CGFloat(row.top), width: CGFloat(environment.totalWidth), height: CGFloat(row.height))
+            x: 0,
+            y: CGFloat(row.top),
+            width: CGFloat(environment.totalWidth),
+            height: CGFloat(row.height)
+        )
         switch paint {
             case .rowFill(let color):
                 context.setFillColor(Self.cgColor(color.resolved(for: environment.appearance)))
@@ -359,7 +445,11 @@ extension TextTypesetter {
             case .rangeFill(let range, let color):
                 guard
                     let rect = Self.rect(
-                        for: range, lineHeight: environment.lineHeight, lines: row.lines, rowText: row.rowText)
+                        for: range,
+                        lineHeight: environment.lineHeight,
+                        lines: row.lines,
+                        rowText: row.rowText
+                    )
                 else { return }
                 context.setFillColor(Self.cgColor(color.resolved(for: environment.appearance)))
                 context.fill(rect)
@@ -379,7 +469,10 @@ extension TextTypesetter {
     /// of each end found through that line's own coordinates; approximate when a range spans more than one visual
     /// line, since a decoration layer paints per row and code emphasis rarely wraps.
     private static func rect(
-        for range: Range<ByteOffset>, lineHeight: Double, lines: [(line: CTLine, y: Double)], rowText: RowText
+        for range: Range<ByteOffset>,
+        lineHeight: Double,
+        lines: [(line: CTLine, y: Double)],
+        rowText: RowText
     ) -> CGRect? {
         let start = rowText.utf16Offset(atByte: Int(range.lowerBound.rawValue))
         let end = rowText.utf16Offset(atByte: Int(range.upperBound.rawValue))

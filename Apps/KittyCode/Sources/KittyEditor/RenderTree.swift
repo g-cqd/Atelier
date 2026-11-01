@@ -51,9 +51,12 @@ public func renderTreePanel(
         let label = String(repeating: " ", count: entry.depth * 2) + icon + node.name
         let isSelected = rowIndex == state.selectedTreeIndex
         let visibleLabel = truncateSidebarLabel(
-            label, contentWidth: contentWidth, isSelected: isSelected,
+            label,
+            contentWidth: contentWidth,
+            isSelected: isSelected,
             overflowMode: state.config.sidebarOverflowMode,
-            marqueeOffset: state.marqueeTickOffset)
+            marqueeOffset: state.marqueeTickOffset
+        )
         pipeline.buffer.write(visibleLabel, row: screenRow, col: treeRect.x, style: rowStyle)
 
         guard let status = provider?.status(for: node.path), !status.indicator.isEmpty else {
@@ -89,8 +92,9 @@ public func renderTreePanel(
     }
 
     if let indicatorRect = TreePanelLayout.verticalScrollIndicatorRect(
-        rowCount: rowCount, in: treeRect)
-    {
+        rowCount: rowCount,
+        in: treeRect
+    ) {
         VerticalScrollIndicator(
             metrics: metrics,
             style: colorScheme.verticalScrollIndicator
@@ -100,7 +104,9 @@ public func renderTreePanel(
 }
 
 public func truncateSidebarLabel(
-    _ label: String, contentWidth: Int, isSelected: Bool,
+    _ label: String,
+    contentWidth: Int,
+    isSelected: Bool,
     overflowMode: KittyConfig.SidebarOverflowMode,
     marqueeOffset: Int
 ) -> String {

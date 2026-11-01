@@ -232,7 +232,8 @@ struct TextEditorTests {
         #expect(TextEditorLayout.contentWidth(for: editor, in: rect) == 4)
         #expect(
             TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect)
-                == Rect(x: 12, y: 3, width: 1, height: 1))
+                == Rect(x: 12, y: 3, width: 1, height: 1)
+        )
         #expect(TextEditorLayout.textPosition(for: editor, in: rect, row: 3, col: 12) == nil)
     }
 
@@ -290,6 +291,11 @@ struct TextEditorTests {
         #expect(gripOffset == 0)
         #expect(
             TextEditorLayout.scrollOffset(
-                for: editor, in: rect, pointerRow: 3, gripOffset: gripOffset ?? 0) == 3)
+                for: editor,
+                in: rect,
+                pointerRow: 3,
+                gripOffset: gripOffset ?? 0
+            ) == 3
+        )
     }
 }

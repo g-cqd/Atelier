@@ -36,7 +36,9 @@ public struct SemanticTokenTier: AtelierHighlighting.HighlightTier {
     ///   - store: Where each text's symbol kinds are kept for hover; nil keeps none.
     ///   - resolve: Finds a text's on-disk document and its session.
     public init(
-        languages: Set<Language> = [.swift], store: SyntaxFactsStore? = nil, resolve: @escaping Resolve
+        languages: Set<Language> = [.swift],
+        store: SyntaxFactsStore? = nil,
+        resolve: @escaping Resolve
     ) {
         self.languages = languages
         self.store = store
@@ -59,7 +61,10 @@ public struct SemanticTokenTier: AtelierHighlighting.HighlightTier {
         }
         try Task.checkCancellation()
         let outcome = await document.session.semanticTokens(
-            uri: document.uri, languageID: document.languageID, content: request.text)
+            uri: document.uri,
+            languageID: document.languageID,
+            content: request.text
+        )
         try Task.checkCancellation()
         let decoded: [HighlightToken]
         switch outcome {
@@ -76,8 +81,13 @@ public struct SemanticTokenTier: AtelierHighlighting.HighlightTier {
             try Task.checkCancellation()
             await emit(
                 TierUpdate(
-                    layer: layer, coverage: coverage, revision: request.revision, lines: chunk,
-                    tokens: request.lineTokens(names, lines: chunk)))
+                    layer: layer,
+                    coverage: coverage,
+                    revision: request.revision,
+                    lines: chunk,
+                    tokens: request.lineTokens(names, lines: chunk)
+                )
+            )
         }
     }
 

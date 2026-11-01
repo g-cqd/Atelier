@@ -25,7 +25,9 @@ struct ModelTimelineBenchmark {
         .timeLimit(.minutes(5)),
         .enabled(
             if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
-                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil))
+                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil
+        )
+    )
     func `repository comparison and selections`() async throws {
         let environment = ProcessInfo.processInfo.environment
         let repo = URL(filePath: environment["GDV_BENCH_REPO"] ?? ".", directoryHint: .isDirectory)
@@ -36,7 +38,10 @@ struct ModelTimelineBenchmark {
         defer { pool.shutdown() }
         let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool), pool: pool)
         let model = DiffViewerModel(
-            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: loader, taskProvider: spy)
+            settings: ViewerSettings(defaults: scratchDefaults.defaults),
+            reader: loader,
+            taskProvider: spy
+        )
         let clock = ContinuousClock()
 
         var start = clock.now
@@ -91,6 +96,8 @@ struct ModelTimelineBenchmark {
     private static func ms(_ duration: Duration?) -> String {
         guard let duration else { return "–" }
         return String(
-            format: "%.1f", Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15)
+            format: "%.1f",
+            Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
+        )
     }
 }

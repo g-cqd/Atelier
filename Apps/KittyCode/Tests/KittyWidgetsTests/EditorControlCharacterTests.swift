@@ -12,8 +12,11 @@ struct EditorControlCharacterTests {
     private func renderedRow(_ line: String, wrapLines: Bool) -> String {
         var buffer = ScreenBuffer(columns: 12, rows: 1)
         let editor = TextEditor(
-            lines: [line], lineSpans: [[StyledSpan(text: line, style: .default)]], showLineNumbers: false,
-            wrapLines: wrapLines)
+            lines: [line],
+            lineSpans: [[StyledSpan(text: line, style: .default)]],
+            showLineNumbers: false,
+            wrapLines: wrapLines
+        )
         editor.render(to: &buffer, in: Rect(x: 0, y: 0, width: 12, height: 1))
         return String((0 ..< 12).map { buffer[0, $0].character })
     }

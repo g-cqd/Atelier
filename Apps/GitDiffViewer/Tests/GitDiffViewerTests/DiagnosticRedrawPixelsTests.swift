@@ -19,7 +19,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct DiagnosticRedrawPixelsTests {
     private static let rowCount = 12
     /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.
@@ -134,7 +135,8 @@ struct DiagnosticRedrawPixelsTests {
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct CardPaneDiagnosticPixelsTests {
     private static let rowCount = 12
     /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.
@@ -199,8 +201,11 @@ private final class HostedCardPane {
         host = NSHostingView(rootView: Self.pane(layouts, overlay: overlay, version: 0))
         // The scrolling pane's window size, so that both suites composite with one renderer; the card is shorter.
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
         try #require(host.layer != nil)
@@ -209,8 +214,14 @@ private final class HostedCardPane {
     private static func pane(_ layouts: CardLayouts, overlay: DiagnosticOverlay?, version: Int) -> EmbeddedDiffTextView
     {
         EmbeddedDiffTextView(
-            layouts: layouts, side: .new, gutter: .new, width: width, wrapMode: .none, diagnosticOverlay: overlay,
-            diagnosticsVersion: version)
+            layouts: layouts,
+            side: .new,
+            gutter: .new,
+            width: width,
+            wrapMode: .none,
+            diagnosticOverlay: overlay,
+            diagnosticsVersion: version
+        )
     }
 
     var bounds: NSRect { host.bounds }
@@ -247,7 +258,8 @@ private final class HostedCardPane {
         let layoutManager = try #require(textView.textLayoutManager)
         let contentManager = try #require(layoutManager.textContentManager)
         let location = try #require(
-            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+        )
         let fragment = try #require(layoutManager.textLayoutFragment(for: location))
         var frame = fragment.layoutFragmentFrame
         frame.origin.y += textView.textContainerOrigin.y
@@ -272,19 +284,29 @@ private final class HostedPane {
         self.wrapsLines = wrapsLines
         host = NSHostingView(rootView: Self.pane(rendered, wrapsLines: wrapsLines, overlay: overlay, version: 0))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
         try #require(host.layer != nil)
     }
 
     private static func pane(
-        _ rendered: RenderedText, wrapsLines: Bool, overlay: DiagnosticOverlay?, version: Int
+        _ rendered: RenderedText,
+        wrapsLines: Bool,
+        overlay: DiagnosticOverlay?,
+        version: Int
     ) -> DiffTextView {
         DiffTextView(
-            rendered: rendered, gutter: .new, wrapsLines: wrapsLines, diagnosticOverlay: overlay,
-            diagnosticsVersion: version)
+            rendered: rendered,
+            gutter: .new,
+            wrapsLines: wrapsLines,
+            diagnosticOverlay: overlay,
+            diagnosticsVersion: version
+        )
     }
 
     var bounds: NSRect { host.bounds }
@@ -312,7 +334,8 @@ private final class HostedPane {
         let layoutManager = try #require(textView.textLayoutManager)
         let contentManager = try #require(layoutManager.textContentManager)
         let location = try #require(
-            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+        )
         let fragment = try #require(layoutManager.textLayoutFragment(for: location))
         var frame = fragment.layoutFragmentFrame
         frame.origin.y += textView.textContainerOrigin.y

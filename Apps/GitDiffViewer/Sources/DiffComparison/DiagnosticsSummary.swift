@@ -32,7 +32,9 @@ package struct DiagnosticsSummary: Equatable, Sendable {
         var byTool: [DiagnosticTool: ToolCounts] = [:]
         for (tool, findings) in findingsByTool {
             byTool[tool] = ToolCounts(
-                errors: findings.count { $0.severity == .error }, warnings: findings.count { $0.severity == .warning })
+                errors: findings.count { $0.severity == .error },
+                warnings: findings.count { $0.severity == .warning }
+            )
         }
         let errors = byTool.values.reduce(0) { $0 + $1.errors }
         let warnings = byTool.values.reduce(0) { $0 + $1.warnings }

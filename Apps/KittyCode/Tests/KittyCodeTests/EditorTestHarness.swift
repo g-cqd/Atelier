@@ -40,8 +40,12 @@ enum EditorTestHarness {
         config.tabRibbon.position = tabRibbon
         config.statusBar.show = statusBar
         let state = EditorState(
-            rootPath: rootPath, config: config, taskProvider: taskProvider, clock: clock,
-            searchPool: EditorTestPool.shared)
+            rootPath: rootPath,
+            config: config,
+            taskProvider: taskProvider,
+            clock: clock,
+            searchPool: EditorTestPool.shared
+        )
         state.mode = mode
         state.sidebarCollapsed = sidebarCollapsed
         if let fileContent {

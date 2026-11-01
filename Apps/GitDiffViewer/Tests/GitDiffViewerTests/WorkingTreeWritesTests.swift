@@ -35,7 +35,8 @@ struct WorkingTreeWritesTests {
 
         #expect(!writes.touchesListing)
         #expect(
-            writes.unlisted == ["App.xcodeproj/xcuserdata/me.xcuserdatad/UserInterfaceState.xcuserstate", "new.swift"])
+            writes.unlisted == ["App.xcodeproj/xcuserdata/me.xcuserdatad/UserInterfaceState.xcuserstate", "new.swift"]
+        )
     }
 
     @Test

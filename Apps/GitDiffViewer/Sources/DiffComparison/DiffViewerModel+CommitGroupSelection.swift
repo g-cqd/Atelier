@@ -152,7 +152,8 @@ extension DiffViewerModel {
                 return [
                     CommitGroupMenuItem(
                         title: "Compare This Range",
-                        action: .compare(.repository(range.repository, leftRef: range.base, rightRef: parent)))
+                        action: .compare(.repository(range.repository, leftRef: range.base, rightRef: parent))
+                    )
                 ]
             case .uncommitted:
                 return []

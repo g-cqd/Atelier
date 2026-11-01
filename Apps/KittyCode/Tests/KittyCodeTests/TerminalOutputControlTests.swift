@@ -60,7 +60,11 @@ struct TerminalOutputControlTests {
         let pipeline = RenderPipeline(connection: connection, columns: 100, rows: 8)
         let state = EditorTestHarness.make(columns: 100, rows: 8, tabRibbon: .top, sidebarCollapsed: true).state
         state.bufferManager.open(
-            filePath: "/tmp/" + Self.hostileName, fileName: Self.hostileName, content: Self.hostileLine, language: nil)
+            filePath: "/tmp/" + Self.hostileName,
+            fileName: Self.hostileName,
+            content: Self.hostileLine,
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         state.refreshHighlights()
 

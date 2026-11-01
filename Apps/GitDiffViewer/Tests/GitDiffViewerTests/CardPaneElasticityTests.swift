@@ -18,8 +18,11 @@ struct CardPaneElasticityTests {
         let layouts = CardLayouts(rendered: DiffRenderer.render(oldText: text, newText: text, language: .plain))
         let host = NSHostingView(rootView: Self.pane(layouts, width: 600))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         let textView = try #require(Self.first(NSTextView.self, in: host))
@@ -44,8 +47,11 @@ struct CardPaneElasticityTests {
         let layouts = CardLayouts(rendered: DiffRenderer.render(oldText: text, newText: text, language: .plain))
         let host = NSHostingView(rootView: Self.pane(layouts, width: 600))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         let scrollView = try #require(Self.first(NSTextView.self, in: host)?.enclosingScrollView)
@@ -65,8 +71,13 @@ struct CardPaneElasticityTests {
         -> EmbeddedDiffTextView
     {
         EmbeddedDiffTextView(
-            layouts: layouts, side: .unified, gutter: .dual, width: width, wrapMode: .none,
-            bouncesAtEdges: bouncesAtEdges)
+            layouts: layouts,
+            side: .unified,
+            gutter: .dual,
+            width: width,
+            wrapMode: .none,
+            bouncesAtEdges: bouncesAtEdges
+        )
     }
 
     private static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {

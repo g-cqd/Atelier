@@ -64,7 +64,9 @@ struct GitStatusParserTests {
         ("u AA N... 000000 100644 100644 100644 0000 bbbb cccc a.swift", .added, .added)
     ])
     func `each record keeps what changed in the index and in the working tree apart`(
-        record: String, index: GitStatusCode, worktree: GitStatusCode
+        record: String,
+        index: GitStatusCode,
+        worktree: GitStatusCode
     ) throws {
         let entry = try #require(GitParsers.porcelainV2(Self.records([record])).entries.first)
         #expect(entry.path == "a.swift")
@@ -78,7 +80,9 @@ struct GitStatusParserTests {
         ("2 C. N... 100644 100644 100644 aaaa aaaa C90 new.swift", .copied, .unmodified)
     ])
     func `a rename or copy record keeps its columns next to its original path`(
-        record: String, index: GitStatusCode, worktree: GitStatusCode
+        record: String,
+        index: GitStatusCode,
+        worktree: GitStatusCode
     ) throws {
         let entry = try #require(GitParsers.porcelainV2(Self.records([record, "old.swift"])).entries.first)
         #expect(entry.path == "new.swift")
@@ -90,7 +94,8 @@ struct GitStatusParserTests {
     @Test
     func `a column letter git does not document reads as a modification and a missing one as unmodified`() throws {
         let entry = try #require(
-            GitParsers.porcelainV2(Self.records(["1 X N... 100644 100644 100644 aaaa bbbb a.swift"])).entries.first)
+            GitParsers.porcelainV2(Self.records(["1 X N... 100644 100644 100644 aaaa bbbb a.swift"])).entries.first
+        )
         #expect(entry.indexStatus == .modified)
         #expect(entry.worktreeStatus == .unmodified)
         #expect(entry.status == .modified)
@@ -103,9 +108,14 @@ struct GitStatusParserTests {
         #expect(
             snapshot.entries == [
                 GitStatusEntry(
-                    path: "new name.swift", originalPath: "old name.swift", status: .renamed, indexStatus: .renamed,
-                    worktreeStatus: .unmodified)
-            ])
+                    path: "new name.swift",
+                    originalPath: "old name.swift",
+                    status: .renamed,
+                    indexStatus: .renamed,
+                    worktreeStatus: .unmodified
+                )
+            ]
+        )
         let copy = Self.records(["2 C. N... 100644 100644 100644 aaaa aaaa C90 copy.swift", "source.swift"])
         #expect(GitParsers.porcelainV2(copy).entries.first?.status == .added)
         #expect(GitParsers.porcelainV2(copy).entries.first?.originalPath == "source.swift")
@@ -149,7 +159,9 @@ struct GitStatusParserTests {
     @Test(.timeLimit(.minutes(1)))
     func `a real repository reports every kind of change`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "atelier-status-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "atelier-status-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let pool = BlockingOffloadPool(width: 2)
@@ -157,8 +169,11 @@ struct GitStatusParserTests {
         let runner = HardenedProcessRunner(pool: pool)
         func git(_ arguments: String...) async throws {
             let spec = ProcessSpec(
-                executable: GitClient.executable, arguments: ["-c", "user.name=t", "-c", "user.email=t@t"] + arguments,
-                currentDirectory: root, environment: .inherited(overriding: GitClient.hardeningEnvironment))
+                executable: GitClient.executable,
+                arguments: ["-c", "user.name=t", "-c", "user.email=t@t"] + arguments,
+                currentDirectory: root,
+                environment: .inherited(overriding: GitClient.hardeningEnvironment)
+            )
             let output = try await runner.run(spec)
             try #require(output.succeeded, "\(output.errorText)")
         }
@@ -202,7 +217,8 @@ struct GitStatusParserTests {
         #expect(statuses["ignored.txt"] == .ignored)
         #expect(statuses["kept.txt"] == nil)
         let columns = Dictionary(
-            uniqueKeysWithValues: snapshot.entries.map { ($0.path, [$0.indexStatus, $0.worktreeStatus]) })
+            uniqueKeysWithValues: snapshot.entries.map { ($0.path, [$0.indexStatus, $0.worktreeStatus]) }
+        )
         #expect(columns["changed.txt"] == [.unmodified, .modified])
         #expect(columns["staged.txt"] == [.modified, .unmodified])
         #expect(columns["both.txt"] == [.modified, .modified])

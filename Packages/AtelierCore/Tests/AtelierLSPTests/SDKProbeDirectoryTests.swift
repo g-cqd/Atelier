@@ -61,7 +61,9 @@ struct SDKProbeDirectoryTests {
 
         #expect(
             throws: SDKProbeDirectoryError.creationFailed(
-                parentPath: missingParent.path(percentEncoded: false), code: ENOENT)
+                parentPath: missingParent.path(percentEncoded: false),
+                code: ENOENT
+            )
         ) {
             try SDKDocumentationProvider.makeProbeDirectory(in: missingParent)
         }
@@ -72,19 +74,25 @@ struct SDKProbeDirectoryTests {
         let parent = TemporaryDirectory(prefix: "atelier-sdk-parent")
         defer { parent.cleanup() }
         let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory(
-            in: URL(filePath: parent.path, directoryHint: .isDirectory))
+            in: URL(filePath: parent.path, directoryHint: .isDirectory)
+        )
         let transport = PipeTransport()
         let service = LanguageServerSession(
             configuration: LanguageServerSession.Configuration(
-                serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: probeDirectory),
+                serverExecutable: URL(filePath: "/usr/bin/true"),
+                workspaceRoot: probeDirectory
+            ),
             clock: TestClock()
         ) { _ in LSPConnection(transport: transport) }
         let provider = SDKDocumentationProvider(service: service)
         // An uppercase chain whose first answer has no prose sends a second, type-position probe.
         let content = "import SwiftUI\nlet x = StateObject"
         let query = HoverQuery(
-            documentURI: "file:///repository/a.swift", content: content, line: 1,
-            utf16Column: "let x = StateObject".utf16.count - 3)
+            documentURI: "file:///repository/a.swift",
+            content: content,
+            line: 1,
+            utf16Column: "let x = StateObject".utf16.count - 3
+        )
 
         async let answer = provider.hover(query)
         await transport.sink.waitForCount(1)

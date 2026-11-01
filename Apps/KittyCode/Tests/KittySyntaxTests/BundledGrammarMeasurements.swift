@@ -21,7 +21,9 @@ struct BundledGrammarMeasurements {
 
     @Test(
         .enabled(
-            if: environment["GDV_BENCH"] != nil && environment["ATELIER_GRAMMAR_MEASURE_NAME"] != nil))
+            if: environment["GDV_BENCH"] != nil && environment["ATELIER_GRAMMAR_MEASURE_NAME"] != nil
+        )
+    )
     func `measures a bundled grammar against its upstream corpus and large samples`() async throws {
         let name = try #require(Self.environment["ATELIER_GRAMMAR_MEASURE_NAME"])
         let resources = try #require(KittySyntaxResources.resourcePath)
@@ -36,54 +38,79 @@ struct BundledGrammarMeasurements {
         let peakRise = Self.footprint().peak - footprintBefore.peak
         print(
             "MEASURE \(name) compile: \(compileTime), CPU \(compileCPU), peak footprint +\(peakRise / 1_048_576) MiB, "
-                + "\(compiled.parseTable.stateCount) states, \(compiled.lexTable.automaton.count) lexer states")
+                + "\(compiled.parseTable.stateCount) states, \(compiled.lexTable.automaton.count) lexer states"
+        )
 
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let scannerType = BundledScanners.byGrammarName[grammar.name]
         let hidden = Set(grammar.supertypes)
         let extras = Set(
-            grammar.extras.compactMap { rule -> String? in if case .symbol(let name) = rule { name } else { nil } })
+            grammar.extras.compactMap { rule -> String? in if case .symbol(let name) = rule { name } else { nil } }
+        )
         if let corpus = Self.environment["ATELIER_CORPUS_DIR"] {
             try measureCorpus(
-                name: name, directory: URL(filePath: corpus).appending(path: name), parser: parser,
-                scannerType: scannerType, hidden: hidden, extras: extras)
+                name: name,
+                directory: URL(filePath: corpus).appending(path: name),
+                parser: parser,
+                scannerType: scannerType,
+                hidden: hidden,
+                extras: extras
+            )
         }
         if let samples = Self.environment["ATELIER_LARGE_SAMPLE_DIR"] {
             try await measureSamples(
-                name: name, directory: URL(filePath: samples).appending(path: name), parser: parser,
-                scannerType: scannerType)
+                name: name,
+                directory: URL(filePath: samples).appending(path: name),
+                parser: parser,
+                scannerType: scannerType
+            )
         }
     }
 
     // MARK: - Corpus
 
     private func measureCorpus(
-        name: String, directory: URL, parser: GrammarParser, scannerType: (any GrammarExternalScanner.Type)?,
-        hidden: Set<String>, extras: Set<String>
+        name: String,
+        directory: URL,
+        parser: GrammarParser,
+        scannerType: (any GrammarExternalScanner.Type)?,
+        hidden: Set<String>,
+        extras: Set<String>
     ) throws {
         var withScanner = CorpusTally()
         var withoutScanner = CorpusTally()
         for file in try Self.files(in: directory) where file.pathExtension == "txt" {
             let contents = try String(contentsOf: file, encoding: .utf8)
             for corpusCase in UpstreamCorpusCase.cases(
-                in: contents, file: file.lastPathComponent, language: name)
-            {
+                in: contents,
+                file: file.lastPathComponent,
+                language: name
+            ) {
                 guard !corpusCase.isSkipped, let expected = corpusCase.expected?.removing(extras) else {
                     withScanner.skipped += 1
                     continue
                 }
                 if let divergence = withScanner.add(
-                    corpusCase, expected: expected,
+                    corpusCase,
+                    expected: expected,
                     tree: try? parser.parse(corpusCase.input, externalScanner: scannerType?.init()),
-                    hidden: hidden, extras: extras)
-                {
+                    hidden: hidden,
+                    extras: extras
+                ) {
                     print("DIVERGE \(name) \(corpusCase.file) “\(corpusCase.name)”\(divergence)")
                 }
                 if scannerType != nil {
                     _ = withoutScanner.add(
-                        corpusCase, expected: expected, tree: try? parser.parse(corpusCase.input), hidden: hidden,
-                        extras: extras)
+                        corpusCase,
+                        expected: expected,
+                        tree: try? parser.parse(corpusCase.input),
+                        hidden: hidden,
+                        extras: extras
+                    )
                 }
             }
         }
@@ -105,7 +132,10 @@ struct BundledGrammarMeasurements {
 
         /// Adds a case's parse, `tree`, nil when the parse threw; returns how it departs from the expected tree.
         mutating func add(
-            _ corpusCase: UpstreamCorpusCase, expected: CorpusTreeNode, tree: SyntaxTree?, hidden: Set<String>,
+            _ corpusCase: UpstreamCorpusCase,
+            expected: CorpusTreeNode,
+            tree: SyntaxTree?,
+            hidden: Set<String>,
             extras: Set<String>
         ) -> String? {
             guard let tree else {
@@ -151,7 +181,10 @@ struct BundledGrammarMeasurements {
     // MARK: - Large samples
 
     private func measureSamples(
-        name: String, directory: URL, parser: GrammarParser, scannerType: (any GrammarExternalScanner.Type)?
+        name: String,
+        directory: URL,
+        parser: GrammarParser,
+        scannerType: (any GrammarExternalScanner.Type)?
     ) async throws {
         #expect(await LanguageHighlighter.ensureArtifacts(for: name))
         let clock = ContinuousClock()
@@ -171,7 +204,8 @@ struct BundledGrammarMeasurements {
             print(
                 "MEASURE \(name) sample \(file.lastPathComponent): \(source.utf8.count) bytes parsed in \(parseTime) "
                     + "(CPU \(parseCPU)), "
-                    + "\(counts.summary), grammar-highlighted \(session.isGrammarBacked)")
+                    + "\(counts.summary), grammar-highlighted \(session.isGrammarBacked)"
+            )
         }
         print("MEASURE \(name) samples: \(total.summary)")
     }

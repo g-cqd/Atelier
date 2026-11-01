@@ -115,7 +115,8 @@ private struct DiffSettings: View {
                 Section("Changes") {
                     Toggle(SettingLabel.isolatesChanges, isOn: $settings.isolatesChanges)
                     Stepper(
-                        "\(SettingLabel.contextLines): \(settings.contextLines)", value: $settings.contextLines,
+                        "\(SettingLabel.contextLines): \(settings.contextLines)",
+                        value: $settings.contextLines,
                         in: 0 ... 20
                     )
                     .disabled(!settings.isolatesChanges)
@@ -136,28 +137,33 @@ private struct DiffSettings: View {
                     DisclosureGroup(SettingLabel.advancedMatching) {
                         VStack(alignment: .leading, spacing: 8) {
                             heuristicToggle(
-                                SettingLabel.anchorsRareLines, isOn: $settings.diffHeuristics.anchorsRareLines,
+                                SettingLabel.anchorsRareLines,
+                                isOn: $settings.diffHeuristics.anchorsRareLines,
                                 caption: "Matches rare lines first (git's histogram algorithm) before filling in "
                                     + "the rest, instead of the plain shortest edit script. Helps repetitive files "
                                     + "where the shortest script picks a confusing match."
                             )
                             heuristicToggle(
-                                SettingLabel.slidesToIndentation, isOn: $settings.diffHeuristics.slidesToIndentation,
+                                SettingLabel.slidesToIndentation,
+                                isOn: $settings.diffHeuristics.slidesToIndentation,
                                 caption: "Slides a change's boundaries to line up with indentation, the way git's "
                                     + "own indent heuristic does, so a change starts and ends on a natural line."
                             )
                             heuristicToggle(
-                                SettingLabel.pairsSimilarLines, isOn: $settings.diffHeuristics.pairsSimilarLines,
+                                SettingLabel.pairsSimilarLines,
+                                isOn: $settings.diffHeuristics.pairsSimilarLines,
                                 caption: "Pairs changed lines by how similar their content is rather than by "
                                     + "position, so intraline emphasis lands on the right counterpart."
                             )
                             heuristicToggle(
-                                SettingLabel.cleansUpEmphasis, isOn: $settings.diffHeuristics.cleansUpEmphasis,
+                                SettingLabel.cleansUpEmphasis,
+                                isOn: $settings.diffHeuristics.cleansUpEmphasis,
                                 caption: "Merges scattered intraline edits and aligns them to token boundaries, "
                                     + "the way diff-match-patch cleans up a noisy character-level diff."
                             )
                             heuristicToggle(
-                                SettingLabel.detectsMovedBlocks, isOn: $settings.diffHeuristics.detectsMovedBlocks,
+                                SettingLabel.detectsMovedBlocks,
+                                isOn: $settings.diffHeuristics.detectsMovedBlocks,
                                 caption: "Marks blocks of lines that only moved, rather than showing them as a "
                                     + "removal on one side and an addition on the other."
                             )
@@ -213,7 +219,8 @@ private struct AppearanceSettings: View {
                 } else {
                     settings.grammarColorOff.insert(name)
                 }
-            })
+            }
+        )
     }
 
     var body: some View {

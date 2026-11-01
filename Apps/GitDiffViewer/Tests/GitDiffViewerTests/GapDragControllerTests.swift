@@ -24,8 +24,11 @@ struct GapDragControllerTests {
 
     private func makeSUT(base: GapExpansion = GapExpansion()) -> GapDragController {
         GapDragController(
-            taskProvider: taskProvider, clock: clock, expansion: { _ in base },
-            apply: { [applied] expansion, _ in applied.send(expansion) })
+            taskProvider: taskProvider,
+            clock: clock,
+            expansion: { _ in base },
+            apply: { [applied] expansion, _ in applied.send(expansion) }
+        )
     }
 
     @Test
@@ -111,7 +114,11 @@ struct GapDragControllerTests {
     func `a handle the gap does not offer drags nothing`() throws {
         let sut = makeSUT()
         let topOfFile = GapMarker(
-            key: GapKey(fileIndex: 0, gapIndex: 0), hiddenRows: 8, isLeading: true, isTrailing: false)
+            key: GapKey(fileIndex: 0, gapIndex: 0),
+            hiddenRows: 8,
+            isLeading: true,
+            isTrailing: false
+        )
         sut.handle(.began(topOfFile, .extendsChangeAbove, lineHeight: 10))
         sut.handle(.moved(offset: 50, edgeOvershoot: 0))
 

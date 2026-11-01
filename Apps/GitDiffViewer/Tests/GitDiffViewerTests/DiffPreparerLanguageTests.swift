@@ -23,8 +23,12 @@ struct DiffPreparerLanguageTests {
         ]
 
         let prepared = try await preparer.prepare(
-            pairs, left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics())
+            pairs,
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics()
+        )
 
         #expect(prepared.map(\.language) == [.shell])
     }
@@ -35,12 +39,19 @@ struct DiffPreparerLanguageTests {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         let pairs = [
             FilePair(
-                path: "bin/deploy", old: nil, new: SourceEntry(relativePath: "bin/deploy", blobID: "deploy", size: 1))
+                path: "bin/deploy",
+                old: nil,
+                new: SourceEntry(relativePath: "bin/deploy", blobID: "deploy", size: 1)
+            )
         ]
 
         let prepared = try await preparer.prepare(
-            pairs, left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics())
+            pairs,
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics()
+        )
 
         #expect(prepared.map(\.language) == [.shell])
     }
@@ -51,13 +62,19 @@ struct DiffPreparerLanguageTests {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         let pairs = [
             FilePair(
-                path: "bin/deploy", old: SourceEntry(relativePath: "bin/deploy", blobID: "deployOld", size: 1),
-                new: nil)
+                path: "bin/deploy",
+                old: SourceEntry(relativePath: "bin/deploy", blobID: "deployOld", size: 1),
+                new: nil
+            )
         ]
 
         let prepared = try await preparer.prepare(
-            pairs, left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics())
+            pairs,
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics()
+        )
 
         #expect(prepared.map(\.language) == [.shell])
     }

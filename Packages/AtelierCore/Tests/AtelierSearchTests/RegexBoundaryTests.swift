@@ -7,11 +7,13 @@ func `zero width anchors keep their original line boundaries`(line: String) thro
     let start = try #require(compilePattern(SearchQuery(text: "^", isRegex: true)))
     let end = try #require(compilePattern(SearchQuery(text: "$", isRegex: true)))
     #expect(
-        findMatches(in: [line], pattern: start, maxMatches: 10_000) == [SearchMatch(row: 0, colStart: 0, colEnd: 0)])
+        findMatches(in: [line], pattern: start, maxMatches: 10_000) == [SearchMatch(row: 0, colStart: 0, colEnd: 0)]
+    )
     #expect(
         findMatches(in: [line], pattern: end, maxMatches: 10_000) == [
             SearchMatch(row: 0, colStart: line.count, colEnd: line.count)
-        ])
+        ]
+    )
 }
 
 @Test
@@ -20,7 +22,8 @@ func `regex positions use character columns after emoji`() throws {
     #expect(
         findMatches(in: ["👩‍💻 cat"], pattern: pattern, maxMatches: 10_000) == [
             SearchMatch(row: 0, colStart: 2, colEnd: 5)
-        ])
+        ]
+    )
 }
 
 @Test
@@ -32,7 +35,8 @@ func `regex never splits a character during replacement`() throws {
     #expect(matches == [SearchMatch(row: 0, colStart: 0, colEnd: 1)])
     #expect(
         applyReplacements(to: ["👩‍💻"], matches: matches, pattern: grapheme, replacement: "x").newLines
-            == ["x"])
+            == ["x"]
+    )
 }
 
 @Test

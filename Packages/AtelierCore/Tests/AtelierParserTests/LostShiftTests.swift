@@ -27,17 +27,22 @@ struct LostShiftTests {
                     .seq([
                         .symbol("statement"), .repeat(.seq([.string(";"), .symbol("statement")])),
                         .optional(.string(";"))
-                    ]))
+                    ])
+                )
             ),
             ("statement", .choice([.string("x"), .seq([.string("w"), .string("x")])]))
         ],
-        extras: [.pattern(#"\s"#)])
+        extras: [.pattern(#"\s"#)]
+    )
 
     @Test
     func `a statement after a semicolon is shifted where the merged reduction leads nowhere`() throws {
         let compiled = try ParseTableCompiler.compile(Self.grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("{ x ; w x }")
 

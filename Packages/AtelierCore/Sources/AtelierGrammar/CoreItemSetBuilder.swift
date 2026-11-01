@@ -22,7 +22,11 @@ enum CoreItemSetBuilder {
     ) throws(GrammarError) -> (PropagatedStates, [Int: [(symbol: String, target: Int)]]) {
         let start = CoreItem(rule: 0, dot: 0)
         let startSet = try coreClosure(
-            [start], productions: productions, rulesByNonTerminal: rulesByNonTerminal, limits: limits)
+            [start],
+            productions: productions,
+            rulesByNonTerminal: rulesByNonTerminal,
+            limits: limits
+        )
         var cores = [startSet]
         var stateIndex: [[CoreItem]: Int] = [[start]: 0]
         var transitions: [Int: [(symbol: String, target: Int)]] = [:]
@@ -46,7 +50,11 @@ enum CoreItemSetBuilder {
                     targetIdx = existing
                 } else {
                     let gotoSet = try coreClosure(
-                        kernel, productions: productions, rulesByNonTerminal: rulesByNonTerminal, limits: limits)
+                        kernel,
+                        productions: productions,
+                        rulesByNonTerminal: rulesByNonTerminal,
+                        limits: limits
+                    )
                     targetIdx = cores.count
                     guard targetIdx < limits.maxStates else {
                         throw .resourceLimitExceeded(
@@ -68,25 +76,37 @@ enum CoreItemSetBuilder {
         }
         onPhase?("LR(0) cores")
         let merged = try propagateLookaheads(
-            through: cores, transitions: transitions, productions: productions,
-            firstSets: firstSets, rulesByNonTerminal: rulesByNonTerminal, limits: limits)
+            through: cores,
+            transitions: transitions,
+            productions: productions,
+            firstSets: firstSets,
+            rulesByNonTerminal: rulesByNonTerminal,
+            limits: limits
+        )
         onPhase?("lookahead propagation")
         guard merged.states.contains(where: { hasCompetingReductions($0, productions: productions) }) else {
             return (merged, transitions)
         }
         let split = try ConflictSafeCoreMerger.build(
-            cores: cores, transitions: transitions, states: merged,
+            cores: cores,
+            transitions: transitions,
+            states: merged,
             inputs: .init(
-                productions: productions, firstSets: firstSets,
-                rulesByNonTerminal: rulesByNonTerminal, limits: limits),
-            onPhase: onPhase)
+                productions: productions,
+                firstSets: firstSets,
+                rulesByNonTerminal: rulesByNonTerminal,
+                limits: limits
+            ),
+            onPhase: onPhase
+        )
         onPhase?("conflict-safe splitting")
         return split
     }
 
     /// Whether `state` has competing completed rules: two that end with a lookahead in common.
     static func hasCompetingReductions(
-        _ state: LookaheadItemSet, productions: [(name: String, symbols: [String])]
+        _ state: LookaheadItemSet,
+        productions: [(name: String, symbols: [String])]
     ) -> Bool {
         var seen = [UInt64](repeating: 0, count: state.wordCount)
         for (index, item) in state.items.enumerated()
@@ -152,17 +172,27 @@ enum CoreItemSetBuilder {
         }
         var suffixFirsts = SuffixFirsts(productions: productions, terminals: terminals)
         let edges = PropagationEdges(
-            locations: locations, transitions: transitions, productions: productions,
-            rulesByNonTerminal: rulesByNonTerminal, suffixFirsts: &suffixFirsts)
+            locations: locations,
+            transitions: transitions,
+            productions: productions,
+            rulesByNonTerminal: rulesByNonTerminal,
+            suffixFirsts: &suffixFirsts
+        )
         let lookaheads = try edges.propagate(
-            from: start, endIndex: terminals.endIndex, suffixFirsts: suffixFirsts, limit: limits.maxLookaheadItems)
+            from: start,
+            endIndex: terminals.endIndex,
+            suffixFirsts: suffixFirsts,
+            limit: limits.maxLookaheadItems
+        )
         let wordCount = terminals.wordCount
         let states = locations.stateItems.enumerated()
             .map { state, items in
                 let offset = locations.offsets[state]
                 return LookaheadItemSet(
-                    items: items, words: lookaheads[offset * wordCount ..< (offset + items.count) * wordCount],
-                    wordCount: wordCount)
+                    items: items,
+                    words: lookaheads[offset * wordCount ..< (offset + items.count) * wordCount],
+                    wordCount: wordCount
+                )
             }
         return PropagatedStates(states: states, terminals: terminals.names)
     }
@@ -233,7 +263,9 @@ struct PropagationEdges {
         starts = [Int](repeating: 0, count: locations.count + 1)
         for (state, items) in locations.stateItems.enumerated() {
             let transitionsBySymbol = Dictionary(
-                (transitions[state] ?? []).map { ($0.symbol, $0.target) }, uniquingKeysWith: { first, _ in first })
+                (transitions[state] ?? []).map { ($0.symbol, $0.target) },
+                uniquingKeysWith: { first, _ in first }
+            )
             for (offset, item) in items.enumerated() {
                 starts[locations.offsets[state] + offset] = targets.count
                 let symbols = productions[item.rule].symbols
@@ -241,7 +273,9 @@ struct PropagationEdges {
                 let symbol = symbols[item.dot]
                 if let target = transitionsBySymbol[symbol],
                     let location = locations.location(
-                        of: CoreItemSetBuilder.CoreItem(rule: item.rule, dot: item.dot + 1), in: target)
+                        of: CoreItemSetBuilder.CoreItem(rule: item.rule, dot: item.dot + 1),
+                        in: target
+                    )
                 {
                     targets.append(Int32(location))
                     codes.append(Self.code(first: nil, forwards: true))
@@ -262,7 +296,10 @@ struct PropagationEdges {
     /// `start`, propagated along the edges until no set grows.
     /// - Throws: `GrammarError.resourceLimitExceeded` when the item and lookahead pairs pass `limit`.
     func propagate(
-        from start: Int, endIndex: Int, suffixFirsts: SuffixFirsts, limit: Int
+        from start: Int,
+        endIndex: Int,
+        suffixFirsts: SuffixFirsts,
+        limit: Int
     ) throws(GrammarError) -> [UInt64] {
         let wordCount = suffixFirsts.terminals.wordCount
         var lookaheads = [UInt64](repeating: 0, count: (starts.count - 1) * wordCount)
@@ -290,7 +327,8 @@ struct PropagationEdges {
                 itemCount += added
                 guard itemCount <= limit else {
                     throw .resourceLimitExceeded(
-                        "Parser lookahead items exceeded limit (\(itemCount) items, limit \(limit))")
+                        "Parser lookahead items exceeded limit (\(itemCount) items, limit \(limit))"
+                    )
                 }
                 if !isPending[target] {
                     isPending[target] = true

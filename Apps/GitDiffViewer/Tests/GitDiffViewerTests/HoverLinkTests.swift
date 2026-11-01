@@ -53,8 +53,11 @@ struct HoverLinkTests {
     private func makeHostTextView() -> NSTextView {
         let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 200), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView?.addSubview(textView)
         retainedWindows.append(window)
         return textView
@@ -76,15 +79,21 @@ struct HoverLinkTests {
         returns: linkedProse("Whether it opened."),
         extraCandidates: [
             HoverDocument.Candidate(
-                declaration: NSAttributedString(string: "func open() -> Bool"), summary: linkedProse("An overload."))
+                declaration: NSAttributedString(string: "func open() -> Bool"),
+                summary: linkedProse("An overload.")
+            )
         ],
-        chipBackground: .textBackgroundColor)
+        chipBackground: .textBackgroundColor
+    )
 
     /// A panel showing ``everySlot`` whose opener records what it is asked to open.
     private func shownPanel(recordingInto opened: OpenedLinks) -> HoverDocPanel {
         let panel = HoverDocPanel(openLink: { opened.record($0) }, ordersWindowIn: false)
         panel.show(
-            document: Self.everySlot, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16), in: makeHostTextView())
+            document: Self.everySlot,
+            anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
+            in: makeHostTextView()
+        )
         return panel
     }
 
@@ -118,7 +127,8 @@ struct HoverLinkTests {
         ("guide.html", false)
     ])
     func `only an https link survives prose rendering, and a dropped link keeps its text`(
-        link: String, survives: Bool
+        link: String,
+        survives: Bool
     ) throws {
         let content = HoverContent(markdown: "See [the guide](\(link)) first.", source: .docIndex)
         let summary = try #require(HoverDocument.build(from: content, palette: .system).summary)
@@ -126,7 +136,8 @@ struct HoverLinkTests {
         #expect(summary.string == "See the guide first.")
         // Case-folded: a URL's scheme is case-insensitive, and the parser may normalize it.
         #expect(
-            Self.links(in: summary).map { $0.absoluteString.lowercased() } == (survives ? [link.lowercased()] : []))
+            Self.links(in: summary).map { $0.absoluteString.lowercased() } == (survives ? [link.lowercased()] : [])
+        )
     }
 
     @Test
@@ -156,7 +167,8 @@ struct HoverLinkTests {
         let sections = [
             try #require(document.summary),
             try #require(
-                document.discussion.compactMap { if case .paragraph(let text) = $0 { text } else { nil } }.first),
+                document.discussion.compactMap { if case .paragraph(let text) = $0 { text } else { nil } }.first
+            ),
             try #require(document.parameters.first?.text), try #require(document.returns),
             try #require(document.extraCandidates.first?.summary)
         ]

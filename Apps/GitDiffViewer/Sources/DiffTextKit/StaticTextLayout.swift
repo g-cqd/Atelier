@@ -98,7 +98,10 @@ package final class StaticTextLayout {
         let width =
             if case .column(let column) = mode {
                 DiffPalette.wrapWidth(
-                    column: column, font: rendered.palette.font, padding: container.lineFragmentPadding)
+                    column: column,
+                    font: rendered.palette.font,
+                    padding: container.lineFragmentPadding
+                )
             } else {
                 viewportWidth
             }
@@ -222,7 +225,8 @@ extension RenderedText {
                 guard text.rangeOfCharacter(from: Self.nonASCII, options: [], range: range).location != NSNotFound
                 else { continue }
                 let line = CTLineCreateWithAttributedString(
-                    attributed.attributedSubstring(from: range) as CFAttributedString)
+                    attributed.attributedSubstring(from: range) as CFAttributedString
+                )
                 widest = max(widest, CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)))
             }
         }

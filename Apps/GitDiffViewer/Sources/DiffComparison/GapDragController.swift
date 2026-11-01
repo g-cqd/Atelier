@@ -20,8 +20,10 @@ package final class GapDragController {
     private var holdGeneration = 0
 
     package init(
-        taskProvider: any TaskProvider, clock: any Clock<Duration>,
-        expansion: @escaping (GapKey) -> GapExpansion, apply: @escaping (GapExpansion, GapKey) -> Void
+        taskProvider: any TaskProvider,
+        clock: any Clock<Duration>,
+        expansion: @escaping (GapKey) -> GapExpansion,
+        apply: @escaping (GapExpansion, GapKey) -> Void
     ) {
         self.taskProvider = taskProvider
         self.clock = clock

@@ -22,7 +22,8 @@ struct GLRParserCancellationTests {
                 isCancelled: {
                     checks += 1
                     return checks > 1
-                })
+                }
+            )
         }
         #expect(checks == 2)
     }
@@ -40,7 +41,8 @@ struct GLRParserCancellationTests {
                 isCancelled: {
                     checks += 1
                     return checks > 1
-                })
+                }
+            )
         }
     }
 
@@ -62,10 +64,15 @@ struct GLRParserCancellationTests {
         let grammar = GrammarDefinition(
             name: "cancelled_scan",
             rules: [("source", .choice([.symbol("counted"), .string("x")]))],
-            extras: [], externals: [.symbol("counted")])
+            extras: [],
+            externals: [.symbol("counted")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let scanner = CountingScanner()
 
         #expect(throws: ParseError.cancelled(atToken: 0)) {

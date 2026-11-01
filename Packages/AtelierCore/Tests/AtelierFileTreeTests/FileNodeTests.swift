@@ -41,13 +41,21 @@ struct FileNodeTests {
 
     @Test func `icon for collapsed directory returns [+]`() {
         let node = FileNode(
-            name: "Sources", path: "/root/Sources", isDirectory: true, isExpanded: false)
+            name: "Sources",
+            path: "/root/Sources",
+            isDirectory: true,
+            isExpanded: false
+        )
         #expect(node.icon == "[+]")
     }
 
     @Test func `icon for expanded directory returns [-]`() {
         let node = FileNode(
-            name: "Sources", path: "/root/Sources", isDirectory: true, isExpanded: true)
+            name: "Sources",
+            path: "/root/Sources",
+            isDirectory: true,
+            isExpanded: true
+        )
         #expect(node.icon == "[-]")
     }
 

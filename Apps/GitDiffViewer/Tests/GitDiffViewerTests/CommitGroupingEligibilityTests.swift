@@ -12,17 +12,29 @@ struct CommitGroupingEligibilityTests {
     private static let workingTree = ComparisonSource.directory(URL(filePath: "/repo/", directoryHint: .isDirectory))
 
     private static func evaluate(
-        placement: ExplorerPlacement = .unifiedSidebar, style: FileTreeStyle = .flat,
-        left: ComparisonSource? = main, right: ComparisonSource? = feature, ancestry: CommitGroupingAncestry? = nil
+        placement: ExplorerPlacement = .unifiedSidebar,
+        style: FileTreeStyle = .flat,
+        left: ComparisonSource? = main,
+        right: ComparisonSource? = feature,
+        ancestry: CommitGroupingAncestry? = nil
     ) -> CommitGroupingEligibility {
         CommitGroupingEligibility.evaluate(
-            placement: placement, style: style, left: left, right: right, ancestry: ancestry)
+            placement: placement,
+            style: style,
+            left: left,
+            right: right,
+            ancestry: ancestry
+        )
     }
 
     @Test
     func `two refs of one repository wait for the ancestry checks, then apply when the left is an ancestor`() {
         let range = CommitGroupingRange(
-            repository: Self.repository, base: "main", tip: "feature", includesWorkingTree: false)
+            repository: Self.repository,
+            base: "main",
+            tip: "feature",
+            includesWorkingTree: false
+        )
 
         #expect(Self.evaluate() == .needsAncestry(range))
         #expect(Self.evaluate(ancestry: .leftIsAncestor) == .applies(range))
@@ -35,7 +47,13 @@ struct CommitGroupingEligibilityTests {
             Self.evaluate(right: Self.workingTree, ancestry: .leftIsAncestor)
                 == .applies(
                     CommitGroupingRange(
-                        repository: Self.repository, base: "main", tip: "HEAD", includesWorkingTree: true)))
+                        repository: Self.repository,
+                        base: "main",
+                        tip: "HEAD",
+                        includesWorkingTree: true
+                    )
+                )
+        )
     }
 
     @Test

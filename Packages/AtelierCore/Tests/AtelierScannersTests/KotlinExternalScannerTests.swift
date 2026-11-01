@@ -25,7 +25,8 @@ struct KotlinExternalScannerTests {
             KotlinExternalScanner.externalNames == [
                 "_automatic_semicolon", "_import_list_delimiter", "safe_nav", "multiline_comment",
                 "_string_start", "_string_end", "string_content", "_primary_constructor_keyword", "_import_dot"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["kotlin"] != nil)
     }
 

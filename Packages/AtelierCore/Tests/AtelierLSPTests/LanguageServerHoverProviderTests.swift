@@ -60,11 +60,15 @@ private final class ScriptedServers: Sendable {
             makeConfiguration: { root, server in
                 self.configured.withLock { $0.append(Configured(server: server.id, root: root)) }
                 return LanguageServerSession.Configuration(
-                    descriptor: server, serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: root)
+                    descriptor: server,
+                    serverExecutable: URL(filePath: "/usr/bin/false"),
+                    workspaceRoot: root
+                )
             },
             makeSession: { configuration in
                 LanguageServerSession(configuration: configuration, clock: TestClock()) { _ in await factory.make() }
-            })
+            }
+        )
     }
 
     /// Every frame the first server was sent, decoded.
@@ -82,7 +86,9 @@ struct LanguageServerHoverProviderTests {
         for file in files {
             let url = root.appending(path: file)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try Data().write(to: url)
         }
         return (directory, root)
@@ -98,7 +104,8 @@ struct LanguageServerHoverProviderTests {
         let uri = root.appending(path: "web/src/App.tsx").absoluteString
 
         let content = try await provider.hover(
-            HoverQuery(documentURI: uri, content: "export function App() {}", line: 0, utf16Column: 17))
+            HoverQuery(documentURI: uri, content: "export function App() {}", line: 0, utf16Column: 17)
+        )
 
         #expect(content?.markdown == "```typescript\nfunction App(): Element\n```")
         #expect(content?.source == .languageServer)
@@ -121,8 +128,12 @@ struct LanguageServerHoverProviderTests {
 
         let content = try await provider.hover(
             HoverQuery(
-                documentURI: root.appending(path: "Sources/A.swift").absoluteString, content: "let b: Bool", line: 0,
-                utf16Column: 8))
+                documentURI: root.appending(path: "Sources/A.swift").absoluteString,
+                content: "let b: Bool",
+                line: 0,
+                utf16Column: 8
+            )
+        )
 
         #expect(content?.documentationPage == HoverContent.DocumentationPage(module: "Swift", path: ["Bool"]))
         #expect(servers.sessions.map(\.server) == ["sourcekit-lsp"])
@@ -135,7 +146,9 @@ struct LanguageServerHoverProviderTests {
     /// Hovers the document at `path` under `root` through a provider over every server, and answers the server and
     /// root of the one session it started, with the language ID its document was opened with.
     private func hoverOnce(
-        _ path: String, content: String, in root: URL
+        _ path: String,
+        content: String,
+        in root: URL
     ) async throws -> (server: String?, root: URL?, languageID: String?) {
         let servers = ScriptedServers(hover: "`x`")
         let registry = servers.registry()
@@ -143,7 +156,12 @@ struct LanguageServerHoverProviderTests {
 
         let answer = try await provider.hover(
             HoverQuery(
-                documentURI: root.appending(path: path).absoluteString, content: content, line: 0, utf16Column: 0))
+                documentURI: root.appending(path: path).absoluteString,
+                content: content,
+                line: 0,
+                utf16Column: 0
+            )
+        )
 
         #expect(answer?.markdown == "`x`")
         let opened = try await servers.sentFrames().first { $0.method == "textDocument/didOpen" }
@@ -160,8 +178,10 @@ struct LanguageServerHoverProviderTests {
         defer { directory.cleanup() }
 
         let opened = try await hoverOnce(
-            "include/Widget.h", content: "#import <Foundation/Foundation.h>\n@interface Widget : NSObject\n@end",
-            in: root)
+            "include/Widget.h",
+            content: "#import <Foundation/Foundation.h>\n@interface Widget : NSObject\n@end",
+            in: root
+        )
 
         #expect(opened.server == "clangd")
         #expect(opened.root == root)
@@ -210,7 +230,10 @@ struct LanguageServerHoverProviderTests {
         defer { directory.cleanup() }
         let servers = ScriptedServers(hover: "x")
         let provider = LanguageServerHoverProvider(
-            registry: servers.registry(), servers: [.sourceKitLSP, .typeScriptLanguageServer], workspaceRoot: root)
+            registry: servers.registry(),
+            servers: [.sourceKitLSP, .typeScriptLanguageServer],
+            workspaceRoot: root
+        )
 
         for uri in [
             "atelier-blob://abc123/main.ts", root.appending(path: "main.go").absoluteString,

@@ -40,8 +40,11 @@ extension ThemeColor {
     public func mixed(with other: ThemeColor, amount: Double) -> ThemeColor {
         let t = min(max(amount, 0), 1)
         return ThemeColor(
-            red: red + (other.red - red) * t, green: green + (other.green - green) * t,
-            blue: blue + (other.blue - blue) * t, alpha: alpha + (other.alpha - alpha) * t)
+            red: red + (other.red - red) * t,
+            green: green + (other.green - green) * t,
+            blue: blue + (other.blue - blue) * t,
+            alpha: alpha + (other.alpha - alpha) * t
+        )
     }
 }
 
@@ -90,6 +93,7 @@ extension SyntaxTheme {
                 .escape: ThemeStyle(foreground: slot(6, bright: true)),
                 .punctuationBracket: ThemeStyle(foreground: faded.mixed(with: foreground, amount: 0.5)),
                 .punctuationDelimiter: ThemeStyle(foreground: faded.mixed(with: foreground, amount: 0.5))
-            ])
+            ]
+        )
     }
 }

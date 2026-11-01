@@ -25,7 +25,11 @@ struct ClipboardAndHistoryShortcutTests {
     func `command copy uses the active selection by default`() {
         let sut = makeSUT(fileContent: ["hello world"])
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello world",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.selection = TextSelection(
             anchor: TextPosition(row: 0, col: 0),
@@ -72,7 +76,11 @@ struct ClipboardAndHistoryShortcutTests {
         let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello world",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         state.selection = TextSelection(
             anchor: TextPosition(row: 0, col: 6),
@@ -107,7 +115,11 @@ struct ClipboardAndHistoryShortcutTests {
         let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),

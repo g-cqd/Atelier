@@ -111,8 +111,11 @@ package final class RepositoryFreshness {
     ///   - refDebounce: Trailing coalesce for `HEAD`, ref and index events, short since they arrive alone.
     ///   - makeWatcher: Builds the ``WatchEventSource`` for each attachment; a test substitutes a synthetic one.
     package init(
-        taskProvider: any TaskProvider, isEnabled: Bool, clock: any Clock<Duration> = ContinuousClock(),
-        treeDebounce: Duration = .milliseconds(600), refDebounce: Duration = .milliseconds(150),
+        taskProvider: any TaskProvider,
+        isEnabled: Bool,
+        clock: any Clock<Duration> = ContinuousClock(),
+        treeDebounce: Duration = .milliseconds(600),
+        refDebounce: Duration = .milliseconds(150),
         makeWatcher: @escaping @Sendable () -> any WatchEventSource = { FileWatcher() }
     ) {
         self.taskProvider = taskProvider
@@ -194,7 +197,10 @@ package final class RepositoryFreshness {
         // In a linked worktree `.git` is a pointer file, and its HEAD and shared refs live outside the root.
         let location = GitMetadataLocation.resolve(root: root, read: Self.readGitMetadataFile)
         return WatchedPaths(
-            root: root, gitDir: Self.canonical(location.gitDir), commonDir: Self.canonical(location.commonDir))
+            root: root,
+            gitDir: Self.canonical(location.gitDir),
+            commonDir: Self.canonical(location.commonDir)
+        )
     }
 
     private func attach(_ paths: WatchedPaths) {
@@ -297,7 +303,9 @@ package final class RepositoryFreshness {
 
     /// Trailing debounce: each call cancels the wait pending in `slot`, so `fire` runs once events stop for `duration`.
     private func schedule(
-        _ slot: inout Task<Void, Never>?, after duration: Duration, generation: Int,
+        _ slot: inout Task<Void, Never>?,
+        after duration: Duration,
+        generation: Int,
         fire: @escaping @MainActor () async -> Void
     ) {
         slot?.cancel()

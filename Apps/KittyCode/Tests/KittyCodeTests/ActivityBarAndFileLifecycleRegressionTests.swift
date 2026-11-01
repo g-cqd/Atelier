@@ -42,7 +42,8 @@ struct ActivityBarAndFileLifecycleRegressionTests {
         let iconCell = sut.pipeline.buffer[1, 1]
         #expect(
             iconCell.character != " " || iconCell.style != .default,
-            "Activity bar center column should have styled content")
+            "Activity bar center column should have styled content"
+        )
     }
 
     @Test
@@ -76,7 +77,8 @@ struct ActivityBarAndFileLifecycleRegressionTests {
     @Test
     func `save prompt writes a new file under the project root`() throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString)
+            UUID().uuidString
+        )
         try FileManager.default.createDirectory(
             at: rootURL,
             withIntermediateDirectories: true,

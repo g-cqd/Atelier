@@ -42,9 +42,12 @@ struct OutdoneStackTests {
         for range in skipped {
             stack.pushNode(
                 SyntaxNode(
-                    type: "ERROR", byteRange: range,
+                    type: "ERROR",
+                    byteRange: range,
                     pointRange: Point(row: 0, column: range.lowerBound) ..< Point(row: 0, column: range.upperBound),
-                    isError: true))
+                    isError: true
+                )
+            )
             stack.isRecovering = true
         }
         stack.cursor = TokenScanner.Cursor(offset: offset, point: Point(row: 0, column: offset))

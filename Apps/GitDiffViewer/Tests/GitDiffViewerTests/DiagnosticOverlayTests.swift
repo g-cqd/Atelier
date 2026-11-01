@@ -6,9 +6,19 @@ import Testing
 struct DiagnosticOverlayTests {
     private func row(severity: Finding.Severity = .warning, count: Int = 1) -> DiagnosticOverlay.RowDiagnostics {
         let finding = Finding(
-            tool: .swiftlint, ruleID: "rule", message: "message", file: "a.swift", line: 1, severity: severity)
+            tool: .swiftlint,
+            ruleID: "rule",
+            message: "message",
+            file: "a.swift",
+            line: 1,
+            severity: severity
+        )
         return DiagnosticOverlay.RowDiagnostics(
-            severity: severity, count: count, findings: Array(repeating: finding, count: count), squiggles: [])
+            severity: severity,
+            count: count,
+            findings: Array(repeating: finding, count: count),
+            squiggles: []
+        )
     }
 
     @Test

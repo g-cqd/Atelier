@@ -26,8 +26,10 @@ package final class CoreTextPane: DiffTextPane {
 
     package init(gutter: GutterStyle) {
         let configuration = LayoutConfiguration(
-            wrap: .width(0), lineHeight: Double(DiffPalette.system.defaultLineHeight),
-            padding: Double(DiffPaneMetrics.lineFragmentPadding))
+            wrap: .width(0),
+            lineHeight: Double(DiffPalette.system.defaultLineHeight),
+            padding: Double(DiffPaneMetrics.lineFragmentPadding)
+        )
         let canvasView = TextCanvasView(configuration: configuration)
         // Matches TextKit 2's own container inset (DiffTextView.swift's `apply(_:keepingScroll:)`), so a gutter or a
         // split view lines this pane's rows up with a TextKit 2 pane's.
@@ -60,11 +62,18 @@ package final class CoreTextPane: DiffTextPane {
         self.gutterView = gutterView
         self.minimapView = minimapView
         paneView = DiffPaneView(
-            gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
+            gutterView: gutterView,
+            scrollView: scrollView,
+            contentView: scrollView,
+            minimapView: minimapView
+        )
         minimapView.onSelectRow = { [weak self] row in self?.scroll(toRow: row, centered: true) }
         NotificationCenter.default.addObserver(
-            minimapView, selector: #selector(MinimapView.setNeedsDisplayOnScroll(_:)),
-            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+            minimapView,
+            selector: #selector(MinimapView.setNeedsDisplayOnScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
     }
 
     // MARK: DiffTextPane

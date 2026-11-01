@@ -23,27 +23,51 @@ struct TableFileTests {
     @Test
     func `tables built by hand read back equal, with what no cell holds`() throws {
         let table = ParseTable(
-            stateCount: 3, symbols: ["a", "\"é\"", "s"], terminals: ["a", "\"é\""], nonTerminals: ["s"],
+            stateCount: 3,
+            symbols: ["a", "\"é\"", "s"],
+            terminals: ["a", "\"é\""],
+            nonTerminals: ["s"],
             actions: [
                 [.shift(1 << 31), .conflict([.reduce(ruleIndex: 0, count: 2, nonTerminal: "s"), .shift(2)])],
                 [.accept, .error], [.shift(-4), .reduce(ruleIndex: 1, count: 0, nonTerminal: "s")]
             ],
-            gotos: [[2], [nil], [-7]], externalNames: ["x"], externalSymbols: ["\"x\""],
-            validExternals: [[true], [false], [true]], externalIsExtra: [false], lostShifts: [0: [1: 2], 2: [0: 1]])
+            gotos: [[2], [nil], [-7]],
+            externalNames: ["x"],
+            externalSymbols: ["\"x\""],
+            validExternals: [[true], [false], [true]],
+            externalIsExtra: [false],
+            lostShifts: [0: [1: 2], 2: [0: 1]]
+        )
         let lexTable = LexTable(
             states: [LexState(transitions: [(0x61 ... 0x7A, 1)], accepting: nil), LexState(accepting: 0)],
-            keywords: ["if": 0, "else": 1], commentPatterns: [.line(prefix: "//"), .block(open: "/*", close: "*/")],
+            keywords: ["if": 0, "else": 1],
+            commentPatterns: [.line(prefix: "//"), .block(open: "/*", close: "*/")],
             tokens: [LexToken(name: "a", isNamed: true, isExtra: false)],
-            automaton: [LexAutomatonState(transitions: [], accept: 0)], modeStarts: [0], stateModes: [0, 0, 0],
-            errorMode: 0, wordToken: nil, keywordTokens: ["if": 0], modeValidTokens: [[0]], modeEmptyTokens: [nil],
-            modeEmptyAfterSeparator: [0])
+            automaton: [LexAutomatonState(transitions: [], accept: 0)],
+            modeStarts: [0],
+            stateModes: [0, 0, 0],
+            errorMode: 0,
+            wordToken: nil,
+            keywordTokens: ["if": 0],
+            modeValidTokens: [[0]],
+            modeEmptyTokens: [nil],
+            modeEmptyAfterSeparator: [0]
+        )
         let productions = [
             ProductionRule(
-                name: "s", symbolCount: 2, symbols: ["a", "s"], fields: [ProductionField(step: 1, name: "rest")],
-                aliases: [0: SymbolAlias(type: "head", isNamed: true)], dynamicPrecedence: -3)
+                name: "s",
+                symbolCount: 2,
+                symbols: ["a", "s"],
+                fields: [ProductionField(step: 1, name: "rest")],
+                aliases: [0: SymbolAlias(type: "head", isNamed: true)],
+                dynamicPrecedence: -3
+            )
         ]
         let tables = ParseTableCompiler.CompilationResult(
-            parseTable: table, lexTable: lexTable, productions: productions)
+            parseTable: table,
+            lexTable: lexTable,
+            productions: productions
+        )
 
         let read = try ParseTableCompiler.CompilationResult(tableFile: tables.tableFile())
 

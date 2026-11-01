@@ -50,8 +50,12 @@ struct EditorGrammarColorTests {
         let tasks = TaskProviderSpy(defaultTimeout: .seconds(20))
         let clock = TestClock()
         let state = EditorState(
-            rootPath: root.path, config: KittyConfig(), taskProvider: tasks, clock: clock,
-            searchPool: EditorTestPool.shared)
+            rootPath: root.path,
+            config: KittyConfig(),
+            taskProvider: tasks,
+            clock: clock,
+            searchPool: EditorTestPool.shared
+        )
         state.lastRenderRows = Self.rows
         let passes = PassCounter()
         let compute = state.fullHighlightCompute
@@ -66,9 +70,13 @@ struct EditorGrammarColorTests {
     private func open(_ text: String, in fixture: Fixture) async throws {
         try await fixture.tasks.waitForAllTasks()
         fixture.state.finishOpeningFile(
-            requestID: fixture.state.nextOpenRequestID(), path: fixture.root.appending(path: "data.json").path,
-            name: "data.json", loadedFile: try WorkspaceFileLoading.decode(Data(text.utf8)), language: "json",
-            modificationDate: nil)
+            requestID: fixture.state.nextOpenRequestID(),
+            path: fixture.root.appending(path: "data.json").path,
+            name: "data.json",
+            loadedFile: try WorkspaceFileLoading.decode(Data(text.utf8)),
+            language: "json",
+            modificationDate: nil
+        )
         try await fixture.tasks.waitForAllTasks()
     }
 
@@ -81,13 +89,15 @@ struct EditorGrammarColorTests {
     private func grammarLines(of state: EditorState) -> LineHighlights {
         LineHighlights(
             LanguageHighlighter.makeSession(language: "json", theme: state.syntaxTheme)
-                .highlightDocument(source: state.textBuffer.text))
+                .highlightDocument(source: state.textBuffer.text)
+        )
     }
 
     private func lexicalLines(of state: EditorState) -> LineHighlights {
         LineHighlights(
             LanguageHighlighter.makeSession(language: "json", theme: state.syntaxTheme, preferGrammar: false)
-                .highlightDocument(source: state.textBuffer.text))
+                .highlightDocument(source: state.textBuffer.text)
+        )
     }
 
     private func lexicalLine(_ index: Int, of state: EditorState) -> [StyledSpan] {

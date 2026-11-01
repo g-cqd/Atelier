@@ -15,7 +15,8 @@ struct FilePaneOverscrollTests {
     private func makeSUT(wrapsLines: Bool) throws -> (textView: NSTextView, clip: NSClipView, text: RenderedText) {
         let lines = (1 ... 40).map { "let value\($0) = \($0)\n" }.joined()
         let text = try #require(
-            DiffRenderer.render(oldText: lines, newText: lines, language: .plain, lineHeightMultiple: 1.2).unified)
+            DiffRenderer.render(oldText: lines, newText: lines, language: .plain, lineHeightMultiple: 1.2).unified
+        )
         let scrollView = NSTextView.scrollableTextView()
         scrollView.frame = NSRect(x: 0, y: 0, width: 400, height: paneHeight)
         let textView = try #require(scrollView.documentView as? NSTextView)
@@ -25,7 +26,12 @@ struct FilePaneOverscrollTests {
         sut.wrapsLines = wrapsLines
         sut.scrollsPastEnd = true
         DiffTextViewCoordinator.configureWrapping(
-            wrapsLines, column: 0, font: text.palette.font, textView: textView, scrollView: scrollView)
+            wrapsLines,
+            column: 0,
+            font: text.palette.font,
+            textView: textView,
+            scrollView: scrollView
+        )
         sut.apply(text)
         // Laid out whole, as scrolling to the end lays it out, so a wrapped pane's size is final.
         let layoutManager = try #require(textView.textLayoutManager)
@@ -92,16 +98,23 @@ private final class HostedFilePane {
     init(showing rendered: RenderedText) {
         host = NSHostingView(rootView: Self.pane(rendered, keepingScroll: false))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
     }
 
     private static func pane(_ rendered: RenderedText, keepingScroll: Bool) -> DiffTextView {
         DiffTextView(
-            rendered: rendered, gutter: .dual, keepsScrollPosition: keepingScroll, wrapsLines: false,
-            scrollsPastEnd: true)
+            rendered: rendered,
+            gutter: .dual,
+            keepsScrollPosition: keepingScroll,
+            wrapsLines: false,
+            scrollsPastEnd: true
+        )
     }
 
     private var textView: NSTextView? { Self.first(NSTextView.self, in: host) }

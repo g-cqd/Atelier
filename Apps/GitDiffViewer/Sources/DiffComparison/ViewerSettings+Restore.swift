@@ -158,7 +158,8 @@ extension ViewerSettings {
                 Dictionary(
                     uniqueKeysWithValues: decoded.compactMap { key, value in
                         DiagnosticTool(rawValue: key).map { ($0, value) }
-                    })
+                    }
+                )
             } ?? [:]
         return defaultToolLocations.merging(stored) { _, saved in saved }
     }

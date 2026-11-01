@@ -41,7 +41,8 @@ struct LSPConnectionTests {
         let id = try #require(envelope.id)
 
         transport.deliver(
-            LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: .object(["value": .number(42)]))))
+            LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: .object(["value": .number(42)])))
+        )
 
         let payload = try await result
         #expect(payload == Payload(value: 42))
@@ -65,9 +66,11 @@ struct LSPConnectionTests {
 
         // Respond to the second request first.
         transport.deliver(
-            LSPFrameCodec.frame(try JSONRPCMessage.response(id: secondID, result: .object(["value": .number(2)]))))
+            LSPFrameCodec.frame(try JSONRPCMessage.response(id: secondID, result: .object(["value": .number(2)])))
+        )
         transport.deliver(
-            LSPFrameCodec.frame(try JSONRPCMessage.response(id: firstID, result: .object(["value": .number(1)]))))
+            LSPFrameCodec.frame(try JSONRPCMessage.response(id: firstID, result: .object(["value": .number(1)])))
+        )
 
         let (firstPayload, secondPayload) = try await (first, second)
         #expect(firstPayload == Payload(value: 1))
@@ -105,7 +108,8 @@ struct LSPConnectionTests {
         }
         await transport.sink.waitForCount(1)
         let requestID = try #require(
-            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id)
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id
+        )
 
         task.cancel()
         await #expect(throws: CancellationError.self) {
@@ -176,13 +180,16 @@ struct LSPConnectionTests {
         await connection.start()
 
         let payload = Data(
-            #"{"jsonrpc":"2.0","id":1,"method":"workspace/configuration","params":{"items":[]}}"#.utf8)
+            #"{"jsonrpc":"2.0","id":1,"method":"workspace/configuration","params":{"items":[]}}"#.utf8
+        )
         transport.deliver(LSPFrameCodec.frame(payload))
 
         await transport.sink.waitForCount(1)
         let response = try JSONDecoder()
             .decode(
-                ResultOnlyEnvelope.self, from: unframe(await transport.sink.all[0]))
+                ResultOnlyEnvelope.self,
+                from: unframe(await transport.sink.all[0])
+            )
         #expect(response.result == .array([.null]))
     }
 
@@ -222,7 +229,8 @@ struct LSPConnectionTests {
         let envelope = try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0]))
         let id = try #require(envelope.id)
         transport.deliver(
-            LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: .object(["value": .number(9)]))))
+            LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: .object(["value": .number(9)])))
+        )
 
         let payloadResult = try await result
         #expect(payloadResult == Payload(value: 9))
@@ -237,7 +245,8 @@ struct LSPConnectionTests {
         let request = Task { try await connection.request("thing/get", EmptyParams(), as: Payload.self) }
         await transport.sink.waitForCount(1)
         let id = try #require(
-            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id)
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id
+        )
         guard case .number(let number) = id else {
             Issue.record("expected a numeric id, got \(id)")
             return
@@ -250,9 +259,11 @@ struct LSPConnectionTests {
         let later = Task { try await connection.request("thing/later", EmptyParams(), as: Payload.self) }
         await transport.sink.waitForCount(2)
         let laterID = try #require(
-            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[1])).id)
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[1])).id
+        )
         transport.deliver(
-            LSPFrameCodec.frame(try JSONRPCMessage.response(id: laterID, result: .object(["value": .number(2)]))))
+            LSPFrameCodec.frame(try JSONRPCMessage.response(id: laterID, result: .object(["value": .number(2)])))
+        )
         _ = try await later.value
         // Stopping fails whatever is still pending, so a dropped response surfaces here as a closed transport.
         await connection.stop()
@@ -288,7 +299,8 @@ struct LSPConnectionDepthTests {
         let request = Task { try await connection.request("thing/get", EmptyParams(), as: JSONValue.self) }
         await transport.sink.waitForCount(1)
         let id = try #require(
-            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id)
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id
+        )
         // Past the cap, yet shallow enough for the default depth to decode on a pool thread.
         let result = nestedValue(depth: LSPConnection.maximumResultDepth + 16)
         transport.deliver(LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: result)))

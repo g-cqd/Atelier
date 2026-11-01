@@ -22,7 +22,8 @@ final class ScriptedHistory: Sendable {
     init(length: Int, refs: [String: String] = [:], diverged: Bool = false) {
         self.length = length
         self.refs = Mutex(
-            ["main": "c0", "feature": "c\(length)", "HEAD": "c\(length)"].merging(refs) { _, new in new })
+            ["main": "c0", "feature": "c\(length)", "HEAD": "c\(length)"].merging(refs) { _, new in new }
+        )
         self.diverged = diverged
     }
 
@@ -98,9 +99,13 @@ struct DiffViewerModelCommitGroupsTests {
     private func makeSUT(_ history: ScriptedHistory, grouping: Bool = true) -> (DiffViewerModel, FakeProcessRunner) {
         let runner = FakeProcessRunner.gated { history.answer($0) }
         let sut = DiffViewerModel(
-            settings: ViewerSettings(defaults: harness.scratchDefaults.defaults), reader: harness.reader,
-            history: CommitHistory(runner: runner, gate: GitConfigGate()), taskProvider: harness.taskProvider,
-            uptime: harness.uptime.provider, clock: harness.clock)
+            settings: ViewerSettings(defaults: harness.scratchDefaults.defaults),
+            reader: harness.reader,
+            history: CommitHistory(runner: runner, gate: GitConfigGate()),
+            taskProvider: harness.taskProvider,
+            uptime: harness.uptime.provider,
+            clock: harness.clock
+        )
         sut.settings.explorerPlacement = .unifiedSidebar
         sut.settings.treeStyle = .flat
         sut.settings.groupsByCommit = grouping
@@ -150,7 +155,13 @@ struct DiffViewerModelCommitGroupsTests {
             sut.commitGroups.eligibility
                 == .applies(
                     CommitGroupingRange(
-                        repository: Self.repository, base: "main", tip: "feature", includesWorkingTree: false)))
+                        repository: Self.repository,
+                        base: "main",
+                        tip: "feature",
+                        includesWorkingTree: false
+                    )
+                )
+        )
         #expect(sut.unifiedSections.map(\.id) == ["commit:c3", "commit:c2", "commit:c1"])
         #expect(sut.unifiedSections.first?.nodes.map(\.id) == ["a.swift", "file3.swift"])
         #expect(sut.unifiedSections.first?.title == "Commit 3")
@@ -310,7 +321,9 @@ struct DiffViewerModelCommitGroupsTests {
             sut.pipeline.publishedSources
                 == RenderPipeline.Sources(
                     left: .gitRef(repository: Self.repository, ref: "c1"),
-                    right: .gitRef(repository: Self.repository, ref: "c2")))
+                    right: .gitRef(repository: Self.repository, ref: "c2")
+                )
+        )
         #expect(sut.selectionTitle(key) == "Commit 2 · c2")
         #expect(sut.selectionLabel(key) == "Commit 2 · c2")
         #expect(sut.selectionDetail(key).contains("Tess"))
@@ -360,9 +373,11 @@ struct DiffViewerModelCommitGroupsTests {
             menu == [
                 CommitGroupMenuItem(
                     title: "Compare This Commit",
-                    action: .compare(.repository(Self.repository, leftRef: "c1", rightRef: "c2"))),
+                    action: .compare(.repository(Self.repository, leftRef: "c1", rightRef: "c2"))
+                ),
                 CommitGroupMenuItem(title: "Copy Commit ID", action: .copy("c2"))
-            ])
+            ]
+        )
         #expect(sut.commitGroupMenu(forSelection: "a.swift").isEmpty)
     }
 
@@ -379,8 +394,10 @@ struct DiffViewerModelCommitGroupsTests {
             menu == [
                 CommitGroupMenuItem(
                     title: "Compare This Range",
-                    action: .compare(.repository(Self.repository, leftRef: "main", rightRef: "c300")))
-            ])
+                    action: .compare(.repository(Self.repository, leftRef: "main", rightRef: "c300"))
+                )
+            ]
+        )
     }
 
     // MARK: The "doesn't apply" actions (step 9)

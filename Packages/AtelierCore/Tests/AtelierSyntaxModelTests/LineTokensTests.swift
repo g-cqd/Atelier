@@ -26,7 +26,8 @@ struct LineTokensTests {
         for _ in 0 ..< 500 {
             let (tokens, lineStarts, textLength) = Self.generated(&random)
             let expected = Self.lineTokens(
-                HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: textLength))
+                HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: textLength)
+            )
             let lines = LineTokens(tokens, lineStarts: lineStarts, textLength: textLength)
             #expect(lines.map(Array.init) == expected)
             #expect(lines.tokens == expected.flatMap(\.self))
@@ -75,7 +76,8 @@ struct LineTokensTests {
             lines[0] == [
                 LineToken(range: 0 ..< 1, role: .string, modifiers: [.readonly]),
                 LineToken(range: 1 ..< 4, role: .comment), LineToken(range: 5 ..< 6, role: .keyword)
-            ])
+            ]
+        )
         #expect(Array(lines[1]) == ascii)
         #expect(Array(lines[2]) == beforeMultibyte)
     }
@@ -178,8 +180,13 @@ struct LineTokensTests {
             let role = HighlightRole.allCases[Int(random.next() % UInt64(HighlightRole.allCases.count))]
             tokens.append(
                 HighlightToken(
-                    byteRange: cursor ..< cursor + length, role: role, modifiers: [.readonly],
-                    layer: .lexical, priority: Int(random.next() % 3)))
+                    byteRange: cursor ..< cursor + length,
+                    role: role,
+                    modifiers: [.readonly],
+                    layer: .lexical,
+                    priority: Int(random.next() % 3)
+                )
+            )
             cursor += length
         }
         return (tokens, lineStarts, textLength)

@@ -11,11 +11,17 @@ struct SourceLoaderTests {
     @Test
     func `a folder scan lists supported files by relative path and hashes only those small enough`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-folder-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-folder-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(
-            at: root.appending(path: "Sources/Nested"), withIntermediateDirectories: true)
+            at: root.appending(path: "Sources/Nested"),
+            withIntermediateDirectories: true
+        )
         try FileManager.default.createDirectory(
-            at: root.appending(path: "node_modules"), withIntermediateDirectories: true)
+            at: root.appending(path: "node_modules"),
+            withIntermediateDirectories: true
+        )
         defer { try? FileManager.default.removeItem(at: root) }
         let source = "let a = 1\n"
         try source.write(to: root.appending(path: "Sources/Nested/a.swift"), atomically: true, encoding: .utf8)
@@ -42,7 +48,9 @@ struct SourceLoaderTests {
     @Test
     func `a file that cannot be read is listed without a blob id instead of failing the folder`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-unreadable-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-unreadable-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try "let a = 1\n".write(to: root.appending(path: "a.swift"), atomically: true, encoding: .utf8)

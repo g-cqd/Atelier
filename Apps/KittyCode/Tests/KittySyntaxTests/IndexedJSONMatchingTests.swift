@@ -15,9 +15,13 @@ struct IndexedJSONMatchingTests {
         let grammar = try GrammarLoader.load(from: "\(resources)/Grammars/json/grammar.json")
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let query = try QueryParser.parse(
-            String(contentsOfFile: "\(resources)/Grammars/json/highlights.scm", encoding: .utf8))
+            String(contentsOfFile: "\(resources)/Grammars/json/highlights.scm", encoding: .utf8)
+        )
         let source = #"""
             {"name": "a \"quoted\" value\n", "count": -1.5e3, "ok": true, "none": null,
              "items": [1, "two", [false, {"deep": ["é"]}]], "empty": {}, "list": []}

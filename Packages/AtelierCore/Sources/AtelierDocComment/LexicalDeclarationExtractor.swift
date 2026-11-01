@@ -35,12 +35,20 @@ public struct LexicalDeclarationExtractor: DeclarationExtracting {
             }
             let head = source.head(from: comment.headStart)
             for (name, kind, signature) in HeadReader.read(
-                head.words, language: language, context: context, signature: source.signature(head))
-            {
+                head.words,
+                language: language,
+                context: context,
+                signature: source.signature(head)
+            ) {
                 declarations.append(
                     SyntaxDeclaration(
-                        name: name, kind: kind, range: comment.headStart ..< head.end, documentation: documentation,
-                        signature: signature))
+                        name: name,
+                        kind: kind,
+                        range: comment.headStart ..< head.end,
+                        documentation: documentation,
+                        signature: signature
+                    )
+                )
             }
         }
         return declarations
@@ -341,7 +349,10 @@ enum HeadReader {
     typealias Found = (name: String, kind: SyntaxDeclaration.Kind, signature: String)
 
     static func read(
-        _ words: [HeadWord], language: Language, context: HeadContext, signature: String
+        _ words: [HeadWord],
+        language: Language,
+        context: HeadContext,
+        signature: String
     ) -> [Found] {
         switch language {
             case .go: go(words, context: context, signature: signature)

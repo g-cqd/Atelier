@@ -22,7 +22,8 @@ public enum TextEditorLayout {
         max(
             0,
             rect.width - gutterWidth(for: editor)
-                - verticalScrollIndicatorWidth(for: editor, in: rect))
+                - verticalScrollIndicatorWidth(for: editor, in: rect)
+        )
     }
 
     public static func gutterDecorationWidth(for editor: TextEditor) -> Int {
@@ -93,7 +94,11 @@ public enum TextEditorLayout {
         gripOffset: Int
     ) -> Int {
         let (line, _) = scrollPosition(
-            for: editor, in: rect, pointerRow: pointerRow, gripOffset: gripOffset)
+            for: editor,
+            in: rect,
+            pointerRow: pointerRow,
+            gripOffset: gripOffset
+        )
         return line
     }
 
@@ -137,7 +142,10 @@ public enum TextEditorLayout {
 
         let line = editor.line(at: editor.cursorRow)
         let displayColumn = TextDisplayMetrics.displayColumn(
-            forCharacterOffset: editor.cursorCol, in: line, tabSize: editor.tabSize)
+            forCharacterOffset: editor.cursorCol,
+            in: line,
+            tabSize: editor.tabSize
+        )
 
         if editor.wrapLines {
             let startVisualRow =
@@ -217,7 +225,10 @@ public enum TextEditorLayout {
             )
             let line = editor.line(at: lineIndex)
             let rowStarts = wrappedRowStartColumns(
-                for: line, contentWidth: contentWidth, tabSize: editor.tabSize)
+                for: line,
+                contentWidth: contentWidth,
+                tabSize: editor.tabSize
+            )
             let rowStart = rowStarts[min(max(0, wrapRow), max(0, rowStarts.count - 1))]
             let wrappedDisplayColumn = rowStart + displayColumn
             return TextPosition(
@@ -257,7 +268,9 @@ public enum TextEditorLayout {
     }
 
     public static func needsHorizontalScrollIndicator(
-        for editor: TextEditor, in rect: Rect, maxLineWidth: Int
+        for editor: TextEditor,
+        in rect: Rect,
+        maxLineWidth: Int
     ) -> Bool {
         guard editor.showsHorizontalScrollIndicator, !editor.wrapLines else { return false }
         guard rect.width > 0, rect.height > 1 else { return false }
@@ -310,7 +323,9 @@ public enum TextEditorLayout {
             let gutter = gutterWidth(for: editor)
             let pessimisticContentWidth = max(1, rect.width - gutter - 1)
             let visualRows = totalWrappedRowCount(
-                for: editor, contentWidth: pessimisticContentWidth)
+                for: editor,
+                contentWidth: pessimisticContentWidth
+            )
             return visualRows > rect.height
         }
         return editor.lineCount > rect.height
@@ -331,7 +346,9 @@ public enum TextEditorLayout {
         return (0 ..< editor.lineCount)
             .reduce(into: 0) { total, lineIndex in
                 total += wrappedRowCount(
-                    for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize
+                    for: editor.line(at: lineIndex),
+                    contentWidth: contentWidth,
+                    tabSize: editor.tabSize
                 )
             }
     }
@@ -354,7 +371,9 @@ public enum TextEditorLayout {
 
         for lineIndex in 0 ..< clampedLineOffset {
             visualOffset += wrappedRowCount(
-                for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize
+                for: editor.line(at: lineIndex),
+                contentWidth: contentWidth,
+                tabSize: editor.tabSize
             )
         }
 
@@ -367,7 +386,9 @@ public enum TextEditorLayout {
         contentWidth: Int
     ) -> Int {
         lineAndWrapRowOffset(
-            forVisualRowOffset: visualRowOffset, editor: editor, contentWidth: contentWidth
+            forVisualRowOffset: visualRowOffset,
+            editor: editor,
+            contentWidth: contentWidth
         )
         .0
     }
@@ -409,7 +430,10 @@ public enum TextEditorLayout {
         for lineIndex in 0 ..< editor.lineCount {
             let line = editor.line(at: lineIndex)
             let rowCount = wrappedRowCount(
-                for: line, contentWidth: contentWidth, tabSize: editor.tabSize)
+                for: line,
+                contentWidth: contentWidth,
+                tabSize: editor.tabSize
+            )
             let nextVisualRow = currentVisualRow + rowCount
             if resolvedVisualRowOffset < nextVisualRow {
                 return (lineIndex, resolvedVisualRowOffset - currentVisualRow)
@@ -453,7 +477,10 @@ public enum TextEditorLayout {
         tabSize: Int = 4
     ) -> (row: Int, column: Int) {
         let rowStarts = wrappedRowStartColumns(
-            for: line, contentWidth: contentWidth, tabSize: tabSize)
+            for: line,
+            contentWidth: contentWidth,
+            tabSize: tabSize
+        )
         let totalWidth = max(0, TextDisplayMetrics.displayWidth(of: line, tabSize: tabSize))
         let clampedDisplayColumn = max(0, displayColumn)
 

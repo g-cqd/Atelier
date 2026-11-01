@@ -23,7 +23,9 @@ public import class AemiRuntime.BlockingOffloadPool
 
 /// Editor signposts around `textDidChange` and the wrap-cache rebuild, so Instruments can attribute frame time.
 private let editorSignposter = OSSignposter(
-    subsystem: "com.kittytui.editor", category: "edit")
+    subsystem: "com.kittytui.editor",
+    category: "edit"
+)
 
 @Observable
 @MainActor
@@ -778,7 +780,9 @@ public final class EditorState {
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
             cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
-                for: normalizedLines, tabSize: config.editor.tabSize)
+                for: normalizedLines,
+                tabSize: config.editor.tabSize
+            )
             cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
                 for: normalizedLines,
                 lineEnding: currentLineEnding
@@ -908,7 +912,8 @@ public final class EditorState {
             WrapCache.wrapCount(
                 of: fileLine(at: lineIndex),
                 contentWidth: contentWidth,
-                tabSize: tabSize)
+                tabSize: tabSize
+            )
         }
         // A changed line count moves every row below the edit, so only a stable count repaints just its lines.
         if mutation.originalLineRange.count == mutation.updatedLineRange.count {
@@ -920,7 +925,10 @@ public final class EditorState {
 
     public func replaceDocumentText(with content: String) {
         workspace.replaceDocumentText(
-            with: content, tabSize: config.editor.tabSize, lineEnding: currentLineEnding)
+            with: content,
+            tabSize: config.editor.tabSize,
+            lineEnding: currentLineEnding
+        )
     }
 
     public var serializedByteCount: Int {
@@ -997,7 +1005,10 @@ public final class EditorState {
         // The outgoing document's highlights and caches: the switch evicts the buffer's copy and the restore lets go
         // of the workspace's, so they are retired once it has, below. Its rope stays with its buffer.
         let retired = RetiredStorage(
-            highlights: highlightedLines, fileLines: cachedFileLines, documentText: cachedDocumentText)
+            highlights: highlightedLines,
+            fileLines: cachedFileLines,
+            documentText: cachedDocumentText
+        )
         workspace.switchToTab(index)
         refreshHighlightsIfIncomplete()
         markEverythingDirty()
@@ -1025,9 +1036,14 @@ public final class EditorState {
     public func ensureActiveTabVisible(ribbonWidth: Int) {
         let tabs = tabRibbonTabs()
         let ribbon = TabRibbon(
-            tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
+            tabs: tabs,
+            activeIndex: bufferManager.activeIndex,
+            scrollOffset: tabScrollOffset
+        )
         tabScrollOffset = ribbon.clampedScrollOffset(
-            activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
+            activeIndex: bufferManager.activeIndex,
+            ribbonWidth: ribbonWidth
+        )
     }
 
     public func buildWrapCache(contentWidth: Int) {
@@ -1042,8 +1058,11 @@ public final class EditorState {
 
         guard
             !wrapCache.isValid(
-                contentWidth: contentWidth, tabSize: tabSize, documentVersion: docVersion,
-                lineCount: lineCount)
+                contentWidth: contentWidth,
+                tabSize: tabSize,
+                documentVersion: docVersion,
+                lineCount: lineCount
+            )
         else {
             return
         }
@@ -1054,7 +1073,10 @@ public final class EditorState {
         wrapCache.lineWrapCounts = (0 ..< lineCount)
             .map { lineIndex in
                 WrapCache.wrapCount(
-                    of: fileLine(at: lineIndex), contentWidth: contentWidth, tabSize: tabSize)
+                    of: fileLine(at: lineIndex),
+                    contentWidth: contentWidth,
+                    tabSize: tabSize
+                )
             }
         wrapCache.totalRowCount = wrapCache.lineWrapCounts.reduce(0, +)
 
@@ -1123,7 +1145,9 @@ public final class EditorState {
             rows: max(2, rows)
         )
         let lineNumberWidth = max(
-            3, TextDisplayMetrics.lineNumberDigits(forLineCount: fileLineCount) + 1)
+            3,
+            TextDisplayMetrics.lineNumberDigits(forLineCount: fileLineCount) + 1
+        )
         let gutterDecorationWidth =
             (config.git.enabled && config.git.decorations.showLineChanges
                 && gitLineDecorationProvider != nil) ? 2 : 0
@@ -1353,8 +1377,10 @@ public final class EditorState {
     @ObservationIgnored private let ownsSearchPool: Bool
 
     public init(
-        rootPath: String, config: KittyConfig,
-        taskProvider: any TaskProvider = .default, clock: any Clock<Duration> = ContinuousClock(),
+        rootPath: String,
+        config: KittyConfig,
+        taskProvider: any TaskProvider = .default,
+        clock: any Clock<Duration> = ContinuousClock(),
         searchPool: BlockingOffloadPool? = nil
     ) {
         self.taskProvider = taskProvider
@@ -1384,7 +1410,8 @@ public final class EditorState {
         self.retire = { retired.yield($0) }
         let (searchStream, searchCont) = AsyncStream<Void>
             .makeStream(
-                bufferingPolicy: .bufferingNewest(1))
+                bufferingPolicy: .bufferingNewest(1)
+            )
         self.workspaceSearchDebounceSignal = searchStream
         self.workspaceSearchDebounceContinuation = searchCont
         self.fileTreeHistory.maxOperationSteps = config.editor.maxTreeUndoSteps
@@ -1461,8 +1488,14 @@ public final class EditorState {
         else { return }
         let request = currentHighlightRequest
         let input = FullHighlightInput(
-            textBuffer: textBuffer, language: currentLanguage, grammarLanguage: qualifiedGrammarLanguage,
-            theme: syntaxTheme, highlightsSyntax: highlightsSyntax, tabSize: config.editor.tabSize, clock: clock)
+            textBuffer: textBuffer,
+            language: currentLanguage,
+            grammarLanguage: qualifiedGrammarLanguage,
+            theme: syntaxTheme,
+            highlightsSyntax: highlightsSyntax,
+            tabSize: config.editor.tabSize,
+            clock: clock
+        )
         let compute = fullHighlightCompute
         let work = taskProvider.detachedTask(role: .work) { [weak self] in
             let result = await compute(input)
@@ -1505,11 +1538,17 @@ public final class EditorState {
     /// go of, to hand to `retire` once the state has replaced them, so that the last reference to each goes with the
     /// consumer.
     func activeDocumentStorage(
-        closing closedBuffer: DocumentBuffer? = nil, replaced: consuming DocumentBuffer.ReplacedContents? = nil
+        closing closedBuffer: DocumentBuffer? = nil,
+        replaced: consuming DocumentBuffer.ReplacedContents? = nil
     ) -> RetiredStorage {
         RetiredStorage(
-            highlights: highlightedLines, textBuffer: textBuffer, fileLines: cachedFileLines,
-            documentText: cachedDocumentText, buffer: closedBuffer, replaced: replaced)
+            highlights: highlightedLines,
+            textBuffer: textBuffer,
+            fileLines: cachedFileLines,
+            documentText: cachedDocumentText,
+            buffer: closedBuffer,
+            replaced: replaced
+        )
     }
 
     /// The preview buffer an open in preview mode replaces, and the active document's storage when it is that buffer.
@@ -1525,8 +1564,11 @@ public final class EditorState {
     private var currentHighlightRequest: HighlightRequest {
         let buffer = bufferManager.activeBuffer
         return HighlightRequest(
-            bufferID: buffer.map(ObjectIdentifier.init), documentVersion: buffer?.documentVersion ?? 0,
-            contentHash: textBuffer.contentHash, generation: highlightGeneration)
+            bufferID: buffer.map(ObjectIdentifier.init),
+            documentVersion: buffer?.documentVersion ?? 0,
+            contentHash: textBuffer.contentHash,
+            generation: highlightGeneration
+        )
     }
 
     /// Asks the consumer for a full pass; the requests of a burst make one pass.
@@ -1661,7 +1703,8 @@ public final class EditorState {
     public var isGitIgnoreFilterAvailable: Bool {
         guard config.git.enabled, fileStatusProvider != nil else { return false }
         return FileManager.default.fileExists(
-            atPath: FilePath(rootPath).appending(".gitignore").string)
+            atPath: FilePath(rootPath).appending(".gitignore").string
+        )
     }
 
     public func cycleFileVisibility() async {
@@ -1761,20 +1804,32 @@ extension EditorState {
         let source = String(decoding: rope.bytes(in: 0 ..< rope.byteCount), as: UTF8.self)
         if let grammarLanguage = input.grammarLanguage,
             let lines = await grammarHighlight(
-                of: source, language: grammarLanguage, theme: input.theme, clock: input.clock)
+                of: source,
+                language: grammarLanguage,
+                theme: input.theme,
+                clock: input.clock
+            )
         {
             return FullHighlightResult(highlightedLines: lines, maxLineWidth: maxLineWidth, isFromGrammar: true)
         }
         let session = LanguageHighlighter.makeSession(
-            language: input.language, theme: input.theme, preferGrammar: false)
+            language: input.language,
+            theme: input.theme,
+            preferGrammar: false
+        )
         return FullHighlightResult(
-            highlightedLines: session.highlightDocument(source: source), maxLineWidth: maxLineWidth)
+            highlightedLines: session.highlightDocument(source: source),
+            maxLineWidth: maxLineWidth
+        )
     }
 
     /// `source` highlighted from `language`'s grammar; nil when the parse fails the quality gate, or when it outlasts
     /// `grammarPassDeadline` on `clock`, which cancels it.
     nonisolated private static func grammarHighlight(
-        of source: String, language: String, theme: Theme, clock: any Clock<Duration>
+        of source: String,
+        language: String,
+        theme: Theme,
+        clock: any Clock<Duration>
     ) async -> [[StyledSpan]]? {
         await withTaskGroup(of: [[StyledSpan]]?.self) { group in
             group.addTask {

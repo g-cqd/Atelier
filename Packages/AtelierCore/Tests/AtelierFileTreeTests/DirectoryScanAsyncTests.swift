@@ -28,7 +28,13 @@ struct DirectoryScanAsyncTests {
         defer { pool.shutdown() }
 
         let entries = try await DirectoryScanner.scanAsync(
-            tree.root, maxDepth: 1, maxEntries: 1000, visibility: .defaultHidden, withinRoot: nil, offload: pool)
+            tree.root,
+            maxDepth: 1,
+            maxEntries: 1000,
+            visibility: .defaultHidden,
+            withinRoot: nil,
+            offload: pool
+        )
 
         #expect(entries.count == 40)
         #expect(entries.allSatisfy { $0.children.map(\.name) == ["a.txt"] })

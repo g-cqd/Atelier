@@ -30,8 +30,11 @@ package final class LanguageServerPolicy {
     ///   - environment: The environment of a server's process; ``environment(with:)`` in the app.
     ///   - taskProvider: Spawns the shutdown of a revoked repository's session.
     package init(
-        trust: RepositoryTrust, defaults: UserDefaults = .standard, locate: @escaping Locate,
-        environment: @escaping SessionEnvironment = { _, _ in nil }, taskProvider: any TaskProvider = .default
+        trust: RepositoryTrust,
+        defaults: UserDefaults = .standard,
+        locate: @escaping Locate,
+        environment: @escaping SessionEnvironment = { _, _ in nil },
+        taskProvider: any TaskProvider = .default
     ) {
         self.trust = trust
         self.defaults = defaults
@@ -65,7 +68,10 @@ package final class LanguageServerPolicy {
     package static func environment(with discovery: ToolDiscovery) -> SessionEnvironment {
         { server, executable in
             await server.sessionEnvironment(
-                serverExecutable: executable, locator: discovery, base: ProcessInfo.processInfo.environment)
+                serverExecutable: executable,
+                locator: discovery,
+                base: ProcessInfo.processInfo.environment
+            )
         }
     }
 
@@ -91,7 +97,8 @@ package final class LanguageServerPolicy {
     /// trust the repository that holds `root`, when the server is off for `root`'s project, or when no executable
     /// resolves.
     package func configuration(
-        forRoot root: URL, server: LanguageServerDescriptor = .sourceKitLSP
+        forRoot root: URL,
+        server: LanguageServerDescriptor = .sourceKitLSP
     ) async -> LanguageServerSession.Configuration? {
         // Checked again although the registry admits every root first: an untrusted root never reaches a server.
         guard trust.isTrusted(Self.trustRoot(of: root)) else { return nil }
@@ -100,8 +107,11 @@ package final class LanguageServerPolicy {
             return nil
         }
         return LanguageServerSession.Configuration(
-            descriptor: server, serverExecutable: executable, workspaceRoot: root,
-            environment: await environment(server, executable))
+            descriptor: server,
+            serverExecutable: executable,
+            workspaceRoot: root,
+            environment: await environment(server, executable)
+        )
     }
 
     /// The directory whose trust decision gates a session at `root`: the repository that holds it, which a server's
@@ -134,8 +144,11 @@ package final class LanguageServerPolicy {
             let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
             let sdks = located
             let provider = SDKDocumentationProvider.scratch(
-                serverExecutable: executable, probeDirectory: probeDirectory, locateSDK: { sdks[$0] },
-                resolvesDocumentationPages: true)
+                serverExecutable: executable,
+                probeDirectory: probeDirectory,
+                locateSDK: { sdks[$0] },
+                resolvesDocumentationPages: true
+            )
             return SDKHoverTier.Resolved(provider: provider, probeDirectory: probeDirectory)
         } catch {
             PhaseTrace.log("SDK documentation is off: \(error)")
@@ -155,7 +168,9 @@ package final class LanguageServerPolicy {
     package func location(of server: LanguageServerDescriptor, forRoot root: URL) -> ToolLocation? {
         if let project = Self.projectRoot(containing: root) {
             let scopedKey = ViewerSettings.scopedKey(
-                ViewerSettings.Key.lspServerLocations, projectKey: ProjectIdentity(root: project).key)
+                ViewerSettings.Key.lspServerLocations,
+                projectKey: ProjectIdentity(root: project).key
+            )
             if defaults.object(forKey: scopedKey) != nil { return location(of: server, underKey: scopedKey) }
         }
         return location(of: server, underKey: ViewerSettings.Key.lspServerLocations)

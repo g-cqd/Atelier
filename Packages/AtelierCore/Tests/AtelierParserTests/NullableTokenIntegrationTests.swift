@@ -13,10 +13,14 @@ struct NullableTokenIntegrationTests {
                 ("source", .seq([.string("a"), .symbol("word")])),
                 ("word", .pattern("[a-z]*"))
             ],
-            extras: [.pattern(#"\s"#)])
+            extras: [.pattern(#"\s"#)]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("a foo")
 
@@ -32,10 +36,14 @@ struct NullableTokenIntegrationTests {
                 ("source", .seq([.optional(.string("a")), .symbol("word")])),
                 ("word", .pattern("[a-z]*"))
             ],
-            extras: [])
+            extras: []
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("a")
 
@@ -51,10 +59,16 @@ struct NullableTokenIntegrationTests {
     @Test
     func `a repeated nullable token does not loop at one position`() throws {
         let grammar = GrammarDefinition(
-            name: "nullable_repeat", rules: [("source", .repeat(.pattern("x*")))], extras: [])
+            name: "nullable_repeat",
+            rules: [("source", .repeat(.pattern("x*")))],
+            extras: []
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("y")
 

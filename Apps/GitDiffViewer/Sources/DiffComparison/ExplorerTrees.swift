@@ -28,8 +28,12 @@ package struct ExplorerTrees: Sendable, Equatable {
     package static let empty = ExplorerTrees()
 
     package static func build(
-        comparison: Comparison, leftTree: [PathNode], rightTree: [PathNode], showsChangesOnly: Bool,
-        showsIgnoredFiles: Bool = false, style: FileTreeStyle
+        comparison: Comparison,
+        leftTree: [PathNode],
+        rightTree: [PathNode],
+        showsChangesOnly: Bool,
+        showsIgnoredFiles: Bool = false,
+        style: FileTreeStyle
     ) -> ExplorerTrees {
         var trees = ExplorerTrees()
         var leftNodes = leftTree
@@ -65,13 +69,22 @@ package struct ExplorerTrees: Sendable, Equatable {
     /// always off the main actor.
     @concurrent
     package static func buildOffMain(
-        comparison: Comparison, leftTree: [PathNode], rightTree: [PathNode], showsChangesOnly: Bool,
-        showsIgnoredFiles: Bool = false, style: FileTreeStyle
+        comparison: Comparison,
+        leftTree: [PathNode],
+        rightTree: [PathNode],
+        showsChangesOnly: Bool,
+        showsIgnoredFiles: Bool = false,
+        style: FileTreeStyle
     ) async -> ExplorerTrees {
         assert(!isOnMainThread(), "buildOffMain must run off the main actor")
         return build(
-            comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: showsChangesOnly,
-            showsIgnoredFiles: showsIgnoredFiles, style: style)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: rightTree,
+            showsChangesOnly: showsChangesOnly,
+            showsIgnoredFiles: showsIgnoredFiles,
+            style: style
+        )
     }
 
     private static func arranged(_ nodes: [PathNode], style: FileTreeStyle) -> [PathNode] {

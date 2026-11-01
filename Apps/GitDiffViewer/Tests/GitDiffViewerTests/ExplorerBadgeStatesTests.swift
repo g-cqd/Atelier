@@ -24,8 +24,11 @@ struct ExplorerBadgeStatesTests {
 
     /// `left` against `right`, both loaded, with `status` as the working tree's git status.
     private func makeLoadedSUT(
-        left: ComparisonSource = head, right: ComparisonSource = tree, leftEntries: [SourceEntry],
-        rightEntries: [SourceEntry], status: [GitStatusEntry] = []
+        left: ComparisonSource = head,
+        right: ComparisonSource = tree,
+        leftEntries: [SourceEntry],
+        rightEntries: [SourceEntry],
+        status: [GitStatusEntry] = []
     ) async throws -> DiffViewerModel {
         harness.reader.entries[left] = leftEntries
         harness.reader.entries[right] = rightEntries
@@ -42,8 +45,10 @@ struct ExplorerBadgeStatesTests {
         async throws
     {
         let sut = try await makeLoadedSUT(
-            leftEntries: [harness.entry("Sources/a.swift", "1")], rightEntries: [harness.entry("Sources/a.swift", "2")],
-            status: Self.status("1 .M N... 100644 100644 100644 aaaa aaaa Sources/a.swift"))
+            leftEntries: [harness.entry("Sources/a.swift", "1")],
+            rightEntries: [harness.entry("Sources/a.swift", "2")],
+            status: Self.status("1 .M N... 100644 100644 100644 aaaa aaaa Sources/a.swift")
+        )
 
         #expect(sut.left.explorerBadgeStates.state(of: "Sources/a.swift") == .unstaged)
         #expect(sut.left.explorerBadgeStates.state(of: "Sources") == .unstaged)
@@ -55,7 +60,8 @@ struct ExplorerBadgeStatesTests {
         let sut = try await makeLoadedSUT(
             leftEntries: [harness.entry("staged.swift", "1"), harness.entry("committed.swift", "1")],
             rightEntries: [harness.entry("staged.swift", "2"), harness.entry("committed.swift", "2")],
-            status: Self.status("1 M. N... 100644 100644 100644 aaaa bbbb staged.swift"))
+            status: Self.status("1 M. N... 100644 100644 100644 aaaa bbbb staged.swift")
+        )
 
         for explorer in [sut.left.explorerBadgeStates, sut.right.explorerBadgeStates] {
             #expect(explorer.state(of: "staged.swift") == .staged)
@@ -70,7 +76,10 @@ struct ExplorerBadgeStatesTests {
             leftEntries: [harness.entry("Sources/old.swift", "1"), harness.entry("Sources/kept.swift", "2")],
             rightEntries: [harness.entry("Moved/old.swift", "1b"), harness.entry("Sources/kept.swift", "2")],
             status: Self.status(
-                "2 RM N... 100644 100644 100644 aaaa bbbb R90 Moved/old.swift", "Sources/old.swift"))
+                "2 RM N... 100644 100644 100644 aaaa bbbb R90 Moved/old.swift",
+                "Sources/old.swift"
+            )
+        )
 
         #expect(sut.left.explorerBadgeStates.state(of: "Sources/old.swift") == .unstaged)
         #expect(sut.left.explorerBadgeStates.state(of: "Sources") == .unstaged)
@@ -84,8 +93,10 @@ struct ExplorerBadgeStatesTests {
         async throws
     {
         let sut = try await makeLoadedSUT(
-            leftEntries: [harness.entry("old.swift", "1")], rightEntries: [harness.entry("new.swift", "1")],
-            status: Self.status("1 .D N... 100644 100644 000000 aaaa aaaa old.swift", "? new.swift"))
+            leftEntries: [harness.entry("old.swift", "1")],
+            rightEntries: [harness.entry("new.swift", "1")],
+            status: Self.status("1 .D N... 100644 100644 000000 aaaa aaaa old.swift", "? new.swift")
+        )
 
         #expect(sut.left.explorerBadgeStates.state(of: "old.swift") == .unstaged)
         #expect(sut.right.explorerBadgeStates.state(of: "new.swift") == .unstaged)
@@ -95,7 +106,10 @@ struct ExplorerBadgeStatesTests {
     func `a ref against a ref draws every change filled in both trees`() async throws {
         let feature = ComparisonSource.gitRef(repository: Self.root, ref: "feature")
         let sut = try await makeLoadedSUT(
-            right: feature, leftEntries: [harness.entry("a.swift", "1")], rightEntries: [harness.entry("a.swift", "2")])
+            right: feature,
+            leftEntries: [harness.entry("a.swift", "1")],
+            rightEntries: [harness.entry("a.swift", "2")]
+        )
 
         #expect(sut.left.explorerBadgeStates.state(of: "a.swift") == .staged)
         #expect(sut.right.explorerBadgeStates.state(of: "a.swift") == .staged)

@@ -52,9 +52,13 @@ struct DiffViewerModelBadgeStatesTests {
                 harness.entry("new.swift", "4")
             ],
             status: Self.status(
-                "2 RM N... 100644 100644 100644 aaaa bbbb R90 Moved/old.swift", "Sources/old.swift",
+                "2 RM N... 100644 100644 100644 aaaa bbbb R90 Moved/old.swift",
+                "Sources/old.swift",
                 "1 M. N... 100644 100644 100644 aaaa bbbb Sources/kept.swift",
-                "1 .M N... 100644 100644 100644 aaaa aaaa Docs/readme.md", "? new.swift"))
+                "1 .M N... 100644 100644 100644 aaaa aaaa Docs/readme.md",
+                "? new.swift"
+            )
+        )
 
         #expect(sut.badgeState(ofPath: "Sources/old.swift") == .unstaged)
         #expect(sut.badgeState(ofPath: "Sources") == .unstaged)
@@ -71,8 +75,10 @@ struct DiffViewerModelBadgeStatesTests {
     @Test
     func `an index change re-reads git's status and every lookup follows, with no file listed again`() async throws {
         let sut = try await makeLoadedSUT(
-            head: [harness.entry("a.swift", "1")], tree: [harness.entry("a.swift", "2")],
-            status: Self.status("1 .M N... 100644 100644 100644 aaaa aaaa a.swift"))
+            head: [harness.entry("a.swift", "1")],
+            tree: [harness.entry("a.swift", "2")],
+            status: Self.status("1 .M N... 100644 100644 100644 aaaa aaaa a.swift")
+        )
         sut.attachFreshness()
         #expect(sut.badgeState(ofPath: "a.swift") == .unstaged)
         let listingsBefore = harness.reader.entriesReads

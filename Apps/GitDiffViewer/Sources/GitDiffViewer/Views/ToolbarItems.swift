@@ -57,7 +57,8 @@ struct DiagnosticsLabel: View {
             .toolbarItemMetrics()
             .accessibilityLabel("Diagnostics")
             .help(
-                DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates).joined(separator: "\n"))
+                DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates).joined(separator: "\n")
+            )
         } else {
             NoFindingsLabel(diagnosticsEnabled: model.settings.diagnosticsEnabled)
                 .toolbarItemMetrics()
@@ -92,8 +93,10 @@ struct SelectedFileLabel: View {
         HStack(spacing: 6) {
             if let path, let summary {
                 ChangeGlyphBadge(
-                    glyph: ChangeGlyph(summary.kind), scheme: model.settings.badgeScheme,
-                    state: model.shownBadgeState(ofPath: path))
+                    glyph: ChangeGlyph(summary.kind),
+                    scheme: model.settings.badgeScheme,
+                    state: model.shownBadgeState(ofPath: path)
+                )
             }
             Text(path.map { (model.shownDisplayPath(for: $0) as NSString).lastPathComponent } ?? "No file")
                 .font(.callout)

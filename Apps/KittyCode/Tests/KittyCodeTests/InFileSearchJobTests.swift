@@ -16,8 +16,14 @@ struct InFileSearchJobTests {
     /// Starts a search for `query` in `state`, as typing in the find field does.
     private func startSearch(_ query: String, in state: EditorState) {
         var search = EditorState.InFileSearch(
-            query: query, pattern: nil, matches: [], activeMatchIndex: -1, isCaseSensitive: false, isRegex: false,
-            isWholeWord: false)
+            query: query,
+            pattern: nil,
+            matches: [],
+            activeMatchIndex: -1,
+            isCaseSensitive: false,
+            isRegex: false,
+            isWholeWord: false
+        )
         scheduleInFileSearch(&search, state: state, pipeline: nil)
         state.inFileSearch = search
     }

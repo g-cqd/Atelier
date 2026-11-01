@@ -38,7 +38,8 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                 // Multi-key sequence handling (press only, not repeat)
                 if !isRepeat {
                     let sequenceTimeout = Duration.milliseconds(
-                        state.config.keybindings.sequenceTimeoutMilliseconds)
+                        state.config.keybindings.sequenceTimeoutMilliseconds
+                    )
                     if !state.pendingKeySequence.isEmpty,
                         let pendingTime = state.pendingKeySequenceTime,
                         pendingTime.duration(to: state.clock.erasedNow()) > sequenceTimeout
@@ -54,22 +55,26 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                             state.pendingKeySequenceTime = nil
                             let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
                                 .joined(
-                                    separator: " ")
+                                    separator: " "
+                                )
                             state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
                             state.commandFeedbackExpiry = state.clock.erasedNow()
                                 .advanced(
-                                    by: commandFeedbackDuration)
+                                    by: commandFeedbackDuration
+                                )
                             return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
                         case .partial:
                             state.pendingKeySequence = candidate
                             state.pendingKeySequenceTime = state.clock.erasedNow()
                             let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
                                 .joined(
-                                    separator: " ")
+                                    separator: " "
+                                )
                             state.commandFeedback = "\(seqLabel)..."
                             state.commandFeedbackExpiry = state.clock.erasedNow()
                                 .advanced(
-                                    by: commandFeedbackDuration)
+                                    by: commandFeedbackDuration
+                                )
                             return true
                         case .none:
                             if !state.pendingKeySequence.isEmpty {
@@ -102,18 +107,31 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                     state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
                     state.commandFeedbackExpiry = state.clock.erasedNow().advanced(by: commandFeedbackDuration)
                     return dispatchEditorAwareCommand(
-                        command, key: key, state: state, pipeline: pipeline)
+                        command,
+                        key: key,
+                        state: state,
+                        pipeline: pipeline
+                    )
                 }
                 // Shift+navigation: try resolving without shift so selection tracking can wrap it
                 if key.modifiers.contains(.shift) {
                     let strippedStroke = KeyStroke(
-                        keyCode: stroke.keyCode, modifiers: stroke.modifiers.subtracting(.shift))
+                        keyCode: stroke.keyCode,
+                        modifiers: stroke.modifiers.subtracting(.shift)
+                    )
                     if let command = resolver.resolve(
-                        strippedStroke, context: context, isRepeat: isRepeat),
+                        strippedStroke,
+                        context: context,
+                        isRepeat: isRepeat
+                    ),
                         command.isEditorNavigation
                     {
                         return dispatchEditorAwareCommand(
-                            command, key: key, state: state, pipeline: pipeline)
+                            command,
+                            key: key,
+                            state: state,
+                            pipeline: pipeline
+                        )
                     }
                 }
             }
@@ -161,7 +179,10 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
 
 @MainActor
 private func dispatchEditorAwareCommand(
-    _ command: CommandID, key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ command: CommandID,
+    key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     let isShiftHeld = key.modifiers.contains(.shift)
 
@@ -214,7 +235,10 @@ private func dispatchEditorAwareCommand(
         if state.hasActiveSelection, let selection = state.selection {
             let previousSnapshot = state.activeBufferSnapshot()
             let mutation = TextOperations.deleteRange(
-                in: &state.textBuffer, at: &state.textCursor, selection: selection)
+                in: &state.textBuffer,
+                at: &state.textCursor,
+                selection: selection
+            )
             state.textDidChange(mutation, previousSnapshot: previousSnapshot)
             state.clearSelection()
             // For backspace, selection delete is sufficient — don't also delete backward
@@ -232,7 +256,9 @@ private func dispatchEditorAwareCommand(
 public func handleCopy(state: EditorState) {
     guard let selection = state.selection else { return }
     let text = selection.extractText(
-        from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
+        from: { state.fileLine(at: $0) },
+        lineCount: state.fileLineCount
+    )
     let base64 = Data(text.utf8).base64EncodedString()
     state.terminalWriter?(EscapeSequences.setClipboard(base64))
     state.statusMessage = "Copied \(text.count) chars"
@@ -242,12 +268,17 @@ public func handleCopy(state: EditorState) {
 public func handleCut(state: EditorState) {
     guard let selection = state.selection else { return }
     let text = selection.extractText(
-        from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
+        from: { state.fileLine(at: $0) },
+        lineCount: state.fileLineCount
+    )
     let base64 = Data(text.utf8).base64EncodedString()
     state.terminalWriter?(EscapeSequences.setClipboard(base64))
     let previousSnapshot = state.activeBufferSnapshot()
     let mutation = TextOperations.deleteRange(
-        in: &state.textBuffer, at: &state.textCursor, selection: selection)
+        in: &state.textBuffer,
+        at: &state.textCursor,
+        selection: selection
+    )
     state.textDidChange(mutation, previousSnapshot: previousSnapshot)
     state.clearSelection()
     state.statusMessage = "Cut \(text.count) chars"
@@ -304,14 +335,20 @@ private func handlePaste(_ text: String, state: EditorState) {
     if state.hasActiveSelection, let selection = state.selection {
         let previousSnapshot = state.activeBufferSnapshot()
         let mutation = TextOperations.deleteRange(
-            in: &state.textBuffer, at: &state.textCursor, selection: selection)
+            in: &state.textBuffer,
+            at: &state.textCursor,
+            selection: selection
+        )
         state.textDidChange(mutation, previousSnapshot: previousSnapshot)
         state.clearSelection()
     }
 
     let previousSnapshot = state.activeBufferSnapshot()
     let mutation = TextOperations.insert(
-        sanitized.text, into: &state.textBuffer, at: &state.textCursor)
+        sanitized.text,
+        into: &state.textBuffer,
+        at: &state.textCursor
+    )
     state.textDidChange(mutation, previousSnapshot: previousSnapshot)
 
     if sanitized.replacedCount > 0 {

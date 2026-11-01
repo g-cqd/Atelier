@@ -13,11 +13,14 @@ struct WordKeywordTests {
                 ("source", .seq([.string("let"), .symbol("identifier")])),
                 ("identifier", .pattern("[a-z]+"))
             ],
-            word: "identifier")
+            word: "identifier"
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable,
-            productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("let let")
 

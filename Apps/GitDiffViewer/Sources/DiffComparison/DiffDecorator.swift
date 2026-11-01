@@ -104,7 +104,8 @@ package final class DiffDecorator {
     ///     scopes from its braces.
     package init(
         tiers: [any AtelierHighlighting.HighlightTier] = DiffDecorations.tiers(),
-        clock: any Clock<Duration> = ContinuousClock(), store: SyntaxFactsStore? = nil
+        clock: any Clock<Duration> = ContinuousClock(),
+        store: SyntaxFactsStore? = nil
     ) {
         self.tiers = tiers
         self.clock = clock
@@ -291,8 +292,12 @@ package final class DiffDecorator {
             let newScopes = parts.new.flatMap { scopes[$0] }
             guard old != nil || new != nil || found != nil || oldScopes != nil || newScopes != nil else { continue }
             let inputs = Inputs(
-                old: old?.version, new: new?.version, marks: found?.version, oldScopes: oldScopes?.version,
-                newScopes: newScopes?.version)
+                old: old?.version,
+                new: new?.version,
+                marks: found?.version,
+                oldScopes: oldScopes?.version,
+                newScopes: newScopes?.version
+            )
             let decorations: DiffDecorations
             if let known = composed[parts] ?? kept[parts], known.inputs == inputs {
                 decorations = known.decorations
@@ -306,12 +311,19 @@ package final class DiffDecorator {
                     } ?? false
                 decorations = DiffDecorations(
                     old: DiffDecorations.Side(
-                        colors: old?.tokens, emphasis: found?.old ?? [:], scopes: oldScopes?.lines),
+                        colors: old?.tokens,
+                        emphasis: found?.old ?? [:],
+                        scopes: oldScopes?.lines
+                    ),
                     new: DiffDecorations.Side(
-                        colors: new?.tokens, emphasis: found?.new ?? [:], scopes: newScopes?.lines),
+                        colors: new?.tokens,
+                        emphasis: found?.new ?? [:],
+                        scopes: newScopes?.lines
+                    ),
                     moved: found?.moved,
                     colorVersion: sameColors ? known?.decorations.colorVersion ?? 0 : nextVersion(),
-                    markVersion: sameMarks ? known?.decorations.markVersion ?? 0 : nextVersion())
+                    markVersion: sameMarks ? known?.decorations.markVersion ?? 0 : nextVersion()
+                )
             }
             kept[parts] = (inputs, decorations)
             for text in [file.rendered.unified, file.rendered.old, file.rendered.new].compactMap(\.self) {

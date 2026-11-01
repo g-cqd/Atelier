@@ -28,7 +28,8 @@ public struct SourceLoader: SourceReading {
     }
 
     init(
-        runner: any ProcessRunner, offload: any BlockingOffload,
+        runner: any ProcessRunner,
+        offload: any BlockingOffload,
         hashFile: @escaping FileHasher = SourceLoader.hashedFile(atPath:)
     ) {
         self.runner = runner
@@ -145,7 +146,12 @@ public struct SourceLoader: SourceReading {
             case .file(let url): FileSource(url: url, offload: offload)
             case .directory(let url):
                 DirectorySource(
-                    root: url, runner: runner, offload: offload, hashFile: hashFile, hashes: workingTreeHashes)
+                    root: url,
+                    runner: runner,
+                    offload: offload,
+                    hashFile: hashFile,
+                    hashes: workingTreeHashes
+                )
             case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref, runner: runner)
             case .patch(let url, let side): PatchSource(url: url, side: side, cache: patches)
         }
@@ -315,8 +321,10 @@ public struct DirectorySource: SourceProvider {
         return files.map { file in
             let hashed = fresh[file.relativePath]
             return GitTreeEntry(
-                relativePath: file.relativePath, blobID: hashed?.blobID ?? kept[file.relativePath]?.blobID,
-                size: hashed?.stamp.size ?? file.stamp.size)
+                relativePath: file.relativePath,
+                blobID: hashed?.blobID ?? kept[file.relativePath]?.blobID,
+                size: hashed?.stamp.size ?? file.stamp.size
+            )
         }
     }
 
@@ -454,7 +462,9 @@ public struct GitRefSource: SourceProvider {
         return Dictionary(
             entries.map { entry in
                 (entry.relativePath, entry.blobID.flatMap { blobs[$0] }.map(SourceLoader.text(from:)) ?? "")
-            }, uniquingKeysWith: { first, _ in first })
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 }
 
@@ -467,7 +477,10 @@ public struct PatchSource: SourceProvider {
         try await cache.entry(at: url).texts(side: side).ordered
             .map { path, text in
                 GitTreeEntry(
-                    relativePath: path, blobID: SourceLoader.patchBlobID(path: path, text: text), size: text.utf8.count)
+                    relativePath: path,
+                    blobID: SourceLoader.patchBlobID(path: path, text: text),
+                    size: text.utf8.count
+                )
             }
     }
 
@@ -479,7 +492,8 @@ public struct PatchSource: SourceProvider {
         let byPath = try await cache.entry(at: url).texts(side: side).byPath
         return Dictionary(
             entries.compactMap { entry in byPath[entry.relativePath].map { (entry.relativePath, $0) } },
-            uniquingKeysWith: { first, _ in first })
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 }
 

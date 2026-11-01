@@ -40,6 +40,8 @@ extension View {
         ModifiedView(
             content: self,
             modifier: PaddingModifier(
-                insets: EdgeInsets(top: top, bottom: bottom, left: left, right: right)))
+                insets: EdgeInsets(top: top, bottom: bottom, left: left, right: right)
+            )
+        )
     }
 }

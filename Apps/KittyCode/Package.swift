@@ -46,12 +46,15 @@ let package = Package(
                 .product(name: "AemiCore", package: "aemi"),
                 .product(name: "AtelierFileTree", package: "AtelierCore")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // Layer 2e — SF Symbols discovery + terminal glyph helpers
         .target(
-            name: "KittySymbols", dependencies: [.product(name: "AemiJSON", package: "AemiJSON")],
-            swiftSettings: strict),
+            name: "KittySymbols",
+            dependencies: [.product(name: "AemiJSON", package: "AemiJSON")],
+            swiftSettings: strict
+        ),
 
         // Layer 2f — Git integration (pluggable)
         .target(
@@ -62,13 +65,15 @@ let package = Package(
                 .product(name: "AemiDiff", package: "aemi"),
                 .product(name: "TerminalKitText", package: "TerminalKit")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // Layer 2g — Search engine primitives
         .target(
             name: "KittySearch",
             dependencies: [.product(name: "AtelierSearch", package: "AtelierCore")],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // Layers 3a–3c (grammar tables, GLR parser, queries) live in AtelierCore; text storage in TerminalKit.
 
@@ -97,7 +102,8 @@ let package = Package(
                 "KittySyntax", .product(name: "TerminalKitInput", package: "TerminalKit"),
                 .product(name: "TerminalKitRender", package: "TerminalKit")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // Layer 4b — Workspace domain: document, tab, file lifecycle, git coordination
         .target(
@@ -106,7 +112,8 @@ let package = Package(
                 .product(name: "TerminalKitText", package: "TerminalKit"), "KittySyntax", "KittyFileTree", "KittyGit",
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiIO", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // Layer 5 — App lifecycle, event loop, signals
         .target(
@@ -115,7 +122,8 @@ let package = Package(
                 "KittyWidgets", .product(name: "TerminalKitInput", package: "TerminalKit"),
                 .product(name: "AemiCore", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // Layer 6 — Editor logic library: all but `AppMain`, so the tests depend on a library, not an executable
         .target(
@@ -135,7 +143,8 @@ let package = Package(
                 .product(name: "AemiRuntime", package: "aemi"),
                 .product(name: "AemiJSON", package: "AemiJSON")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
 
         // KittyCode — The executable, a thin shell over `KittyEditor`: argv, config, runtime wiring, crash log
         .executableTarget(
@@ -149,12 +158,16 @@ let package = Package(
                 .product(name: "AemiCore", package: "aemi"),
                 .product(name: "AemiRuntime", package: "aemi"),
                 .product(name: "AtelierProcess", package: "AtelierCore")
-            ], swiftSettings: strict),
+            ],
+            swiftSettings: strict
+        ),
 
         // KittySymbols CLI
         .executableTarget(
-            name: "KittySymbolsCLI", dependencies: ["KittySymbols"],
-            swiftSettings: strict),
+            name: "KittySymbolsCLI",
+            dependencies: ["KittySymbols"],
+            swiftSettings: strict
+        ),
 
         // Owning terminal suites are in TerminalKit; app integration tests remain here.
         .testTarget(
@@ -165,7 +178,8 @@ let package = Package(
                 .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "KittyWidgetsTests",
             dependencies: [
@@ -174,7 +188,8 @@ let package = Package(
                 .product(name: "TerminalKitRender", package: "TerminalKit"),
                 .product(name: "TerminalKitText", package: "TerminalKit")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "KittyAppTests",
             dependencies: [
@@ -184,7 +199,8 @@ let package = Package(
                 .product(name: "TerminalKitInput", package: "TerminalKit"),
                 .product(name: "TerminalKitRender", package: "TerminalKit")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "KittyCodeTests",
             dependencies: [
@@ -194,10 +210,13 @@ let package = Package(
                 .product(name: "AemiTesting", package: "aemi"),
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
-            name: "KittySymbolsTests", dependencies: ["KittySymbols"],
-            swiftSettings: strict),
+            name: "KittySymbolsTests",
+            dependencies: ["KittySymbols"],
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "KittyWorkspaceTests",
             dependencies: [
@@ -207,7 +226,8 @@ let package = Package(
                 .product(name: "AemiIO", package: "aemi"),
                 .product(name: "AemiTesting", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "KittyGitTests",
             dependencies: [
@@ -217,6 +237,7 @@ let package = Package(
                 .product(name: "TerminalKitText", package: "TerminalKit"),
                 .product(name: "AemiRuntime", package: "aemi")
             ],
-            swiftSettings: strict)
+            swiftSettings: strict
+        )
     ]
 )

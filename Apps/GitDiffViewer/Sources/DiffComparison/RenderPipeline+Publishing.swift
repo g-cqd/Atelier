@@ -12,8 +12,14 @@ extension RenderPipeline {
         shelvedLists.removeAll { $0.target.showsSameFiles(as: published) }
         shelvedLists.append(
             ShelvedList(
-                target: published, prepared: prepared, stamps: stamps, cards: cards.map(\.rendered),
-                granularity: publishedGranularity, heuristics: publishedHeuristics))
+                target: published,
+                prepared: prepared,
+                stamps: stamps,
+                cards: cards.map(\.rendered),
+                granularity: publishedGranularity,
+                heuristics: publishedHeuristics
+            )
+        )
         if shelvedLists.count > Self.shelfCapacity { shelvedLists.removeFirst(shelvedLists.count - Self.shelfCapacity) }
     }
 
@@ -85,8 +91,10 @@ extension RenderPipeline {
         let files = indices.filter { prepared.indices.contains($0) }
             .map { index -> (Int, Stamped) in
                 let file = PaneRenderer.renderInline(
-                    PaneRenderer.Job(index: index, diff: prepared[index]), options: renderOptions(for: target),
-                    layout: layout)
+                    PaneRenderer.Job(index: index, diff: prepared[index]),
+                    options: renderOptions(for: target),
+                    layout: layout
+                )
                 return (index, (file, currentStamp(forIndex: index, in: target)))
             }
         install(files, of: target, keepingScroll: keepingScroll)

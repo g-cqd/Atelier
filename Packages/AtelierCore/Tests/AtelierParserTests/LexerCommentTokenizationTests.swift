@@ -117,7 +117,9 @@ struct LexerCommentTokenizationTests {
             states:
                 LexTableCompiler.compile(
                     GrammarDefinition(
-                        name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
+                        name: "t",
+                        rules: [("s", .choice([.string("if"), .string("//")]))]
+                    )
                 )
                 .states,
             keywords: ["if": 0, "//": 1],

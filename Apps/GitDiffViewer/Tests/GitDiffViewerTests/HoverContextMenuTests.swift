@@ -16,8 +16,16 @@ struct HoverContextMenuTests {
     /// "alphaValue" is columns 4 to 13 of row 0, zero-based; "gamma" columns 4 to 8 of row 1.
     fileprivate static let text = "let alphaValue = betaValue\nlet gamma = 1\n"
     fileprivate static let alpha = Finding(
-        tool: .swiftlint, ruleID: "alpha", message: "message alpha", file: "a.swift", line: 1, column: 5, endLine: 1,
-        endColumn: 15, severity: .warning)
+        tool: .swiftlint,
+        ruleID: "alpha",
+        message: "message alpha",
+        file: "a.swift",
+        line: 1,
+        column: 5,
+        endLine: 1,
+        endColumn: 15,
+        severity: .warning
+    )
 
     @Test
     func `a context menu over an underlined identifier offers Show Documentation and Show Issue`() throws {
@@ -65,8 +73,17 @@ struct HoverContextMenuTests {
         let location = sut.textView.convert(sut.point(row: 0, column: 8), to: nil)
         let event = try #require(
             NSEvent.mouseEvent(
-                with: .rightMouseDown, location: location, modifierFlags: [], timestamp: 0,
-                windowNumber: sut.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                with: .rightMouseDown,
+                location: location,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: sut.window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
+        )
 
         let menu = try #require(sut.textView.menu(for: event))
 
@@ -89,9 +106,12 @@ private final class Pane {
     init() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: HoverContextMenuTests.text, newText: HoverContextMenuTests.text, language: .plain
+                oldText: HoverContextMenuTests.text,
+                newText: HoverContextMenuTests.text,
+                language: .plain
             )
-            .new)
+            .new
+        )
         self.rendered = rendered
         textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
         textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
@@ -108,7 +128,11 @@ private final class Pane {
         let pane = DiffPaneView(gutterView: gutter, scrollView: nil, contentView: textView, minimapView: MinimapView())
         pane.frame = NSRect(x: 0, y: 0, width: 640, height: 100)
         window = NSWindow(
-            contentRect: pane.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            contentRect: pane.frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView?.addSubview(pane)
         pane.layoutSubtreeIfNeeded()
@@ -117,7 +141,10 @@ private final class Pane {
         }
 
         controller = DocHoverController(
-            clock: TestClock(), taskProvider: taskProvider, panel: HoverDocPanel(ordersWindowIn: false))
+            clock: TestClock(),
+            taskProvider: taskProvider,
+            panel: HoverDocPanel(ordersWindowIn: false)
+        )
         controller.resolve = { _ in HoverDocument(title: "doc") }
         controller.attach(to: textView) { rendered }
         gutter.onDiagnosticClick = { [weak self] row, findings, _, _ in self?.clicks.append((row, findings)) }
@@ -133,7 +160,8 @@ private final class Pane {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
         return NSPoint(
             x: DiffPaneMetrics.lineFragmentPadding + (CGFloat(column) + 0.5) * charWidth,
-            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight)
+            y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight
+        )
     }
 
     /// Chooses `item`, as the menu does.

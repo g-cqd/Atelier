@@ -26,7 +26,9 @@ public enum HighlightTiers {
     ///   - clock: The clock deadlines are measured on.
     ///   - emit: Called with each event, concurrently from several tiers.
     public static func run(
-        _ request: TierRequest, tiers: [any HighlightTier], clock: any Clock<Duration>,
+        _ request: TierRequest,
+        tiers: [any HighlightTier],
+        clock: any Clock<Duration>,
         emit: @escaping @Sendable (TierEvent) async -> Void
     ) async {
         let supported = tiers.filter { $0.supports(request.revision.language) }
@@ -40,7 +42,9 @@ public enum HighlightTiers {
     /// The same job as a stream: iterate `events` while `run` runs in a task of the caller's, a child of a task group
     /// or an `async let`. The stream finishes when `run` returns.
     public static func events(
-        _ request: TierRequest, tiers: [any HighlightTier], clock: any Clock<Duration>
+        _ request: TierRequest,
+        tiers: [any HighlightTier],
+        clock: any Clock<Duration>
     ) -> (events: AsyncStream<TierEvent>, run: @Sendable () async -> Void) {
         let (events, continuation) = AsyncStream.makeStream(of: TierEvent.self)
         return (
@@ -55,7 +59,9 @@ public enum HighlightTiers {
     /// One tier, raced against its deadline. Once the deadline passes, the tier is cancelled and nothing more it emits
     /// is passed on.
     private static func run(
-        _ tier: any HighlightTier, _ request: TierRequest, clock: any Clock<Duration>,
+        _ tier: any HighlightTier,
+        _ request: TierRequest,
+        clock: any Clock<Duration>,
         emit: @escaping @Sendable (TierEvent) async -> Void
     ) async {
         let gate = EmitGate()

@@ -102,7 +102,12 @@ struct ContentView: View {
 
     private func rightExplorerView(isSidebar: Bool) -> some View {
         FileExplorerView(
-            side: model.right, model: model, position: .right, isSidebar: isSidebar, uiState: rightExplorer)
+            side: model.right,
+            model: model,
+            position: .right,
+            isSidebar: isSidebar,
+            uiState: rightExplorer
+        )
     }
 
     /// The window's toolbar, customizable: every item has an identity of its own, so View ▸ Customize Toolbar
@@ -261,7 +266,8 @@ private struct LayoutPicker: View {
         .help(
             offersStacked
                 ? "⌘1 inline, ⌘2 side by side, ⌘3 stacked"
-                : "⌘1 inline, ⌘2 side by side. \(LayoutShortcuts.stackedUnavailable)")
+                : "⌘1 inline, ⌘2 side by side. \(LayoutShortcuts.stackedUnavailable)"
+        )
     }
 
     /// Shows the layout drawn and stores the one picked, so the card list never rewrites a stacked choice.

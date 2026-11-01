@@ -40,7 +40,11 @@ struct GLRParserTests {
                 ProductionRule(name: "Bad", symbolCount: 2, symbols: ["a", "ERROR"]),
                 ProductionRule(name: "BadSingle", symbolCount: 1, symbols: ["ERROR"]),
                 ProductionRule(
-                    name: "Good", symbolCount: 2, symbols: ["a", "b"], fields: [ProductionField(step: 1, name: "rhs")])
+                    name: "Good",
+                    symbolCount: 2,
+                    symbols: ["a", "b"],
+                    fields: [ProductionField(step: 1, name: "rhs")]
+                )
             ]
         )
 
@@ -66,7 +70,10 @@ struct GLRParserTests {
             """
         let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(json.utf8)))
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse(letters.joined())
 

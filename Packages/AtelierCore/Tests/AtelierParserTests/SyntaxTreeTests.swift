@@ -38,10 +38,14 @@ struct SyntaxTreeTests {
         let grammar = GrammarDefinition(
             name: "words",
             rules: [("source", .repeat1(.symbol("word"))), ("word", .pattern("[a-z]+"))],
-            extras: [.pattern(#"\s"#)])
+            extras: [.pattern(#"\s"#)]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
 
         let tree = try parser.parse("ab 12")
 
@@ -118,7 +122,11 @@ struct SyntaxTreeTests {
         var node = SyntaxNode(type: "leaf", byteRange: 0 ..< 1)
         for _ in 1 ..< depth {
             node = SyntaxNode(
-                type: "branch", children: [node], byteRange: 0 ..< 1, fields: fieldPerLevel ? ["inner": [node]] : [:])
+                type: "branch",
+                children: [node],
+                byteRange: 0 ..< 1,
+                fields: fieldPerLevel ? ["inner": [node]] : [:]
+            )
         }
         return SyntaxTree(root: node, source: "x")
     }

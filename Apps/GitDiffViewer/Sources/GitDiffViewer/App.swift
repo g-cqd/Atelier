@@ -52,8 +52,10 @@ struct GitDiffViewerApp: App {
 
         WindowGroup(id: WindowID.comparison, for: LaunchConfiguration.self) { $configuration in
             ComparisonWindow(
-                configuration: configuration ?? LaunchOptions.configuration, recents: recents,
-                reader: appDelegate.services.loader, services: appDelegate.services
+                configuration: configuration ?? LaunchOptions.configuration,
+                recents: recents,
+                reader: appDelegate.services.loader,
+                services: appDelegate.services
             )
             .frame(minWidth: 900, minHeight: 600)
             .repositoryTrustPrompt(appDelegate.services.repositoryTrust)
@@ -67,7 +69,8 @@ struct GitDiffViewerApp: App {
 
         Settings {
             SettingsView(
-                settings: settings, runner: appDelegate.services.runner,
+                settings: settings,
+                runner: appDelegate.services.runner,
                 discovery: appDelegate.services.toolDiscovery
             )
             .environment(appDelegate.services.repositoryTrust)
@@ -124,18 +127,25 @@ private final class AppearanceApplier {
     private func apply() {
         // `NSApplication.shared`: the first apply runs from the app's `init`, while the `NSApp` global is still nil.
         NSApplication.shared.appearance = Self.resolvedAppearance(
-            explicit: settings.appearanceScheme, matchesTheme: settings.matchesThemeAppearance,
-            themeLuminance: settings.themePath.flatMap(XcodeThemeLibrary.theme(at:))?.backgroundLuminance)
+            explicit: settings.appearanceScheme,
+            matchesTheme: settings.matchesThemeAppearance,
+            themeLuminance: settings.themePath.flatMap(XcodeThemeLibrary.theme(at:))?.backgroundLuminance
+        )
     }
 
     /// The override for `NSApplication.appearance`, or nil to follow the system; a `themeLuminance` below
     /// ``AppearancePrecedence/darkLuminanceThreshold`` reads as a dark theme.
     static func resolvedAppearance(
-        explicit: AppearanceScheme, matchesTheme: Bool, themeLuminance: Double?
+        explicit: AppearanceScheme,
+        matchesTheme: Bool,
+        themeLuminance: Double?
     ) -> NSAppearance? {
         let themeIsDark = themeLuminance.map { $0 < AppearancePrecedence.darkLuminanceThreshold }
         let resolved = AppearancePrecedence.resolve(
-            explicit: explicit, matchesTheme: matchesTheme, themeIsDark: themeIsDark)
+            explicit: explicit,
+            matchesTheme: matchesTheme,
+            themeIsDark: themeIsDark
+        )
         return resolved.nsAppearance
     }
 }
@@ -190,12 +200,15 @@ final class AppServices {
         diagnosticsEngine = DiagnosticsEngine(runner: diagnosticsRunner, discovery: toolDiscovery)
 
         let policy = LanguageServerPolicy(
-            trust: repositoryTrust, locate: LanguageServerPolicy.locate(with: toolDiscovery),
-            environment: LanguageServerPolicy.environment(with: toolDiscovery))
+            trust: repositoryTrust,
+            locate: LanguageServerPolicy.locate(with: toolDiscovery),
+            environment: LanguageServerPolicy.environment(with: toolDiscovery)
+        )
         languageServerPolicy = policy
         let registry = LanguageServerRegistry(
             admits: { root, server in await policy.admitsSession(at: root, server: server) },
-            makeConfiguration: { root, server in await policy.configuration(forRoot: root, server: server) })
+            makeConfiguration: { root, server in await policy.configuration(forRoot: root, server: server) }
+        )
         lspRegistry = registry
         policy.stopSessionsOnRevocation(in: registry)
         let sdkRunner = diagnosticsRunner
@@ -225,7 +238,8 @@ final class AppServices {
                 grammarColor?.shutdown()
                 diagnosticsPool.shutdown()
                 pool.shutdown()
-            })
+            }
+        )
     }
 }
 
@@ -248,7 +262,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         NotificationCenter.default.addObserver(
-            self, selector: #selector(windowWillClose(_:)), name: NSWindow.willCloseNotification, object: nil)
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: nil
+        )
     }
 
     /// Closing the last comparison brings the welcome window back instead of quitting, as Xcode does.

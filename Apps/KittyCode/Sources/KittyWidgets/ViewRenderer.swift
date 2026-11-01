@@ -61,7 +61,11 @@ public enum ViewRenderer {
         let style = context.applyTo(text.style)
         fillRow(into: &buffer, row: rect.y, col: rect.x, width: rect.width, style: style)
         buffer.write(
-            String(text.content.prefix(rect.width)), row: rect.y, col: rect.x, style: style)
+            String(text.content.prefix(rect.width)),
+            row: rect.y,
+            col: rect.x,
+            style: style
+        )
     }
 
     private static func renderStyledText(
@@ -71,8 +75,12 @@ public enum ViewRenderer {
         context: RenderContext
     ) {
         fillRow(
-            into: &buffer, row: rect.y, col: rect.x, width: rect.width,
-            style: context.applyTo(.default))
+            into: &buffer,
+            row: rect.y,
+            col: rect.x,
+            width: rect.width,
+            style: context.applyTo(.default)
+        )
         var col = rect.x
         let maxCol = rect.x + rect.width
         for span in view.spans {
@@ -171,12 +179,15 @@ public enum ViewRenderer {
         )
 
         if let thumbRect = HorizontalScrollIndicatorLayout.thumbRect(
-            for: indicator.metrics, in: rect)
-        {
+            for: indicator.metrics,
+            in: rect
+        ) {
             for col in thumbRect.x ..< thumbRect.maxX {
                 guard col >= rect.x, col < rect.maxX else { continue }
                 buffer[thumbRect.y, col] = Cell(
-                    character: indicator.style.thumbCharacter, style: thumbStyle)
+                    character: indicator.style.thumbCharacter,
+                    style: thumbStyle
+                )
             }
         }
     }
@@ -255,7 +266,12 @@ public enum ViewRenderer {
             let labelText = indent + row.icon + row.label
             let line = String(labelText.prefix(contentWidth))
             fillRow(
-                into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: style)
+                into: &buffer,
+                row: rect.y + offset,
+                col: rect.x,
+                width: rect.width,
+                style: style
+            )
             buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
 
             if !row.suffix.isEmpty {
@@ -265,8 +281,11 @@ public enum ViewRenderer {
                 if suffixCol > rect.x + labelLen {
                     let resolvedSuffixStyle = context.applyTo(row.suffixStyle)
                     buffer.write(
-                        " " + row.suffix, row: rect.y + offset, col: suffixCol,
-                        style: resolvedSuffixStyle)
+                        " " + row.suffix,
+                        row: rect.y + offset,
+                        col: suffixCol,
+                        style: resolvedSuffixStyle
+                    )
                 }
             }
         }
@@ -274,8 +293,12 @@ public enum ViewRenderer {
         if visibleCount < rect.height {
             for offset in visibleCount ..< rect.height {
                 fillRow(
-                    into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width,
-                    style: normalStyle)
+                    into: &buffer,
+                    row: rect.y + offset,
+                    col: rect.x,
+                    width: rect.width,
+                    style: normalStyle
+                )
             }
         }
 
@@ -323,7 +346,9 @@ public enum ViewRenderer {
                     tabSize: editor.tabSize
                 )
                 let totalWidth = max(
-                    1, TextDisplayMetrics.displayWidth(of: line, tabSize: editor.tabSize))
+                    1,
+                    TextDisplayMetrics.displayWidth(of: line, tabSize: editor.tabSize)
+                )
                 let wrappedRows = rowStarts.count
                 let lineOverlay = editor.lineStyleOverlays[lineIndex]
                 let isCurrentLine = lineIndex == editor.cursorRow
@@ -372,7 +397,9 @@ public enum ViewRenderer {
                             if lineNumberColumnWidth > 0 {
                                 buffer.write(
                                     formattedLineNumber(
-                                        lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
+                                        lineIndex + 1,
+                                        width: lineNumberColumnWidth - 1
+                                    ) + " ",
                                     row: row,
                                     col: rect.x + gutterDecorationWidth,
                                     style: resolvedLineNumberStyle
@@ -411,14 +438,17 @@ public enum ViewRenderer {
                                 let inSelection =
                                     isInSelection(charIndex: charIndex, highlights: lineHighlights)
                                 let category = WhitespaceRenderer.classify(
-                                    char, isLeading: wrapIsLeading)
+                                    char,
+                                    isLeading: wrapIsLeading
+                                )
                                 switch category {
                                     case .normal:
                                         wrapIsLeading = false
                                     case .indentSpace, .indentTab:
                                         if wsConfig.shouldShowIndentation(inSelection: inSelection),
                                             let glyph = WhitespaceRenderer.replacementGlyph(
-                                                for: category)
+                                                for: category
+                                            )
                                         {
                                             displayChar = glyph
                                             charStyle = wsConfig.indentationStyle
@@ -427,7 +457,8 @@ public enum ViewRenderer {
                                     case .space:
                                         if wsConfig.shouldShowSpaces(inSelection: inSelection),
                                             let glyph = WhitespaceRenderer.replacementGlyph(
-                                                for: category)
+                                                for: category
+                                            )
                                         {
                                             displayChar = glyph
                                             charStyle = wsConfig.spaceStyle
@@ -435,7 +466,8 @@ public enum ViewRenderer {
                                     case .unexpectedInvisible:
                                         if wsConfig.showUnexpected,
                                             let glyph = WhitespaceRenderer.replacementGlyph(
-                                                for: category)
+                                                for: category
+                                            )
                                         {
                                             displayChar = glyph
                                             charStyle = wsConfig.unexpectedStyle
@@ -470,7 +502,10 @@ public enum ViewRenderer {
                                     currentLineStyle: currentLineStyle
                                 )
                                 style = resolveHighlightStyle(
-                                    for: charIndex, highlights: lineHighlights, base: style)
+                                    for: charIndex,
+                                    highlights: lineHighlights,
+                                    base: style
+                                )
                                 renderCharacter(
                                     displayChar,
                                     width: width,
@@ -498,7 +533,9 @@ public enum ViewRenderer {
                                 currentLineStyle: currentLineStyle
                             )
                             buffer[row, col] = Cell(
-                                character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                                character: WhitespaceRenderer.lineBreakGlyph,
+                                style: lbStyle
+                            )
                             col += 1
                         }
                     }
@@ -525,8 +562,11 @@ public enum ViewRenderer {
                     )
                     if lineNumberColumnWidth > 0 {
                         buffer.write(
-                            "~", row: row, col: rect.x + gutterDecorationWidth,
-                            style: lineNumberStyle)
+                            "~",
+                            row: row,
+                            col: rect.x + gutterDecorationWidth,
+                            style: lineNumberStyle
+                        )
                         if lineNumberColumnWidth > 1 {
                             buffer.fill(
                                 row: row,
@@ -540,15 +580,20 @@ public enum ViewRenderer {
                 }
                 if contentWidth > 0 {
                     buffer.fill(
-                        row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1,
-                        cell: Cell(character: " ", style: editorStyle))
+                        row: row,
+                        col: rect.x + gutterWidth,
+                        width: contentWidth,
+                        height: 1,
+                        cell: Cell(character: " ", style: editorStyle)
+                    )
                 }
                 screenRow += 1
             }
 
             if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(
-                for: editor, in: rect)
-            {
+                for: editor,
+                in: rect
+            ) {
                 VerticalScrollIndicator(
                     metrics: TextEditorLayout.verticalScrollMetrics(for: editor, in: rect),
                     style: editor.verticalScrollIndicatorStyle
@@ -577,8 +622,11 @@ public enum ViewRenderer {
                     )
                     if lineNumberColumnWidth > 0 {
                         buffer.write(
-                            "~", row: row, col: rect.x + gutterDecorationWidth,
-                            style: lineNumberStyle)
+                            "~",
+                            row: row,
+                            col: rect.x + gutterDecorationWidth,
+                            style: lineNumberStyle
+                        )
                         if lineNumberColumnWidth > 1 {
                             buffer.fill(
                                 row: row,
@@ -592,8 +640,12 @@ public enum ViewRenderer {
                 }
                 if contentWidth > 0 {
                     buffer.fill(
-                        row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1,
-                        cell: Cell(character: " ", style: editorStyle))
+                        row: row,
+                        col: rect.x + gutterWidth,
+                        width: contentWidth,
+                        height: 1,
+                        cell: Cell(character: " ", style: editorStyle)
+                    )
                 }
                 continue
             }
@@ -677,10 +729,14 @@ public enum ViewRenderer {
         // Horizontal scroll indicator (only for non-wrapped mode)
         if editor.showsHorizontalScrollIndicator, !editor.wrapLines {
             if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
-                for: editor, in: rect, maxLineWidth: editor.maxLineWidth
+                for: editor,
+                in: rect,
+                maxLineWidth: editor.maxLineWidth
             ) {
                 let hMetrics = TextEditorLayout.horizontalScrollMetrics(
-                    for: editor, in: rect, maxLineWidth: editor.maxLineWidth
+                    for: editor,
+                    in: rect,
+                    maxLineWidth: editor.maxLineWidth
                 )
                 HorizontalScrollIndicator(
                     metrics: hMetrics,
@@ -710,8 +766,12 @@ public enum ViewRenderer {
 
             guard itemIdx < list.items.count else {
                 fillRow(
-                    into: &buffer, row: screenRow, col: rect.x, width: rect.width,
-                    style: normalStyle)
+                    into: &buffer,
+                    row: screenRow,
+                    col: rect.x,
+                    width: rect.width,
+                    style: normalStyle
+                )
                 continue
             }
 
@@ -732,7 +792,10 @@ public enum ViewRenderer {
             }
             let padded = String(label.prefix(contentWidth))
                 .padding(
-                    toLength: contentWidth, withPad: " ", startingAt: 0)
+                    toLength: contentWidth,
+                    withPad: " ",
+                    startingAt: 0
+                )
 
             fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: rowStyle)
             buffer.write(padded, row: screenRow, col: rect.x, style: rowStyle)
@@ -740,7 +803,11 @@ public enum ViewRenderer {
             if !item.suffix.isEmpty && indicatorCol < contentWidth {
                 let suffixStyle = context.applyTo(item.suffixStyle)
                 buffer.write(
-                    item.suffix, row: screenRow, col: rect.x + indicatorCol, style: suffixStyle)
+                    item.suffix,
+                    row: screenRow,
+                    col: rect.x + indicatorCol,
+                    style: suffixStyle
+                )
             }
         }
 
@@ -784,7 +851,8 @@ public enum ViewRenderer {
                     + centered.text
                     + String(
                         repeating: " ",
-                        count: max(0, rect.width - leftPadding - centered.text.count))
+                        count: max(0, rect.width - leftPadding - centered.text.count)
+                    )
                 buffer.write(
                     String(line.prefix(rect.width)),
                     row: screenRow,
@@ -793,7 +861,12 @@ public enum ViewRenderer {
                 )
             } else {
                 fillRow(
-                    into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: bgStyle)
+                    into: &buffer,
+                    row: screenRow,
+                    col: rect.x,
+                    width: rect.width,
+                    style: bgStyle
+                )
             }
         }
     }
@@ -833,8 +906,12 @@ public enum ViewRenderer {
     ) {
         guard rect.width > 0, rect.height > 0 else { return }
         buffer.fill(
-            row: rect.y, col: rect.x, width: rect.width, height: rect.height,
-            cell: Cell(character: " ", style: style))
+            row: rect.y,
+            col: rect.x,
+            width: rect.width,
+            height: rect.height,
+            cell: Cell(character: " ", style: style)
+        )
     }
 
     private static func fillRow(
@@ -846,7 +923,12 @@ public enum ViewRenderer {
     ) {
         guard width > 0 else { return }
         buffer.fill(
-            row: row, col: col, width: width, height: 1, cell: Cell(character: " ", style: style))
+            row: row,
+            col: col,
+            width: width,
+            height: 1,
+            cell: Cell(character: " ", style: style)
+        )
     }
 
     private static func resolveHighlightStyle(
@@ -928,9 +1010,14 @@ public enum ViewRenderer {
                     if byte != 0x20 { isLeading = false }
                     if currentX >= hScrollOffset && currentX < visibleEnd {
                         let style = resolveHighlightStyle(
-                            for: charIndex, highlights: highlights, base: spanStyle)
+                            for: charIndex,
+                            highlights: highlights,
+                            base: spanStyle
+                        )
                         buffer[row, currentCol] = Cell(
-                            character: Character(Unicode.Scalar(byte)), style: style)
+                            character: Character(Unicode.Scalar(byte)),
+                            style: style
+                        )
                         currentCol += 1
                     }
                     currentX += 1
@@ -1002,7 +1089,10 @@ public enum ViewRenderer {
                         currentLineStyle: currentLineStyle
                     )
                     style = resolveHighlightStyle(
-                        for: charIndex, highlights: highlights, base: style)
+                        for: charIndex,
+                        highlights: highlights,
+                        base: style
+                    )
                     renderCharacter(
                         displayChar,
                         width: width,
@@ -1029,7 +1119,9 @@ public enum ViewRenderer {
                     currentLineStyle: currentLineStyle
                 )
                 buffer[row, currentCol] = Cell(
-                    character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                    character: WhitespaceRenderer.lineBreakGlyph,
+                    style: lbStyle
+                )
                 currentCol += 1
             }
         }
@@ -1336,12 +1428,18 @@ public enum ViewRenderer {
             switch stack.axis {
                 case .vertical:
                     childRect = Rect(
-                        x: rect.x, y: rect.y + segment.offset, width: rect.width, height: segment.length
+                        x: rect.x,
+                        y: rect.y + segment.offset,
+                        width: rect.width,
+                        height: segment.length
                     )
                 case .horizontal:
                     childRect = Rect(
-                        x: rect.x + segment.offset, y: rect.y, width: segment.length,
-                        height: rect.height)
+                        x: rect.x + segment.offset,
+                        y: rect.y,
+                        width: segment.length,
+                        height: rect.height
+                    )
             }
 
             guard !childRect.isEmpty else { continue }

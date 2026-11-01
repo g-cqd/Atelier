@@ -33,7 +33,10 @@ struct DiffViewerModelFreshnessTests {
 
     private func makeSUT() -> DiffViewerModel {
         DiffViewerModel(
-            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: reader, taskProvider: taskProvider)
+            settings: ViewerSettings(defaults: scratchDefaults.defaults),
+            reader: reader,
+            taskProvider: taskProvider
+        )
     }
 
     /// `HEAD` at commit `c1` against its working tree, both listing `tree`, with the watcher attached.
@@ -107,7 +110,10 @@ struct DiffViewerModelFreshnessTests {
         let listings = reader.listings(of: Self.tree)
 
         try await report(
-            "/repo/.build/index-build/Index/v5/records/AB/a.swift-1Q2W3E", on: source, after: Self.treeDebounce)
+            "/repo/.build/index-build/Index/v5/records/AB/a.swift-1Q2W3E",
+            on: source,
+            after: Self.treeDebounce
+        )
 
         #expect(reader.listings(of: Self.tree) == listings)
         #expect(reader.ignoreChecks.isEmpty)

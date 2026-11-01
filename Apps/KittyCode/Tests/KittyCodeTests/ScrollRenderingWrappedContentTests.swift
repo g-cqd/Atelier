@@ -52,7 +52,8 @@ struct ScrollRenderingWrappedContentTests {
         let topRowText = String((0 ..< 8).map { pipeline.buffer[0, $0].character })
         #expect(
             topRowText.contains("EEEE"),
-            "Expected wrapped continuation to remain visible after scrolling, got: \(topRowText)")
+            "Expected wrapped continuation to remain visible after scrolling, got: \(topRowText)"
+        )
 
         let lastContentRowText = String((0 ..< 8).map { pipeline.buffer[4, $0].character })
         #expect(
@@ -81,7 +82,12 @@ struct ScrollRenderingWrappedContentTests {
         let taskProvider = TaskProviderSpy()
         let clock = TestClock()
         let state = EditorState(
-            rootPath: ".", config: config, taskProvider: taskProvider, clock: clock, searchPool: EditorTestPool.shared)
+            rootPath: ".",
+            config: config,
+            taskProvider: taskProvider,
+            clock: clock,
+            searchPool: EditorTestPool.shared
+        )
         state.sidebarCollapsed = true
         state.mode = .editor
         state.fileContent = ["AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH", "after", "tail", "done"]

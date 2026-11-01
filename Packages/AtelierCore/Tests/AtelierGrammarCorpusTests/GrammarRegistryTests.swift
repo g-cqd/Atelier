@@ -10,8 +10,11 @@ struct GrammarRegistryTests {
         let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(
-                name: "swift", extensions: [".swift"], path: "swift"
-            ))
+                name: "swift",
+                extensions: [".swift"],
+                path: "swift"
+            )
+        )
         let entry = registry.entry(forExtension: ".swift")
         #expect(entry?.name == "swift")
     }
@@ -20,9 +23,11 @@ struct GrammarRegistryTests {
     func `Language names are sorted`() async {
         let registry = GrammarRegistry.scratch()
         registry.register(
-            GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
+            GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift")
+        )
         registry.register(
-            GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python"))
+            GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python")
+        )
         let names = registry.languageNames
         #expect(names == ["python", "swift"])
     }
@@ -40,7 +45,8 @@ struct GrammarRegistryTests {
     func `entry forExtension normalises extension without leading dot`() async {
         let registry = GrammarRegistry.scratch()
         registry.register(
-            GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json"))
+            GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json")
+        )
         let entry = registry.entry(forExtension: "json")
         #expect(entry?.name == "json")
     }
@@ -89,10 +95,12 @@ struct GrammarRegistryTests {
 
             #expect(
                 FileManager.default.fileExists(atPath: grammarPath),
-                "Missing grammar for \(entry.name)")
+                "Missing grammar for \(entry.name)"
+            )
             #expect(
                 FileManager.default.fileExists(atPath: highlightsPath),
-                "Missing highlights for \(entry.name)")
+                "Missing highlights for \(entry.name)"
+            )
         }
     }
 
@@ -101,7 +109,11 @@ struct GrammarRegistryTests {
         let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(
-                name: "ruby", extensions: [".rb", ".ruby"], path: "ruby"))
+                name: "ruby",
+                extensions: [".rb", ".ruby"],
+                path: "ruby"
+            )
+        )
 
         let entry = registry.entry(forLanguage: "ruby")
         #expect(entry?.name == "ruby")
@@ -121,7 +133,11 @@ struct GrammarRegistryTests {
         let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(
-                name: "elvish", extensions: [".elv"], path: "elvish"))
+                name: "elvish",
+                extensions: [".elv"],
+                path: "elvish"
+            )
+        )
 
         #expect(registry.entry(forFilename: "build.elv")?.name == "elvish")
         #expect(registry.entry(forFilename: "BUILD.ELV")?.name == "elvish")
@@ -135,6 +151,8 @@ extension GrammarRegistry {
     static func scratch() -> GrammarRegistry {
         GrammarRegistry(
             cacheDirectory: FileManager.default.temporaryDirectory.appending(
-                path: "grammar-registry-\(UUID().uuidString)"))
+                path: "grammar-registry-\(UUID().uuidString)"
+            )
+        )
     }
 }

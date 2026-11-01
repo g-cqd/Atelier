@@ -2,7 +2,9 @@ import AtelierParser
 
 extension MarkdownExternalScanner {
     mutating func parseFencedCodeBlock(
-        _ delimiter: UInt32, _ lexer: inout some ScannerLexer, validSymbols valid: [Bool]
+        _ delimiter: UInt32,
+        _ lexer: inout some ScannerLexer,
+        validSymbols valid: [Bool]
     ) -> Bool {
         // Count the number of backticks or tildes.
         var level = 0
@@ -102,7 +104,8 @@ extension MarkdownExternalScanner {
     }
 
     mutating func parseThematicBreakUnderscore(
-        _ lexer: inout some ScannerLexer, validSymbols valid: [Bool]
+        _ lexer: inout some ScannerLexer,
+        validSymbols valid: [Bool]
     ) -> Bool {
         advance(&lexer)
         markEnd(&lexer)
@@ -238,7 +241,8 @@ extension MarkdownExternalScanner {
     }
 
     mutating func parseOrderedListMarker(
-        _ lexer: inout some ScannerLexer, validSymbols valid: [Bool]
+        _ lexer: inout some ScannerLexer,
+        validSymbols valid: [Bool]
     ) -> Bool {
         guard
             indentation <= 3

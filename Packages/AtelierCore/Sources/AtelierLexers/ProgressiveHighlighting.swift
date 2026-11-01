@@ -32,8 +32,12 @@ public enum ProgressiveHighlighting {
     /// - Returns: The states found, exact from the top down to the last line lexed from an exact state.
     /// - Complexity: O(bytes + tokens), plus the visible lines' once more when the guess was wrong.
     public static func run(
-        _ source: some LineSource, lexer: some LineLexer, visibleLines: Range<Int>, states: LexStates? = nil,
-        chunkLines: Int = defaultChunkLines, emit: (_ lines: Range<Int>, _ tokens: LineTokens) async -> Void
+        _ source: some LineSource,
+        lexer: some LineLexer,
+        visibleLines: Range<Int>,
+        states: LexStates? = nil,
+        chunkLines: Int = defaultChunkLines,
+        emit: (_ lines: Range<Int>, _ tokens: LineTokens) async -> Void
     ) async -> LexStates {
         let lineCount = source.lineCount
         var states = states.flatMap { $0.lineCount == lineCount ? $0 : nil } ?? LexStates(lineCount: lineCount)
@@ -93,17 +97,28 @@ public enum ProgressiveHighlighting {
     /// ``run(_:lexer:visibleLines:states:chunkLines:emit:)`` over a tier request's lines, each chunk emitted as a
     /// ``TierUpdate`` of the lexical layer, complete, stamped with the request's revision, in its unit.
     public static func run(
-        _ request: TierRequest, lexer: some LineLexer, states: LexStates? = nil,
-        chunkLines: Int = defaultChunkLines, emit: (TierUpdate) async -> Void
+        _ request: TierRequest,
+        lexer: some LineLexer,
+        states: LexStates? = nil,
+        chunkLines: Int = defaultChunkLines,
+        emit: (TierUpdate) async -> Void
     ) async -> LexStates {
         await run(
-            RequestLines(text: request.text, ranges: request.lineRanges), lexer: lexer,
-            visibleLines: request.visibleLines, states: states, chunkLines: chunkLines
+            RequestLines(text: request.text, ranges: request.lineRanges),
+            lexer: lexer,
+            visibleLines: request.visibleLines,
+            states: states,
+            chunkLines: chunkLines
         ) { lines, tokens in
             await emit(
                 TierUpdate(
-                    layer: .lexical, coverage: .complete, revision: request.revision, lines: lines,
-                    tokens: request.inUnit(tokens, lines: lines)))
+                    layer: .lexical,
+                    coverage: .complete,
+                    revision: request.revision,
+                    lines: lines,
+                    tokens: request.inUnit(tokens, lines: lines)
+                )
+            )
         }
     }
 
@@ -120,7 +135,9 @@ public enum ProgressiveHighlighting {
     /// - Throws: `CancellationError` when the calling task is cancelled.
     /// - Complexity: O(bytes + tokens), spread over the pieces, plus the lines re-lexed past a wrong guess.
     public static func lexAll(
-        _ source: some LineSource, lexer: some LineLexer, parallelism: Int
+        _ source: some LineSource,
+        lexer: some LineLexer,
+        parallelism: Int
     ) async throws(CancellationError) -> (tokens: LineTokens, states: LexStates) {
         let lineCount = source.lineCount
         let pieces = max(1, min(parallelism, lineCount / minimumPieceLines))
@@ -150,7 +167,11 @@ public enum ProgressiveHighlighting {
     /// `guess`, the tokens of `lines` lexed from a guessed state, made exact for `entry`: lines are lexed again from
     /// `entry` until one starts in the state `guess` gave it, and `guess` stands from there.
     private static func repair(
-        _ guess: Lexed, of source: some LineSource, lines: Range<Int>, from entry: LexState, lexer: some LineLexer
+        _ guess: Lexed,
+        of source: some LineSource,
+        lines: Range<Int>,
+        from entry: LexState,
+        lexer: some LineLexer
     ) throws(CancellationError) -> Lexed {
         guard !lines.isEmpty, guess.entries[0] != entry else { return guess }
         var state = entry
@@ -177,7 +198,10 @@ public enum ProgressiveHighlighting {
     /// Lexes `lines` from `entry`; nil when the task is cancelled on the way.
     /// - Complexity: O(bytes and tokens of `lines`)
     private static func lex(
-        _ source: some LineSource, lines: Range<Int>, from entry: LexState, lexer: some LineLexer
+        _ source: some LineSource,
+        lines: Range<Int>,
+        from entry: LexState,
+        lexer: some LineLexer
     ) -> Lexed? {
         var tokens: [LineToken] = []
         var offsets: [UInt32] = [0]

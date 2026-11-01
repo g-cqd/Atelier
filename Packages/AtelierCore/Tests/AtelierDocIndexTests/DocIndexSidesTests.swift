@@ -55,7 +55,10 @@ struct DocIndexSidesTests {
         let index = try await makeIndex()
         try await index.upsert([
             DocIndexFile(
-                uri: "atelier-blob://baz/Sources/Other.swift", content: "/// Another foo.\nenum Foo {}", sides: .new)
+                uri: "atelier-blob://baz/Sources/Other.swift",
+                content: "/// Another foo.\nenum Foo {}",
+                sides: .new
+            )
         ])
         #expect(await signatures(of: "Foo", side: .new, in: index) == ["enum Foo", "struct Foo: Sendable"])
     }
@@ -82,7 +85,11 @@ struct DocIndexSidesTests {
         let provider = DocIndexHoverProvider(index: index, side: .new)
         // "Foo" sits at columns 10..<13 of "let foo = Foo()".
         let query = HoverQuery(
-            documentURI: "atelier-blob://use2/Sources/Use.swift", content: Self.use, line: 0, utf16Column: 11)
+            documentURI: "atelier-blob://use2/Sources/Use.swift",
+            content: Self.use,
+            line: 0,
+            utf16Column: 11
+        )
 
         let markdown = try #require(try await provider.hover(query)?.markdown)
 
@@ -94,7 +101,11 @@ struct DocIndexSidesTests {
         let index = try await makeIndex()
         let provider = DocIndexHoverProvider(index: index, side: .old)
         let query = HoverQuery(
-            documentURI: "atelier-blob://use1/Sources/Use.swift", content: Self.use, line: 0, utf16Column: 11)
+            documentURI: "atelier-blob://use1/Sources/Use.swift",
+            content: Self.use,
+            line: 0,
+            utf16Column: 11
+        )
 
         let markdown = try #require(try await provider.hover(query)?.markdown)
 

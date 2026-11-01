@@ -27,19 +27,28 @@ struct RuntimeSizeBoundsTests {
 
     /// Runs a session on a terminal of `size` that receives `events`, then Ctrl+C, and returns every frame rendered.
     private func renderedFrames(
-        size: TerminalSize, environment: [String: String] = [:], events: [InputEvent] = []
+        size: TerminalSize,
+        environment: [String: String] = [:],
+        events: [InputEvent] = []
     ) async throws -> [Frame] {
         let connection = MockTerminalConnection(size: size)
         let runtime = ApplicationRuntime(
-            connection: connection, taskProvider: TaskProviderSpy(), environment: environment,
-            makeSignals: SignalSessionSpy().factory)
+            connection: connection,
+            taskProvider: TaskProviderSpy(),
+            environment: environment,
+            makeSignals: SignalSessionSpy().factory
+        )
         var frames: [Frame] = []
         try await runtime.run(
             render: { pipeline in
                 frames.append(
                     Frame(
-                        columns: pipeline.columns, rows: pipeline.rows, chromeCell: pipeline.chrome?.cell,
-                        outputBefore: connection.writtenOutput))
+                        columns: pipeline.columns,
+                        rows: pipeline.rows,
+                        chromeCell: pipeline.chrome?.cell,
+                        outputBefore: connection.writtenOutput
+                    )
+                )
             },
             onEvent: { event, _ in
                 guard case .key(let key) = event else { return true }
@@ -80,7 +89,10 @@ struct RuntimeSizeBoundsTests {
         async throws
     {
         let frames = try await renderedFrames(
-            size: Self.eightByTwenty, environment: Self.kitty, events: [.resize(Self.zeroCellHeight)])
+            size: Self.eightByTwenty,
+            environment: Self.kitty,
+            events: [.resize(Self.zeroCellHeight)]
+        )
 
         #expect(frames.map(\.chromeCell) == [.init(width: 8, height: 20), nil])
         let written = try #require(frames.last).outputBefore
@@ -91,7 +103,10 @@ struct RuntimeSizeBoundsTests {
     func `a resize back to a drawable cell size brings the pixel chrome back`() async throws {
         let wider = TerminalSize(columns: 100, rows: 50, pixelWidth: 1_000, pixelHeight: 1_000)
         let frames = try await renderedFrames(
-            size: Self.eightByTwenty, environment: Self.kitty, events: [.resize(Self.zeroCellHeight), .resize(wider)])
+            size: Self.eightByTwenty,
+            environment: Self.kitty,
+            events: [.resize(Self.zeroCellHeight), .resize(wider)]
+        )
 
         #expect(frames.map(\.chromeCell) == [.init(width: 8, height: 20), nil, .init(width: 10, height: 20)])
     }

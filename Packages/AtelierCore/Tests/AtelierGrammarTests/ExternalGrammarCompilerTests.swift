@@ -9,7 +9,8 @@ struct ExternalGrammarCompilerTests {
         let grammar = GrammarDefinition(
             name: "nullable_token",
             rules: [("source", .seq([.string("#!"), .pattern("[^\\r\\n]*")]))],
-            extras: [])
+            extras: []
+        )
 
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -21,7 +22,10 @@ struct ExternalGrammarCompilerTests {
     func `a literal external shares the internal token terminal`() throws {
         let grammar = GrammarDefinition(
             name: "shared_external",
-            rules: [("source", .string("x"))], extras: [], externals: [.string("x")])
+            rules: [("source", .string("x"))],
+            extras: [],
+            externals: [.string("x")]
+        )
 
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -35,7 +39,10 @@ struct ExternalGrammarCompilerTests {
     func `a pattern external shares its lexical token terminal`() throws {
         let grammar = GrammarDefinition(
             name: "pattern_external",
-            rules: [("source", .pattern("x+"))], extras: [], externals: [.pattern("x+")])
+            rules: [("source", .pattern("x+"))],
+            extras: [],
+            externals: [.pattern("x+")]
+        )
 
         let compiled = try ParseTableCompiler.compile(grammar)
         let token = try #require(compiled.lexTable.tokens.first?.name)
@@ -53,7 +60,9 @@ struct ExternalGrammarCompilerTests {
                 ("source", .seq([.symbol("_inline"), .string(";")])),
                 ("_inline", .choice([.string("a"), .string("b")]))
             ],
-            extras: [], inline: ["_inline"])
+            extras: [],
+            inline: ["_inline"]
+        )
 
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -70,7 +79,9 @@ struct ExternalGrammarCompilerTests {
                 ("source", .seq([.string("let"), .symbol("identifier")])),
                 ("identifier", .pattern("[a-z]+"))
             ],
-            extras: [], word: "identifier")
+            extras: [],
+            word: "identifier"
+        )
 
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -92,7 +103,9 @@ struct ExternalGrammarCompilerTests {
                 ("A", .prec(1, .seq([.string("x")]))),
                 ("B", .prec(2, .seq([.string("x")])))
             ],
-            extras: [], conflicts: conflicts)
+            extras: [],
+            conflicts: conflicts
+        )
 
         let compiled = try ParseTableCompiler.compile(grammar)
         let reductions = compiled.parseTable.actions.rows.flatMap { $0 }
@@ -117,7 +130,9 @@ struct ExternalGrammarCompilerTests {
                 ("A", .prec(2, .seq([.string("x"), .string("y")]))),
                 ("B", .prec(1, .seq([.string("x")])))
             ],
-            extras: [], conflicts: [["A", "B"]])
+            extras: [],
+            conflicts: [["A", "B"]]
+        )
 
         let compiled = try ParseTableCompiler.compile(grammar)
         let hasConflict = compiled.parseTable.actions.rows.flatMap { $0 }
@@ -130,7 +145,9 @@ struct ExternalGrammarCompilerTests {
     func `Swift emoji properties compile as lexical patterns`() throws {
         let grammar = GrammarDefinition(
             name: "emoji_identifier",
-            rules: [("source", .pattern(#"\p{Emoji}\p{EMod}?"#))], extras: [])
+            rules: [("source", .pattern(#"\p{Emoji}\p{EMod}?"#))],
+            extras: []
+        )
 
         let result = try ParseTableCompiler.compile(grammar)
 

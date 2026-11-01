@@ -85,7 +85,11 @@ extension DiffViewerModel {
         // The comparison is the one on screen until both sides land; the groups wait for it too.
         guard !left.isLoading, !right.isLoading, failedLoads.isEmpty else { return }
         let verdict = CommitGroupingEligibility.evaluate(
-            placement: settings.explorerPlacement, style: settings.treeStyle, left: left.source, right: right.source)
+            placement: settings.explorerPlacement,
+            style: settings.treeStyle,
+            left: left.source,
+            right: right.source
+        )
         guard force || verdict != commitGroupsRequest else { return }
         commitGroupsRequest = verdict
         cancelCommitGroups()
@@ -129,7 +133,10 @@ extension DiffViewerModel {
     }
 
     private func loadCommitGroups(
-        _ range: CommitGroupingRange, comparison: Comparison, history: CommitHistory, generation: Int
+        _ range: CommitGroupingRange,
+        comparison: Comparison,
+        history: CommitHistory,
+        generation: Int
     ) async {
         let repository = range.repository
         do {
@@ -140,8 +147,12 @@ extension DiffViewerModel {
             let ancestry = try await history.ancestry(of: base, and: tip, in: repository)
             guard generation == commitGroupsGeneration else { return }
             let eligibility = CommitGroupingEligibility.evaluate(
-                placement: settings.explorerPlacement, style: settings.treeStyle, left: left.source,
-                right: right.source, ancestry: ancestry)
+                placement: settings.explorerPlacement,
+                style: settings.treeStyle,
+                left: left.source,
+                right: right.source,
+                ancestry: ancestry
+            )
             guard case .applies = eligibility else {
                 commitGroups = CommitGroupsState(eligibility: eligibility)
                 dropVanishedCommitGroupTabs()
@@ -150,15 +161,24 @@ extension DiffViewerModel {
             commitGroups.eligibility = eligibility
             let uncommitted = range.includesWorkingTree ? try await history.uncommittedChanges(in: repository) : nil
             var listing = try await Self.startingListing(
-                repository: repository, baseID: base, tipID: tip, cached: commitListing, history: history)
+                repository: repository,
+                baseID: base,
+                tipID: tip,
+                cached: commitListing,
+                history: history
+            )
             guard generation == commitGroupsGeneration else { return }
             if !listing.commits.isEmpty, !listing.isFinished {
                 await publish(listing, comparison: comparison, uncommitted: uncommitted, generation: generation)
             }
             while !listing.isFinished, let next = listing.nextTip {
                 let page = try await history.commitChanges(
-                    from: base, to: next, firstParent: true,
-                    limit: min(Self.commitGroupPageSize, Self.commitGroupCap - listing.commits.count), in: repository)
+                    from: base,
+                    to: next,
+                    firstParent: true,
+                    limit: min(Self.commitGroupPageSize, Self.commitGroupCap - listing.commits.count),
+                    in: repository
+                )
                 guard generation == commitGroupsGeneration else { return }
                 listing.append(page)
                 guard !listing.isFinished else { break }
@@ -173,7 +193,12 @@ extension DiffViewerModel {
             guard generation == commitGroupsGeneration else { return }
             commitListing = listing
             await publish(
-                listing, comparison: comparison, uncommitted: uncommitted, generation: generation, final: true)
+                listing,
+                comparison: comparison,
+                uncommitted: uncommitted,
+                generation: generation,
+                final: true
+            )
         } catch is CancellationError {
             return
         } catch {
@@ -185,7 +210,10 @@ extension DiffViewerModel {
 
     /// Rebuilds the groups from `listing` off the main actor and shows them, unless a newer load started meanwhile.
     private func publish(
-        _ listing: CommitListing, comparison: Comparison, uncommitted: [GitFileChange]?, generation: Int,
+        _ listing: CommitListing,
+        comparison: Comparison,
+        uncommitted: [GitFileChange]?,
+        generation: Int,
         final: Bool = false
     ) async {
         let built = await Self.buildGroups(listing, comparison: comparison, uncommitted: uncommitted)
@@ -205,19 +233,29 @@ extension DiffViewerModel {
 
     @concurrent
     private static func buildGroups(
-        _ listing: CommitListing, comparison: Comparison, uncommitted: [GitFileChange]?
+        _ listing: CommitListing,
+        comparison: Comparison,
+        uncommitted: [GitFileChange]?
     ) async -> (grouping: CommitGrouping, sections: [ExplorerSection]) {
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: listing.commits, uncommitted: uncommitted,
-            isComplete: listing.isComplete, unlistedCommitCount: listing.unlistedCount,
-            baseCommit: listing.firstParent ? listing.baseID : nil)
+            comparison: comparison,
+            commits: listing.commits,
+            uncommitted: uncommitted,
+            isComplete: listing.isComplete,
+            unlistedCommitCount: listing.unlistedCount,
+            baseCommit: listing.firstParent ? listing.baseID : nil
+        )
         return (grouping, grouping.sections.map(ExplorerSection.init(group:)))
     }
 
     /// Where a load starts: the cached listing when it covers the same range, the cached one with the right side's
     /// new first-parent commits put on top when the right side only moved forward, or nothing.
     private nonisolated static func startingListing(
-        repository: URL, baseID: String, tipID: String, cached: CommitListing?, history: CommitHistory
+        repository: URL,
+        baseID: String,
+        tipID: String,
+        cached: CommitListing?,
+        history: CommitHistory
     ) async throws -> CommitListing {
         let fresh = CommitListing(repository: repository, baseID: baseID, tipID: tipID)
         guard let cached, cached.repository == repository, cached.baseID == baseID, cached.isFinished else {
@@ -228,7 +266,12 @@ extension DiffViewerModel {
             try await history.ancestry(of: cached.tipID, and: tipID, in: repository) == .leftIsAncestor
         else { return fresh }
         let page = try await history.commitChanges(
-            from: cached.tipID, to: tipID, firstParent: true, limit: commitGroupCap, in: repository)
+            from: cached.tipID,
+            to: tipID,
+            firstParent: true,
+            limit: commitGroupCap,
+            in: repository
+        )
         // Only commits stacked on the old tip along first parents can go on top of its listing.
         guard page.isComplete, page.commits.last.map({ $0.parentIDs.first == cached.tipID }) ?? true else {
             return fresh
@@ -252,8 +295,12 @@ extension DiffViewerModel {
         -> CommitListing
     {
         let page = try await history.commitChanges(
-            from: listing.baseID, to: listing.tipID, firstParent: false, limit: commitGroupCap,
-            in: listing.repository)
+            from: listing.baseID,
+            to: listing.tipID,
+            firstParent: false,
+            limit: commitGroupCap,
+            in: listing.repository
+        )
         var every = CommitListing(repository: listing.repository, baseID: listing.baseID, tipID: listing.tipID)
         every.commits = page.commits
         every.isComplete = page.isComplete

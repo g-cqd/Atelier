@@ -26,7 +26,8 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.down.rawValue), context: .editor, isRepeat: true)
-                == .editorMoveDown)
+                == .editorMoveDown
+        )
     }
 
     @Test
@@ -44,10 +45,12 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.down.rawValue, .alt), context: .editor)
-                == .editorMoveDownPage)
+                == .editorMoveDownPage
+        )
         #expect(
             resolver.resolve(stroke(Key.up.rawValue, .alt), context: .editor)
-                == .editorMoveUpPage)
+                == .editorMoveUpPage
+        )
     }
 
     @Test
@@ -55,10 +58,12 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.pageDown.rawValue), context: .editor)
-                == .editorMoveDownPage)
+                == .editorMoveDownPage
+        )
         #expect(
             resolver.resolve(stroke(Key.pageUp.rawValue), context: .editor)
-                == .editorMoveUpPage)
+                == .editorMoveUpPage
+        )
     }
 
     // MARK: - Word navigation aliases
@@ -68,10 +73,12 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.left.rawValue, .ctrl), context: .editor)
-                == .editorWordBackward)
+                == .editorWordBackward
+        )
         #expect(
             resolver.resolve(stroke(Key.right.rawValue, .ctrl), context: .editor)
-                == .editorWordForward)
+                == .editorWordForward
+        )
     }
 
     // MARK: - Home/End
@@ -90,10 +97,12 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.enter.rawValue), context: .editor)
-                == .editorInsertNewline)
+                == .editorInsertNewline
+        )
         #expect(
             resolver.resolve(stroke(Key.enterAlt.rawValue), context: .editor)
-                == .editorInsertNewline)
+                == .editorInsertNewline
+        )
     }
 
     @Test
@@ -101,10 +110,12 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.backspace.rawValue), context: .editor)
-                == .editorDeleteBackward)
+                == .editorDeleteBackward
+        )
         #expect(
             resolver.resolve(stroke(Key.backspaceAlt.rawValue), context: .editor)
-                == .editorDeleteBackward)
+                == .editorDeleteBackward
+        )
     }
 
     @Test
@@ -112,7 +123,8 @@ struct EditorNavigationResolverTests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.enter.rawValue), context: .tree)
-                == .treeSelect)
+                == .treeSelect
+        )
     }
 
     // MARK: - isEditorNavigation

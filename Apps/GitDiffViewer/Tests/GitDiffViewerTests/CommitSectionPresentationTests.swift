@@ -10,12 +10,20 @@ struct CommitSectionPresentationTests {
     private static func commit(_ id: String, subject: String = "Fix the ref menu's order") -> CommitGrouping.Commit {
         CommitGrouping.Commit(
             GitCommitChanges(
-                id: id, parentIDs: ["p"], authorName: "Tess Ter", authorDate: Date(timeIntervalSince1970: 0),
-                subject: subject, changes: []))
+                id: id,
+                parentIDs: ["p"],
+                authorName: "Tess Ter",
+                authorDate: Date(timeIntervalSince1970: 0),
+                subject: subject,
+                changes: []
+            )
+        )
     }
 
     private static func section(
-        _ kind: CommitGrouping.Kind, rows: [CommitGrouping.Row] = [], changedBack: Int = 0
+        _ kind: CommitGrouping.Kind,
+        rows: [CommitGrouping.Row] = [],
+        changedBack: Int = 0
     ) -> ExplorerSection {
         ExplorerSection(group: CommitGrouping.Section(kind: kind, rows: rows, changedBackCount: changedBack))
     }
@@ -65,22 +73,28 @@ struct CommitSectionPresentationTests {
     @Test
     func `a commit header names the commit, its author and date, then what was changed back`() throws {
         let section = Self.section(
-            .commit(Self.commit(String(repeating: "3f2a9c1", count: 5) + "abcde")), changedBack: 1)
+            .commit(Self.commit(String(repeating: "3f2a9c1", count: 5) + "abcde")),
+            changedBack: 1
+        )
 
         let tooltip = try #require(
-            section.headerTooltip(includesMergedBranches: true, now: Date(timeIntervalSince1970: 86_400)))
+            section.headerTooltip(includesMergedBranches: true, now: Date(timeIntervalSince1970: 86_400))
+        )
         let lines = tooltip.components(separatedBy: "\n")
 
         #expect(lines.first?.hasPrefix("3f2a9c1 · Tess Ter · ") == true)
         #expect(
             Array(lines.dropFirst()) == [
                 "Fix the ref menu's order", "1 file changed back", "History includes merged branches"
-            ])
+            ]
+        )
         #expect(section.title == "Fix the ref menu's order")
         #expect(
             ExplorerSection(kind: .ignored, title: "Ignored Files", nodes: [])
                 .headerTooltip(
-                    includesMergedBranches: false) == nil)
+                    includesMergedBranches: false
+                ) == nil
+        )
     }
 
     @Test
@@ -89,7 +103,8 @@ struct CommitSectionPresentationTests {
             .commit(Self.commit("c1")),
             rows: [
                 CommitGrouping.Row(path: "a.swift", pathInChange: "old/a.swift"), CommitGrouping.Row(path: "b.swift")
-            ])
+            ]
+        )
 
         #expect(section.pathsInChange == ["a.swift": "old/a.swift"])
         #expect(section.nodes.map(\.id) == ["a.swift", "b.swift"])

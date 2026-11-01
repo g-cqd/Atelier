@@ -106,7 +106,9 @@ public enum ParseTableCompiler: Sendable {
         onPhase?("LR item sets")
 
         var table = ParseActionResolver(
-            productions: flattened, firstSets: firstSets, precedences: grammar.precedences
+            productions: flattened,
+            firstSets: firstSets,
+            precedences: grammar.precedences
         )
         .parseTable(states: states, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
         populateExternalSymbols(in: &table, grammar: grammar, lexical: lexical)
@@ -135,8 +137,12 @@ public enum ParseTableCompiler: Sendable {
         }
         onPhase?("productions and keywords")
         let lexTable = try LexTableCompiler.compile(
-            nfa: tokenAutomaton, tokens: lexical.tokens, validTokens: validTokens(in: table, of: lexical.tokens),
-            wordToken: wordToken, keywordTokens: keywordTokens)
+            nfa: tokenAutomaton,
+            tokens: lexical.tokens,
+            validTokens: validTokens(in: table, of: lexical.tokens),
+            wordToken: wordToken,
+            keywordTokens: keywordTokens
+        )
         onPhase?("lex modes")
 
         return CompilationResult(
@@ -164,7 +170,9 @@ public enum ParseTableCompiler: Sendable {
 
     /// Gives each external its terminal and per-state validity in grammar order.
     private static func populateExternalSymbols(
-        in table: inout ParseTable, grammar: GrammarDefinition, lexical: LexicalGrammar
+        in table: inout ParseTable,
+        grammar: GrammarDefinition,
+        lexical: LexicalGrammar
     ) {
         table.externalNames = externalNames(of: grammar)
         table.externalSymbols = grammar.externals.enumerated()
@@ -184,7 +192,8 @@ public enum ParseTableCompiler: Sendable {
                     case .string(let value): "\"\(value)\""
                     default: nil
                 }
-            })
+            }
+        )
         table.externalIsExtra = table.externalSymbols.map { extraNames.contains($0) }
         let actions = table.actions
         // An external is valid in a state when any of its terminal variants has an action there.
@@ -197,7 +206,8 @@ public enum ParseTableCompiler: Sendable {
                             if table.externalIsExtra[external] { return true }
                             return candidates.contains { !actions.isError(state: state, terminal: $0) }
                         }
-                })
+                }
+        )
     }
 
     private static func literalText(of rule: Rule) -> String? {

@@ -72,7 +72,10 @@ extension SourceLoader {
         let readStart = FileStamp.now()
         guard let blobID = try? blobID(of: file), let after = try? file.stamp() else { return nil }
         return HashedFile(
-            blobID: blobID, stamp: before, isSettled: after == before && before.modified + racyWindow <= readStart)
+            blobID: blobID,
+            stamp: before,
+            isSettled: after == before && before.modified + racyWindow <= readStart
+        )
     }
 }
 

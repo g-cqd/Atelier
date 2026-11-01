@@ -8,7 +8,8 @@ extension GrammarRegistry {
     /// under the temporary directory's `kittycode-cache`.
     public static let shared = GrammarRegistry(
         cacheDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("kittycode-cache"),
-        bundledManifest: BundledLanguageManifest.manifest ?? .empty)
+        bundledManifest: BundledLanguageManifest.manifest ?? .empty
+    )
 
     /// The bundled scanner for a grammar, when one has been ported and registered.
     func scannerType(forGrammar name: String) -> (any GrammarExternalScanner.Type)? {
@@ -19,5 +20,7 @@ extension GrammarRegistry {
 extension SyntaxArtifactsCache {
     /// KittyCode's artifacts, loaded through `GrammarRegistry.shared` from the bundled grammars.
     static let shared = SyntaxArtifactsCache(
-        registry: .shared, grammarsDirectory: KittySyntaxResources.grammarsDirectory)
+        registry: .shared,
+        grammarsDirectory: KittySyntaxResources.grammarsDirectory
+    )
 }

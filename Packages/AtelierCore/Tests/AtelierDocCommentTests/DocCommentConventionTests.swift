@@ -33,7 +33,8 @@ struct DocCommentConventionTests {
                   - retries: How many times to retry.
                 - Returns: (`Promise<User>`) The user.
                 - Throws: (`NotFound`) When no user has that id.
-                """)
+                """
+        )
     }
 
     @Test
@@ -61,7 +62,8 @@ struct DocCommentConventionTests {
                 ```
 
                 - Parameter a: The first.
-                """)
+                """
+        )
     }
 
     @Test
@@ -109,13 +111,15 @@ struct DocCommentConventionTests {
                 It stops at:
                 - the end of the input;
                 - the first malformed record.
-                """)
+                """
+        )
     }
 
     @Test
     func `a Go block comment reads as its lines, and a Markdown link stays a link`() {
         let markdown = DocCommentConvention.goDoc.markdown(
-            fromComment: "/* Package csv reads [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) files. */"[...])
+            fromComment: "/* Package csv reads [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) files. */"[...]
+        )
 
         #expect(markdown == "Package csv reads [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) files.")
     }

@@ -41,7 +41,12 @@ struct PaneSidewaysRangeTests {
 
     private static func card(mode: WrapMode) -> EmbeddedDiffTextView {
         EmbeddedDiffTextView(
-            layouts: CardLayouts(rendered: diff()), side: .unified, gutter: .dual, width: 600, wrapMode: mode)
+            layouts: CardLayouts(rendered: diff()),
+            side: .unified,
+            gutter: .dual,
+            width: 600,
+            wrapMode: mode
+        )
     }
 
     private static func file(wrapsLines: Bool) throws -> DiffTextView {
@@ -58,8 +63,11 @@ private final class Hosted<Pane: View> {
     init(_ pane: Pane) {
         host = NSHostingView(rootView: pane)
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
     }

@@ -42,7 +42,10 @@ package enum RowSpacing {
                 else { continue }
                 style.paragraphSpacing = target
                 storage.addAttribute(
-                    .paragraphStyle, value: style, range: NSRange(location: start, length: end - start))
+                    .paragraphStyle,
+                    value: style,
+                    range: NSRange(location: start, length: end - start)
+                )
                 changed = true
             }
             storage.endEditing()

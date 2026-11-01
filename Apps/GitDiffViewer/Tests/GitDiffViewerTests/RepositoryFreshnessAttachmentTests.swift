@@ -63,9 +63,17 @@ struct RepositoryFreshnessAttachmentTests {
         try await source.waitUntilWatching(3)
 
         try await harness.write(
-            worktree.commonGitDir + "/refs/heads/feature", on: source, after: WatcherHarness.refDebounce, probe: refs)
+            worktree.commonGitDir + "/refs/heads/feature",
+            on: source,
+            after: WatcherHarness.refDebounce,
+            probe: refs
+        )
         try await harness.write(
-            worktree.privateGitDir + "/index", on: source, after: WatcherHarness.refDebounce, probe: index)
+            worktree.privateGitDir + "/index",
+            on: source,
+            after: WatcherHarness.refDebounce,
+            probe: index
+        )
 
         try refs.expectNoBufferedElements()
         try index.expectNoBufferedElements()
@@ -88,7 +96,11 @@ struct RepositoryFreshnessAttachmentTests {
         try await source.waitUntilWatching(3)
 
         try await harness.write(
-            worktree.root + "/a.swift", on: source, after: WatcherHarness.treeDebounce, probe: probe)
+            worktree.root + "/a.swift",
+            on: source,
+            after: WatcherHarness.treeDebounce,
+            probe: probe
+        )
         try await harness.drain(sut)
     }
 
@@ -195,7 +207,11 @@ struct RepositoryFreshnessAttachmentTests {
         // The stale event is dropped; a fresh one proves the pipeline moved on and settles the count.
         staleSource.send(.directoryChanged("/repoA/a.swift"))
         try await harness.fire(
-            .directoryChanged("/repoB/b.swift"), on: freshSource, after: WatcherHarness.treeDebounce, probe: probe)
+            .directoryChanged("/repoB/b.swift"),
+            on: freshSource,
+            after: WatcherHarness.treeDebounce,
+            probe: probe
+        )
 
         #expect(treeChanges == 1)
         try await harness.drain(sut)
@@ -220,7 +236,11 @@ struct RepositoryFreshnessAttachmentTests {
         let probe = AsyncProbe<Void>()
         sut.onTreeChanged = { probe.send(()) }
         try await harness.fire(
-            .directoryChanged("/repo/a.swift"), on: second, after: WatcherHarness.treeDebounce, probe: probe)
+            .directoryChanged("/repo/a.swift"),
+            on: second,
+            after: WatcherHarness.treeDebounce,
+            probe: probe
+        )
         try await harness.drain(sut)
     }
 

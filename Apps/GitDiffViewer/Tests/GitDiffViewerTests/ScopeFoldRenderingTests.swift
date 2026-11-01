@@ -29,15 +29,21 @@ struct ScopeFoldRenderingTests {
     static let s = ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: 0)
 
     static func render(
-        folds: [ScopeFoldKey: Int], layout: RenderLayout = .full, compacts: Bool = false,
+        folds: [ScopeFoldKey: Int],
+        layout: RenderLayout = .full,
+        compacts: Bool = false,
         sides: Set<RenderedSide> = [.unified]
     ) -> RenderedDiff {
         let prepared = PreparedDiff(
-            FileDiffInput(title: "a.swift", oldText: old, newText: new, language: .swift), granularity: .word)
+            FileDiffInput(title: "a.swift", oldText: old, newText: new, language: .swift),
+            granularity: .word
+        )
         return DiffRenderer.render(
             prepared: [prepared],
-            options: DiffRenderer.Options(sides: sides, compactsInline: compacts, foldedScopes: folds), layout: layout,
-            withHeaders: false)
+            options: DiffRenderer.Options(sides: sides, compactsInline: compacts, foldedScopes: folds),
+            layout: layout,
+            withHeaders: false
+        )
     }
 
     /// The text of `row` in `text`.
@@ -64,7 +70,9 @@ struct ScopeFoldRenderingTests {
     @Test
     func `a fold over gaps hides them, and unfolding brings back their keys and revealed lines`() throws {
         let revealed = RenderLayout.changes(
-            context: 1, expansions: [GapKey(fileIndex: 0, gapIndex: 0): GapExpansion(above: 1)])
+            context: 1,
+            expansions: [GapKey(fileIndex: 0, gapIndex: 0): GapExpansion(above: 1)]
+        )
         let open = try #require(Self.render(folds: [:], layout: revealed).unified)
         let g = [ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: 4): 6]
         let inner = try #require(Self.render(folds: g, layout: revealed).unified)

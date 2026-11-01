@@ -40,7 +40,10 @@ struct HorizontalScrollIndicatorTests {
         let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 0)
         let rect = Rect(x: 0, y: 0, width: 40, height: 1)
         let offset = HorizontalScrollIndicatorLayout.offset(
-            for: metrics, in: rect, pointerCol: 30, gripOffset: 0
+            for: metrics,
+            in: rect,
+            pointerCol: 30,
+            gripOffset: 0
         )
         #expect(offset == 75)
     }
@@ -53,7 +56,8 @@ struct HorizontalScrollIndicatorTests {
                     StyledSpan(
                         text:
                             "a very long line that should trigger horizontal scrolling when not wrapped",
-                        style: .default)
+                        style: .default
+                    )
                 ]
             ],
             showLineNumbers: false,
@@ -63,6 +67,10 @@ struct HorizontalScrollIndicatorTests {
         let rect = Rect(x: 0, y: 0, width: 20, height: 5)
         #expect(
             !TextEditorLayout.needsHorizontalScrollIndicator(
-                for: editor, in: rect, maxLineWidth: 80))
+                for: editor,
+                in: rect,
+                maxLineWidth: 80
+            )
+        )
     }
 }

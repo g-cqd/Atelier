@@ -19,11 +19,15 @@ struct ExternalScannerErrorCleanupTests {
                     ])
                 )
             ],
-            extras: [.symbol("SENTINEL")], externals: [.symbol("SENTINEL")])
+            extras: [.symbol("SENTINEL")],
+            externals: [.symbol("SENTINEL")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable,
-            productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let depth = 2_300
         let source = String(repeating: "[", count: depth) + "x" + String(repeating: "]", count: depth)
 

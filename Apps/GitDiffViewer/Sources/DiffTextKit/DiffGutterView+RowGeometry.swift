@@ -16,7 +16,8 @@ extension NSTextView: DiffRowGeometry {
         let origin = textContainerOrigin
         var index = 0
         layoutManager.enumerateTextLayoutFragments(
-            from: layoutManager.documentRange.location, options: [.ensuresLayout]
+            from: layoutManager.documentRange.location,
+            options: [.ensuresLayout]
         ) { fragment in
             defer { index += 1 }
             let frame = fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y)
@@ -37,9 +38,15 @@ extension NSTextView: DiffRowGeometry {
         var found: (frame: CGRect, firstBaseline: CGFloat)?
         forEachRow(
             in: CGRect(
-                x: 0, y: 0, width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+                x: 0,
+                y: 0,
+                width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude
+            )
         ) {
-            index, frame, firstBaseline in
+            index,
+            frame,
+            firstBaseline in
             guard index == row, found == nil else { return }
             found = (frame, firstBaseline)
         }
@@ -62,7 +69,9 @@ extension StaticTextLayout: DiffRowGeometry {
             if frame.minY > rect.maxY { return false }
             if frame.maxY < rect.minY { return true }
             let offset = contentManager.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+                from: layoutManager.documentRange.location,
+                to: fragment.rangeInElement.location
+            )
             let firstBaseline =
                 fragment.textLineFragments.first.map { $0.typographicBounds.minY + $0.glyphOrigin.y }
                 ?? frame.height * 0.75
@@ -77,7 +86,9 @@ extension StaticTextLayout: DiffRowGeometry {
     package func frame(ofRow row: Int) -> (frame: CGRect, firstBaseline: CGFloat)? {
         guard rendered.lineStarts.indices.contains(row), let contentManager = layoutManager.textContentManager,
             let location = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+                layoutManager.documentRange.location,
+                offsetBy: rendered.lineStarts[row]
+            )
         else { return nil }
         layoutManager.ensureLayout(for: NSTextRange(location: location))
         guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }

@@ -182,11 +182,15 @@ struct QueryParserTests {
                     type: QueryPattern.namedWildcardType,
                     children: [
                         .fieldMatch(
-                            name: "key", pattern: .nodeMatch(type: "flow_node", children: [], capture: "property")),
+                            name: "key",
+                            pattern: .nodeMatch(type: "flow_node", children: [], capture: "property")
+                        ),
                         .nodeMatch(type: "plain_scalar", children: [], capture: nil)
                     ],
-                    capture: "pair")
-            ])
+                    capture: "pair"
+                )
+            ]
+        )
     }
 
     @Test
@@ -233,8 +237,10 @@ struct QueryParserTests {
                 .literal("@", capture: "attribute"),
                 .quantified(
                     pattern: .nodeMatch(type: "use_site_target", children: [], capture: "attribute"),
-                    quantifier: .optional)
-            ])
+                    quantifier: .optional
+                )
+            ]
+        )
     }
 
     @Test

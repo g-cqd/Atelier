@@ -151,7 +151,9 @@ struct SyntaxNodeTests {
 
     /// A `depth`-level chain from a leaf of type `leafType` up, each level made by `wrap` from the one below.
     private static func makeChain(
-        depth: Int, leafType: String = "leaf", wrap: (SyntaxNode) -> SyntaxNode
+        depth: Int,
+        leafType: String = "leaf",
+        wrap: (SyntaxNode) -> SyntaxNode
     ) -> SyntaxNode {
         var node = SyntaxNode(type: leafType)
         for _ in 1 ..< depth { node = wrap(node) }

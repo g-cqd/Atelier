@@ -40,7 +40,8 @@ public struct Published<Value> {
 
     /// Unavailable: a `ViewModel` reaches the value through the enclosing-instance subscript.
     @available(
-        *, unavailable,
+        *,
+        unavailable,
         message: "@Published only works on ViewModel subclasses; use the enclosing-instance access."
     )
     public var wrappedValue: Value {

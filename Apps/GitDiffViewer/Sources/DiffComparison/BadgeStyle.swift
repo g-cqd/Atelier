@@ -92,7 +92,11 @@ package enum BadgeStyleResolver {
     /// selected in a focused list (white text on the accent), a staged badge inverts to a white fill with a
     /// coloured letter, and a stroked one draws its outline and letter in white.
     package static func resolve(
-        scheme: BadgeScheme, kind: BadgeChangeKind, state: BadgeChangeState, isSelected: Bool, isFocused: Bool
+        scheme: BadgeScheme,
+        kind: BadgeChangeKind,
+        state: BadgeChangeState,
+        isSelected: Bool,
+        isFocused: Bool
     ) -> BadgeStyle {
         let token = colorToken(for: kind, scheme: scheme)
         let isOnAccent = isSelected && isFocused
@@ -113,7 +117,9 @@ package enum AppearancePrecedence {
     /// The appearance the window presents: an explicit light or dark pin wins, and `.system` follows the theme's
     /// luminance only when `matchesTheme` is on and a theme is selected (`themeIsDark` non-nil).
     package static func resolve(
-        explicit: AppearanceScheme, matchesTheme: Bool, themeIsDark: Bool?
+        explicit: AppearanceScheme,
+        matchesTheme: Bool,
+        themeIsDark: Bool?
     ) -> AppearanceScheme {
         guard explicit == .system else { return explicit }
         guard matchesTheme, let themeIsDark else { return .system }

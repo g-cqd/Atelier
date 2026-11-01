@@ -34,7 +34,10 @@ struct MouseAndContextMenuRegressionTests {
     @Test
     func `editor click converts 1-based mouse coordinates correctly`() {
         let sut = makeSUT(
-            fileContent: ["line one", "line two", "line three"], columns: 40, rows: 10)
+            fileContent: ["line one", "line two", "line three"],
+            columns: 40,
+            rows: 10
+        )
         sut.state.mode = .editor
         sut.state.treePanelWidth = 0
         sut.state.sidebarCollapsed = true
@@ -71,7 +74,9 @@ struct MouseAndContextMenuRegressionTests {
         )
 
         #expect(
-            sut.state.selectedTreeIndex == 0, "First content row click should select tree index 0")
+            sut.state.selectedTreeIndex == 0,
+            "First content row click should select tree index 0"
+        )
     }
 
     @Test
@@ -100,7 +105,8 @@ struct MouseAndContextMenuRegressionTests {
                 "Move…",
                 "Delete…",
                 "Save Here…"
-            ])
+            ]
+        )
         #expect(sut.state.bufferManager.count == 0)
     }
 

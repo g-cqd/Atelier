@@ -12,13 +12,20 @@ import Testing
 @Suite(.tags(.concurrency))
 struct HardenedProcessRunnerLimitsTests {
     private static func shell(
-        _ script: String, timeout: Duration? = nil, input: Data? = nil, outputLimit: Int? = nil,
+        _ script: String,
+        timeout: Duration? = nil,
+        input: Data? = nil,
+        outputLimit: Int? = nil,
         errorLimit: Int? = nil
     ) -> ProcessSpec {
         ProcessSpec(
-            executable: URL(filePath: "/bin/sh"), arguments: ["-c", script], standardInput: input, timeout: timeout,
+            executable: URL(filePath: "/bin/sh"),
+            arguments: ["-c", script],
+            standardInput: input,
+            timeout: timeout,
             standardOutputLimit: outputLimit ?? ProcessSpec.defaultStandardOutputLimit,
-            standardErrorLimit: errorLimit ?? ProcessSpec.defaultStandardErrorLimit)
+            standardErrorLimit: errorLimit ?? ProcessSpec.defaultStandardErrorLimit
+        )
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -57,7 +64,11 @@ struct HardenedProcessRunnerLimitsTests {
         let output = try await HardenedProcessRunner(pool: pool)
             .run(
                 Self.shell(
-                    "head -c 65536 /dev/zero; head -c 1024 /dev/zero >&2", outputLimit: 65_536, errorLimit: 1_024))
+                    "head -c 65536 /dev/zero; head -c 1024 /dev/zero >&2",
+                    outputLimit: 65_536,
+                    errorLimit: 1_024
+                )
+            )
         #expect(output.succeeded)
         #expect(output.standardOutput.count == 65_536)
         #expect(output.standardError.count == 1_024)
@@ -73,7 +84,10 @@ struct HardenedProcessRunnerLimitsTests {
             Int32(
                 String(decoding: output.standardOutput, as: UTF8.self)
                     .trimmingCharacters(
-                        in: .whitespacesAndNewlines)))
+                        in: .whitespacesAndNewlines
+                    )
+            )
+        )
         kill(grandchild, SIGKILL)
         #expect(output.succeeded)
     }

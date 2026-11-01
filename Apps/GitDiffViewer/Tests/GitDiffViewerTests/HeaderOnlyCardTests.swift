@@ -51,8 +51,11 @@ private final class CardList {
 
     init(model: DiffViewerModel) {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 600), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: CombinedDiffView(model: model))
     }

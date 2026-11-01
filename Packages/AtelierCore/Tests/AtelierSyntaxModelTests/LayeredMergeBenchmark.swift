@@ -27,13 +27,20 @@ struct LayeredMergeBenchmark {
             for index in 0 ..< 24 {
                 complete.append(
                     HighlightToken(
-                        byteRange: start + index * 5 ..< start + index * 5 + 3, role: .keyword, layer: .syntactic))
+                        byteRange: start + index * 5 ..< start + index * 5 + 3,
+                        role: .keyword,
+                        layer: .syntactic
+                    )
+                )
             }
             for index in 0 ..< 6 {
                 sparse.append(
                     HighlightToken(
-                        byteRange: start + index * 20 + 2 ..< start + index * 20 + 9, role: .variable,
-                        layer: .semantic))
+                        byteRange: start + index * 20 + 2 ..< start + index * 20 + 9,
+                        role: .variable,
+                        layer: .semantic
+                    )
+                )
             }
         }
         var layered = LayeredLineTokens(lineCount: lineCount)
@@ -42,8 +49,13 @@ struct LayeredMergeBenchmark {
         ] {
             layered.apply(
                 TierUpdate(
-                    layer: layer, coverage: coverage, revision: Self.revision, lines: 0 ..< lineCount,
-                    tokens: LineTokens(tokens, lineRanges: lineRanges)))
+                    layer: layer,
+                    coverage: coverage,
+                    revision: Self.revision,
+                    lines: 0 ..< lineCount,
+                    tokens: LineTokens(tokens, lineRanges: lineRanges)
+                )
+            )
         }
         let completeLines = LineTokens(complete, lineRanges: lineRanges)
         let sparseLines = LineTokens(sparse, lineRanges: lineRanges)
@@ -70,7 +82,8 @@ struct LayeredMergeBenchmark {
             }
         }
         print(
-            "BENCH layered-merge 60 lines: before \(Self.summary(before)) ms CPU, after \(Self.summary(after)) ms CPU")
+            "BENCH layered-merge 60 lines: before \(Self.summary(before)) ms CPU, after \(Self.summary(after)) ms CPU"
+        )
         #expect(after.sorted()[after.count / 2] <= 0.1)
     }
 

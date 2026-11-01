@@ -19,9 +19,15 @@ struct ColourPaneCoverageTests {
 
     static func text(layout: RenderLayout = .full) -> PaneText {
         let prepared = PreparedDiff(
-            FileDiffInput(title: "a.swift", oldText: old, newText: new, language: .swift), granularity: .word)
+            FileDiffInput(title: "a.swift", oldText: old, newText: new, language: .swift),
+            granularity: .word
+        )
         let rendered = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(),
+            layout: layout,
+            withHeaders: false
+        )
         return PaneText(rendered: rendered, asksForChange: true)
     }
 
@@ -29,7 +35,8 @@ struct ColourPaneCoverageTests {
     static func decorations() async -> DiffDecorations {
         DecorationFixtures.colors(
             old: await DecorationFixtures.lexed(old, language: .swift),
-            new: await DecorationFixtures.lexed(new, language: .swift))
+            new: await DecorationFixtures.lexed(new, language: .swift)
+        )
     }
 
     /// Expects every numbered row laid out in each pane's viewport to start in the keyword's colour, and a changed
@@ -55,17 +62,22 @@ struct ColourPaneCoverageTests {
                     return false
                 }
                 let row = pane.rendered.rowIndex(
-                    containing: content.offset(from: start, to: fragment.rangeInElement.location))
+                    containing: content.offset(from: start, to: fragment.rangeInElement.location)
+                )
                 let meta = pane.rendered.rows[row]
                 guard meta.oldNumber != nil || meta.newNumber != nil else { return true }
                 checked += 1
                 let lineStart = pane.rendered.lineStarts[row]
                 #expect(
                     coloured.contains { $0.contains(lineStart) },
-                    "\(moment): row \(row) of the \(pane.rendered.side) pane is not coloured")
+                    "\(moment): row \(row) of the \(pane.rendered.side) pane is not coloured"
+                )
                 if meta.kind == .added || meta.kind == .removed || meta.kind == .modified {
                     let expected = pane.rendered.palette.rowBackground(
-                        for: meta.kind, side: pane.rendered.side, isMoved: false)
+                        for: meta.kind,
+                        side: pane.rendered.side,
+                        isMoved: false
+                    )
                     #expect((fragment as? DiffLayoutFragment)?.backgroundColor == expected, "\(moment): row \(row)")
                 }
                 return true

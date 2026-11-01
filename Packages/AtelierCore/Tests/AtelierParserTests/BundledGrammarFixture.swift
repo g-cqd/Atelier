@@ -12,7 +12,10 @@ enum BundledGrammarFixture {
     static func parser(for result: Result<ParseTableCompiler.CompilationResult, any Error>) throws -> GLRParser {
         let compiled = try result.get()
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 
     /// The `grammar.json` KittyCode bundles for `language`.

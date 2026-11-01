@@ -22,7 +22,9 @@ struct BidiControlCopyTests {
     /// What copying `ranges` of `textView` writes: what `copy(_:)` writes to the general pasteboard, written to a
     /// pasteboard of the test's own.
     private func copied(
-        _ ranges: [NSRange], from textView: NSTextView, as types: [NSPasteboard.PasteboardType]? = nil
+        _ ranges: [NSRange],
+        from textView: NSTextView,
+        as types: [NSPasteboard.PasteboardType]? = nil
     ) throws -> String? {
         let pasteboard = NSPasteboard.withUniqueName()
         defer { pasteboard.releaseGlobally() }
@@ -48,7 +50,8 @@ struct BidiControlCopyTests {
     /// The text view of a card pane showing `rendered`'s diff, as SwiftUI makes it.
     private func cardPane(showing diff: RenderedDiff) throws -> NSTextView {
         let host = NSHostingController(
-            rootView: EmbeddedDiffTextView(layouts: CardLayouts(rendered: diff), side: .new, gutter: .new, width: 600))
+            rootView: EmbeddedDiffTextView(layouts: CardLayouts(rendered: diff), side: .new, gutter: .new, width: 600)
+        )
         host.sizingOptions = []
         host.view.frame = NSRect(x: 0, y: 0, width: 600, height: 200)
         host.view.layoutSubtreeIfNeeded()

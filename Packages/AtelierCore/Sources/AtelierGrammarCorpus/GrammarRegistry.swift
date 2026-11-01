@@ -137,7 +137,8 @@ public final class GrammarRegistry: Sendable {
         let contents = try GrammarLoader.contents(ofFileAt: grammarPath(for: languageName, grammarsPath: grammarsPath))
         let loaded = LoadedGrammar(
             definition: try GrammarLoader.parse(contents),
-            key: CompiledTableCache.Key(language: languageName, grammar: contents))
+            key: CompiledTableCache.Key(language: languageName, grammar: contents)
+        )
         state.withLock { $0.loadedGrammars[languageName] = loaded }
         return loaded
     }
@@ -242,7 +243,8 @@ public final class GrammarRegistry: Sendable {
 
     /// Reads a compiled table only when it is already cached; prewarming never starts a compile.
     public func cachedResult(
-        for languageName: String, grammarsPath: String
+        for languageName: String,
+        grammarsPath: String
     ) throws(GrammarError) -> ParseTableCompiler.CompilationResult? {
         let grammar = try loadedGrammar(for: languageName, grammarsPath: grammarsPath)
         guard let stored = diskCache.outcome(for: grammar.key) else { return nil }

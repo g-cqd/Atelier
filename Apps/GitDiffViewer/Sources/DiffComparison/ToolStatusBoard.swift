@@ -91,9 +91,12 @@ package final class ToolStatusBoard {
         var located: (url: URL, origin: ToolOrigin)?
         for name in server.executableNames {
             located = await discovery.locate(
-                executableName: name, overrideVariable: "GDV_" + server.environmentName,
-                customPath: location?.customPath, searchesToolchain: server.searchesToolchain,
-                homeRelativeDirectories: server.homeRelativeDirectories)
+                executableName: name,
+                overrideVariable: "GDV_" + server.environmentName,
+                customPath: location?.customPath,
+                searchesToolchain: server.searchesToolchain,
+                homeRelativeDirectories: server.homeRelativeDirectories
+            )
             if located != nil { break }
         }
         // No version: a language server reports one only once launched, as its own initialize answer.

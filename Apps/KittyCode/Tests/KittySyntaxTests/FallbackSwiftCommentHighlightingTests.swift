@@ -14,7 +14,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
         let spans = LanguageHighlighter.highlightLine(
-            "// this is a comment", language: "swift", theme: theme)
+            "// this is a comment",
+            language: "swift",
+            theme: theme
+        )
         #expect(spans.count == 1)
         #expect(spans[0].text == "// this is a comment")
         #expect(spans[0].style == commentStyle)
@@ -25,7 +28,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
         let spans = LanguageHighlighter.highlightLine(
-            "/// if the read syscall fails, or", language: "swift", theme: theme)
+            "/// if the read syscall fails, or",
+            language: "swift",
+            theme: theme
+        )
         #expect(spans.count == 1)
         #expect(spans[0].text == "/// if the read syscall fails, or")
         #expect(spans[0].style == commentStyle)
@@ -36,7 +42,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
         let spans = LanguageHighlighter.highlightLine(
-            "    func read(into buffer: Int)", language: "swift", theme: theme)
+            "    func read(into buffer: Int)",
+            language: "swift",
+            theme: theme
+        )
         let funcSpan = spans.first { $0.text == "func" }
         #expect(funcSpan?.style == keywordStyle)
     }
@@ -46,7 +55,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
         let spans = LanguageHighlighter.highlightLine(
-            "let x = 1 // inline comment with if", language: "swift", theme: theme)
+            "let x = 1 // inline comment with if",
+            language: "swift",
+            theme: theme
+        )
         let commentSpan = spans.last { $0.style == commentStyle }
         #expect(commentSpan != nil)
         #expect(commentSpan?.text == "// inline comment with if")
@@ -57,7 +69,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
         let spans = LanguageHighlighter.highlightLine(
-            "/* block if for while */", language: "swift", theme: theme)
+            "/* block if for while */",
+            language: "swift",
+            theme: theme
+        )
         let commentSpan = spans.first { $0.style == commentStyle }
         #expect(commentSpan != nil)
         #expect(commentSpan?.text == "/* block if for while */")
@@ -69,7 +84,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let commentStyle = theme.style(for: "comment")
         let keywordStyle = theme.style(for: "keyword")
         let spans = LanguageHighlighter.highlightLine(
-            "// Layer 4 — View protocol, layout", language: "swift", theme: theme)
+            "// Layer 4 — View protocol, layout",
+            language: "swift",
+            theme: theme
+        )
         #expect(spans.count == 1)
         #expect(spans[0].style == commentStyle)
         #expect(!spans.contains { $0.style == keywordStyle })
@@ -80,7 +98,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
         let spans = LanguageHighlighter.highlightLine(
-            "/// Conforming types may override", language: "swift", theme: theme)
+            "/// Conforming types may override",
+            language: "swift",
+            theme: theme
+        )
         #expect(!spans.contains { $0.style == keywordStyle })
     }
 
@@ -89,8 +110,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
         let spans = LanguageHighlighter.highlightLine(
-            "/// for zero-copy writes using `withUnsafeBufferPointer`.", language: "swift",
-            theme: theme)
+            "/// for zero-copy writes using `withUnsafeBufferPointer`.",
+            language: "swift",
+            theme: theme
+        )
         #expect(!spans.contains { $0.style == keywordStyle })
     }
 
@@ -99,7 +122,10 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
         let spans = LanguageHighlighter.highlightLine(
-            "/// if the connection is at end-of-file.", language: "swift", theme: theme)
+            "/// if the connection is at end-of-file.",
+            language: "swift",
+            theme: theme
+        )
         #expect(!spans.contains { $0.style == keywordStyle })
     }
 }

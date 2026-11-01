@@ -32,7 +32,12 @@ extension DiffGutterView {
                 let next = index + 1 < rendered.changes.endIndex ? rendered.changes[index + 1] : nil
                 guard
                     let wedge = wedge(
-                        at: change.rows.lowerBound, edges: edges, in: rendered, previous: previous, next: next)
+                        at: change.rows.lowerBound,
+                        edges: edges,
+                        in: rendered,
+                        previous: previous,
+                        next: next
+                    )
                 else { continue }
                 body(change, .wedge(wedge))
             } else {
@@ -50,8 +55,11 @@ extension DiffGutterView {
     /// a `previous` or `next` change that touches the boundary with none, so the wedge never overlaps its bar (book
     /// D43, R134).
     private func wedge(
-        at boundary: Int, edges: [Int: (top: CGFloat, bottom: CGFloat)], in rendered: RenderedText,
-        previous: RenderedChange?, next: RenderedChange?
+        at boundary: Int,
+        edges: [Int: (top: CGFloat, bottom: CGFloat)],
+        in rendered: RenderedText,
+        previous: RenderedChange?,
+        next: RenderedChange?
     ) -> CGRect? {
         if boundary == 0 {
             return edges[0].map { ChangeMarkerLayout.wedge(at: $0.top, placement: .below, layerX: changeLayerX) }
@@ -73,7 +81,10 @@ extension DiffGutterView {
     /// touches; centred otherwise, as a row of context then separates it from its neighbours either way (book D43,
     /// R134).
     private static func wedgePlacement(
-        underBand: Bool, previous: RenderedChange?, next: RenderedChange?, boundary: Int
+        underBand: Bool,
+        previous: RenderedChange?,
+        next: RenderedChange?,
+        boundary: Int
     ) -> ChangeMarkerLayout.WedgePlacement {
         let touchesAbove = underBand || previous?.rows.upperBound == boundary
         let touchesBelow = next?.rows.lowerBound == boundary
@@ -121,15 +132,21 @@ extension DiffGutterView {
             let last = lineNumberRect(ofRow: change.rows.upperBound - 1)
         else { return nil }
         let bar = ChangeMarkerLayout.bar(
-            top: first.minY, bottom: last.minY + last.height, isHovered: change.key == hoveredChange,
-            layerX: changeLayerX)
+            top: first.minY,
+            bottom: last.minY + last.height,
+            isHovered: change.key == hoveredChange,
+            layerX: changeLayerX
+        )
         return .bar(bar)
     }
 
     /// The wedge of a folded removal on `boundary`, its own row edges looked up directly: see
     /// ``wedge(at:edges:in:previous:next:)``, which this mirrors for a point rather than a drawn rect.
     private func exactWedge(
-        at boundary: Int, in rendered: RenderedText, previous: RenderedChange?, next: RenderedChange?
+        at boundary: Int,
+        in rendered: RenderedText,
+        previous: RenderedChange?,
+        next: RenderedChange?
     ) -> CGRect? {
         if boundary == 0 {
             return lineNumberRect(ofRow: 0)
@@ -155,7 +172,8 @@ extension DiffGutterView {
             elements.append(
                 ChangeMarkerElement(change: change, frame: frame, parent: self) { [weak self] in
                     self?.onChangeToggle?(change.key)
-                })
+                }
+            )
         }
         return elements
     }
@@ -209,7 +227,10 @@ extension DiffGutterView {
                         color.withAlphaComponent(0.15).setFill()
                         NSBezierPath(roundedRect: bar, xRadius: radius, yRadius: radius).fill()
                         let outline = NSBezierPath(
-                            roundedRect: bar.insetBy(dx: 0.5, dy: 0.5), xRadius: radius - 0.5, yRadius: radius - 0.5)
+                            roundedRect: bar.insetBy(dx: 0.5, dy: 0.5),
+                            xRadius: radius - 0.5,
+                            yRadius: radius - 0.5
+                        )
                         outline.lineWidth = 1
                         color.withAlphaComponent(strength).setStroke()
                         outline.stroke()

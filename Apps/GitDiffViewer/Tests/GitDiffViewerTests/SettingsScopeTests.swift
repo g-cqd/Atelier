@@ -71,9 +71,13 @@ struct SettingsScopeTests {
         #expect(
             sut.entries.first?.overrides == [
                 SettingOverride(
-                    key: "intralineGranularity", label: SettingLabel.granularity, value: "Syntax",
-                    defaultValue: "Words")
-            ])
+                    key: "intralineGranularity",
+                    label: SettingLabel.granularity,
+                    value: "Syntax",
+                    defaultValue: "Words"
+                )
+            ]
+        )
     }
 
     @Test

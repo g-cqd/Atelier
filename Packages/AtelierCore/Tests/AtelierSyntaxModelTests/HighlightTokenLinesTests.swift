@@ -11,7 +11,8 @@ struct HighlightTokenLinesTests {
             byLine == [
                 [HighlightToken(byteRange: 0 ..< 4, role: .comment, layer: .lexical)],
                 [HighlightToken(byteRange: 0 ..< 4, role: .comment, layer: .lexical)]
-            ])
+            ]
+        )
     }
 
     @Test

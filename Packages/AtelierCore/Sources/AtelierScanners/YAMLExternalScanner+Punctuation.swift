@@ -6,8 +6,17 @@ extension YAMLExternalScanner {
     // Preserve the C scanner's precedence among offered punctuation symbols.
     // swiftlint:disable:next cyclomatic_complexity function_body_length function_parameter_count
     mutating func scanPunctuation(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], isR: Bool, isBr: Bool, isB: Bool, isS: Bool,
-        beginningRow: Int, beginningCol: Int, currentIndent: Int, currentIndentType: UInt32, hasTabIndent: Bool
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        isR: Bool,
+        isBr: Bool,
+        isB: Bool,
+        isS: Bool,
+        beginningRow: Int,
+        beginningCol: Int,
+        currentIndent: Int,
+        currentIndentType: UInt32,
+        hasTabIndent: Bool
     ) -> Bool? {
         func has(_ symbol: TokenType) -> Bool { validSymbols[symbol.rawValue] }
         func offered(_ r: TokenType, _ br: TokenType, _ b: TokenType? = nil) -> TokenType? {

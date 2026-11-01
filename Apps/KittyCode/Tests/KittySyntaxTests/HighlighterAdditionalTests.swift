@@ -74,6 +74,7 @@ struct HighlighterAdditionalTests {
             spans == [
                 StyledSpan(text: "if", style: keywordStyle),
                 StyledSpan(text: "42", style: numberStyle)
-            ])
+            ]
+        )
     }
 }

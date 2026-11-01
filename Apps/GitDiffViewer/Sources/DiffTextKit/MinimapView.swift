@@ -49,8 +49,10 @@ package final class MinimapView: NSView {
 
         guard let rendered, !rendered.rows.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
         let key = BarsKey(
-            size: bounds.size, scale: window?.backingScaleFactor ?? 2,
-            appearance: effectiveAppearance.name)
+            size: bounds.size,
+            scale: window?.backingScaleFactor ?? 2,
+            appearance: effectiveAppearance.name
+        )
         if bars?.key != key {
             bars = rasterizeBars(rendered: rendered, scale: key.scale).map { (key, $0) }
         }
@@ -116,8 +118,13 @@ package final class MinimapView: NSView {
         let height = Int(bounds.height * scale)
         guard width > 0, height > 0,
             let context = CGContext(
-                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
             )
         else { return nil }
         context.scaleBy(x: scale, y: scale)
@@ -139,7 +146,8 @@ package final class MinimapView: NSView {
                     y: bounds.height - bucket.y - barHeight,
                     width: 2 + barSpace * share,
                     height: barHeight
-                ))
+                )
+            )
         }
         return context.makeImage()
     }

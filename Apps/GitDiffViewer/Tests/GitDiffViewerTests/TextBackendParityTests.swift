@@ -14,7 +14,8 @@ import Testing
 struct TextBackendParityTests {
     @Test(arguments: [TextBackendParity.Fixture.ascii, .tabs, .longLines], TextBackendParity.widths)
     func `code lays out, hit-tests, scrolls and copies as in the app's pane`(
-        fixture: TextBackendParity.Fixture, width: CGFloat?
+        fixture: TextBackendParity.Fixture,
+        width: CGFloat?
     ) throws {
         try TextBackendParity.check(fixture, width: width)
     }
@@ -25,7 +26,8 @@ struct TextBackendParityTests {
 struct TextBackendScriptParityTests {
     @Test(arguments: [TextBackendParity.Fixture.cjk, .emoji, .rightToLeft], TextBackendParity.widths)
     func `other scripts lay out, hit-test, scroll and copy as in the app's pane`(
-        fixture: TextBackendParity.Fixture, width: CGFloat?
+        fixture: TextBackendParity.Fixture,
+        width: CGFloat?
     ) throws {
         try TextBackendParity.check(fixture, width: width)
     }
@@ -36,7 +38,8 @@ struct TextBackendScriptParityTests {
 struct TextBackendMarkParityTests {
     @Test(arguments: [TextBackendParity.Fixture.combiningMarks, .bidiControls], TextBackendParity.widths)
     func `combining marks and bidi controls lay out, hit-test, scroll and copy as in the app's pane`(
-        fixture: TextBackendParity.Fixture, width: CGFloat?
+        fixture: TextBackendParity.Fixture,
+        width: CGFloat?
     ) throws {
         try TextBackendParity.check(fixture, width: width)
     }
@@ -60,7 +63,8 @@ struct TextBackendGapParityTests {
 struct TextBackendCoreTextGeometryTests {
     @Test(arguments: TextBackendParity.Fixture.allCases, TextBackendParity.widths)
     func `CoreText's row frames and document height match TextKit's, within half a point`(
-        fixture: TextBackendParity.Fixture, width: CGFloat?
+        fixture: TextBackendParity.Fixture,
+        width: CGFloat?
     ) throws {
         // Disclosed M1 gap, not this test's to hide: CoreText does not draw a gap's band yet (a core-engine
         // extension, not an adapter fix). The wrap-boundary and bidi gaps once measured at 400 pt for longLines,
@@ -158,7 +162,8 @@ enum TextBackendParity {
         for step in 0 ..< 100 {
             let point = NSPoint(
                 x: visible.minX + visible.width * (CGFloat(step % 10) + 0.5) / 10,
-                y: visible.minY + visible.height * (CGFloat(step / 10) + 0.5) / 10)
+                y: visible.minY + visible.height * (CGFloat(step / 10) + 0.5) / 10
+            )
             let hit = pane.hoverHit(at: point)
             let expected = HoverHitTester.hit(at: point, textView: reference.textView, rendered: rendered)
             #expect(hit?.row == expected?.row && hit?.utf16Column == expected?.utf16Column, "hover at \(point)")
@@ -242,13 +247,16 @@ enum TextBackendParity {
         var rows: [Row] = []
         layoutManager.enumerateTextLayoutFragments(from: layoutManager.documentRange.location) { fragment in
             let offset = contentManager.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+                from: layoutManager.documentRange.location,
+                to: fragment.rangeInElement.location
+            )
             rows.append(
                 (
                     rendered.rowIndex(containing: offset),
                     fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y),
                     fragment.textLineFragments.count
-                ))
+                )
+            )
             return true
         }
         return rows
@@ -269,7 +277,11 @@ enum TextBackendParity {
 
     static func window(size: NSSize, content: NSView) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = content
         content.layoutSubtreeIfNeeded()
         return window

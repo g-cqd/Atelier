@@ -139,7 +139,8 @@ struct DocCommentIndexUpdateTests {
             "file:///d.swift": ("/// D run.\nfunc run() {}", .both)
         ]
         try await index.upsert(
-            indexed.map { DocIndexFile(uri: $0.key, content: $0.value.content, sides: $0.value.sides) })
+            indexed.map { DocIndexFile(uri: $0.key, content: $0.value.content, sides: $0.value.sides) }
+        )
         indexed["file:///b.swift"] = ("/// B run, again.\nfunc run() {}\n/// B stop.\nfunc stop() {}", .new)
         try await index.upsert([
             DocIndexFile(uri: "file:///b.swift", content: indexed["file:///b.swift"]?.content ?? "", sides: .new)
@@ -155,7 +156,8 @@ struct DocCommentIndexUpdateTests {
                     .filter { $0.name == name }
                 #expect(
                     sorted(await index.matches(named: name, side: side)) == sorted(scanned),
-                    "\(name) on \(side.rawValue)")
+                    "\(name) on \(side.rawValue)"
+                )
             }
         }
     }

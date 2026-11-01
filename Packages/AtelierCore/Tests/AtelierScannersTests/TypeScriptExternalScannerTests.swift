@@ -19,7 +19,8 @@ struct TypeScriptExternalScannerTests {
                 "_automatic_semicolon", "_template_chars", "_ternary_qmark", "html_comment", "||",
                 "escape_sequence", "regex_pattern", "jsx_text", "_function_signature_automatic_semicolon",
                 "__error_recovery"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["typescript"] != nil)
     }
 

@@ -132,8 +132,14 @@ public enum GitParsers {
             }
             commits.append(
                 GitCommitChanges(
-                    id: id, parentIDs: parents, authorName: author, authorDate: Date(timeIntervalSince1970: time),
-                    subject: subject, changes: changes))
+                    id: id,
+                    parentIDs: parents,
+                    authorName: author,
+                    authorDate: Date(timeIntervalSince1970: time),
+                    subject: subject,
+                    changes: changes
+                )
+            )
         }
         return commits
     }
@@ -182,8 +188,12 @@ public enum GitParsers {
         switch letter {
             case "R":
                 let change = GitFileChange(
-                    status: .renamed, path: string(fields[index + 2]), oldPath: first, oldBlobID: oldBlob,
-                    newBlobID: newBlob)
+                    status: .renamed,
+                    path: string(fields[index + 2]),
+                    oldPath: first,
+                    oldBlobID: oldBlob,
+                    newBlobID: newBlob
+                )
                 return (change, 3)
             case "C":
                 return (GitFileChange(status: .added, path: string(fields[index + 2]), newBlobID: newBlob), 3)
@@ -199,6 +209,36 @@ public enum GitParsers {
     /// A raw record's object id, nil for git's all-zero id: no object on that side, or one not hashed yet.
     private static func blobID(_ field: Substring) -> String? {
         field.allSatisfy { $0 == "0" } ? nil : String(field)
+    }
+
+    /// An ordinary changed entry, `1 XY sub mH mI mW hH hI path`; nil for a record that does not fit.
+    private static func ordinaryEntry(_ rest: Substring) -> GitStatusEntry? {
+        // XY sub mH mI mW hH hI path
+        let fields = rest.split(separator: " ", maxSplits: 7, omittingEmptySubsequences: false)
+        guard fields.count == 8 else { return nil }
+        let xy = columns(fields[0])
+        return GitStatusEntry(
+            path: String(fields[7]),
+            status: ordinaryStatus(fields[0]),
+            isSubmodule: fields[1].first == "S",
+            indexStatus: xy.index,
+            worktreeStatus: xy.worktree
+        )
+    }
+
+    /// An unmerged entry, `u XY sub m1 m2 m3 mW h1 h2 h3 path`; nil for a record that does not fit.
+    private static func unmergedEntry(_ rest: Substring) -> GitStatusEntry? {
+        // XY sub m1 m2 m3 mW h1 h2 h3 path
+        let fields = rest.split(separator: " ", maxSplits: 9, omittingEmptySubsequences: false)
+        guard fields.count == 10 else { return nil }
+        let xy = columns(fields[0])
+        return GitStatusEntry(
+            path: String(fields[9]),
+            status: .conflicted,
+            isSubmodule: fields[1].first == "S",
+            indexStatus: xy.index,
+            worktreeStatus: xy.worktree
+        )
     }
 
     /// Splits `status --porcelain=v2 -z --branch` output: NUL-terminated records, a rename or copy record followed by
@@ -241,15 +281,7 @@ public enum GitParsers {
                 case "!":
                     entries.append(GitStatusEntry(path: String(rest), status: .ignored, worktreeStatus: .ignored))
                 case "1":
-                    // XY sub mH mI mW hH hI path
-                    let fields = rest.split(separator: " ", maxSplits: 7, omittingEmptySubsequences: false)
-                    guard fields.count == 8 else { continue }
-                    let xy = columns(fields[0])
-                    entries.append(
-                        GitStatusEntry(
-                            path: String(fields[7]), status: ordinaryStatus(fields[0]),
-                            isSubmodule: fields[1].first == "S", indexStatus: xy.index,
-                            worktreeStatus: xy.worktree))
+                    if let entry = ordinaryEntry(rest) { entries.append(entry) }
                 case "2":
                     // XY sub mH mI mW hH hI Xscore path, then the original path as the next record.
                     let fields = rest.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: false)
@@ -260,18 +292,16 @@ public enum GitParsers {
                     let xy = columns(fields[0])
                     entries.append(
                         GitStatusEntry(
-                            path: String(fields[8]), originalPath: original, status: isCopy ? .added : .renamed,
-                            isSubmodule: fields[1].first == "S", indexStatus: xy.index,
-                            worktreeStatus: xy.worktree))
+                            path: String(fields[8]),
+                            originalPath: original,
+                            status: isCopy ? .added : .renamed,
+                            isSubmodule: fields[1].first == "S",
+                            indexStatus: xy.index,
+                            worktreeStatus: xy.worktree
+                        )
+                    )
                 case "u":
-                    // XY sub m1 m2 m3 mW h1 h2 h3 path
-                    let fields = rest.split(separator: " ", maxSplits: 9, omittingEmptySubsequences: false)
-                    guard fields.count == 10 else { continue }
-                    let xy = columns(fields[0])
-                    entries.append(
-                        GitStatusEntry(
-                            path: String(fields[9]), status: .conflicted, isSubmodule: fields[1].first == "S",
-                            indexStatus: xy.index, worktreeStatus: xy.worktree))
+                    if let entry = unmergedEntry(rest) { entries.append(entry) }
                 default:
                     continue
             }

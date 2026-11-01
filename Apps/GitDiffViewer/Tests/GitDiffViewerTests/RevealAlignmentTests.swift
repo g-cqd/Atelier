@@ -17,7 +17,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct FilePaneRevealAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after a reveal, a file pane's numbers, separator and drawing follow the revealed rows`(
@@ -32,7 +33,8 @@ struct FilePaneRevealAlignmentTests {
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct FilePaneUpdateAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after the file updates, a revealed file pane's numbers, separator and drawing follow its rows`(
@@ -47,7 +49,8 @@ struct FilePaneUpdateAlignmentTests {
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct WrappedFilePaneRevealAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after a reveal, a wrapped file pane's numbers, separator and drawing follow the revealed rows`(
@@ -61,7 +64,8 @@ struct WrappedFilePaneRevealAlignmentTests {
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct WrappedFilePaneUpdateAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after the file updates, a revealed wrapped file pane's numbers, separator and drawing follow its rows`(
@@ -76,11 +80,13 @@ struct WrappedFilePaneUpdateAlignmentTests {
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct CardPaneRevealAlignmentTests {
     @Test(arguments: [CardLayout.inline, .split], [false, true])
     func `after a reveal, a card's numbers, separator and drawing follow the revealed rows`(
-        layout: CardLayout, wrapsLines: Bool
+        layout: CardLayout,
+        wrapsLines: Bool
     ) throws {
         let sut = HostedCardBody(showing: RevealFixture.diff(), layout: layout, wrapsLines: wrapsLines)
 
@@ -95,11 +101,13 @@ struct CardPaneRevealAlignmentTests {
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct CardPaneUpdateAlignmentTests {
     @Test(arguments: [CardLayout.inline, .split], [false, true])
     func `after the file updates, a revealed card's numbers, separator and drawing follow its rows`(
-        layout: CardLayout, wrapsLines: Bool
+        layout: CardLayout,
+        wrapsLines: Bool
     ) throws {
         let sut = HostedCardBody(showing: try RevealFixture.revealed(), layout: layout, wrapsLines: wrapsLines)
 
@@ -131,8 +139,11 @@ enum RevealFixture {
     static func diff(revealing expansions: [GapKey: GapExpansion] = [:], updated: Bool = false) -> RenderedDiff {
         let sides = sides(updated: updated)
         return DiffRenderer.render(
-            oldText: sides.old, newText: sides.new, language: .plain,
-            layout: .changes(context: 2, expansions: expansions))
+            oldText: sides.old,
+            newText: sides.new,
+            language: .plain,
+            layout: .changes(context: 2, expansions: expansions)
+        )
     }
 
     /// The gap between the two changes.
@@ -178,14 +189,19 @@ struct AlignedPane {
             let frame = fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y)
             let bounds = first.typographicBounds
             let line = NSRect(
-                x: frame.minX, y: frame.minY + bounds.minY, width: max(bounds.width, 1), height: bounds.height)
+                x: frame.minX,
+                y: frame.minY + bounds.minY,
+                width: max(bounds.width, 1),
+                height: bounds.height
+            )
             guard visible.minY <= line.minY, line.maxY <= visible.maxY else { return true }
             let baseline = frame.minY + bounds.minY + first.glyphOrigin.y - rendered.baselineOffset
             let row = rendered.rowIndex(containing: content.offset(from: start, to: fragment.rangeInElement.location))
             lines[row] = Line(
                 frame: textView.convert(line, to: nil),
                 baseline: textView.convert(NSPoint(x: 0, y: baseline), to: nil).y,
-                top: fragment.layoutFragmentFrame.minY)
+                top: fragment.layoutFragmentFrame.minY
+            )
             return true
         }
         return lines
@@ -225,8 +241,11 @@ enum RevealAlignment {
     /// Shows the fixture in file panes of `layout`, reveals lines in its middle gap, and checks what shows.
     static func revealInFilePanes(layout: PaneLayout, wrapsLines: Bool) async throws {
         let sut = HostedPanes(
-            showing: PaneText(rendered: RevealFixture.diff(), asksForChange: false), layout: layout,
-            wrapsLines: wrapsLines, size: RevealAlignment.paneSize)
+            showing: PaneText(rendered: RevealFixture.diff(), asksForChange: false),
+            layout: layout,
+            wrapsLines: wrapsLines,
+            size: RevealAlignment.paneSize
+        )
         try await sut.alignSides()
 
         sut.show(PaneText(rendered: try RevealFixture.revealed(), asksForChange: false))
@@ -239,8 +258,11 @@ enum RevealAlignment {
     /// Shows the fixture with lines revealed in file panes of `layout`, updates the file, and checks what shows.
     static func updateInFilePanes(layout: PaneLayout, wrapsLines: Bool) async throws {
         let sut = HostedPanes(
-            showing: PaneText(rendered: try RevealFixture.revealed(), asksForChange: false), layout: layout,
-            wrapsLines: wrapsLines, size: RevealAlignment.paneSize)
+            showing: PaneText(rendered: try RevealFixture.revealed(), asksForChange: false),
+            layout: layout,
+            wrapsLines: wrapsLines,
+            size: RevealAlignment.paneSize
+        )
         try await sut.alignSides()
 
         sut.show(PaneText(rendered: try RevealFixture.revealed(updated: true), asksForChange: false))
@@ -254,7 +276,8 @@ enum RevealAlignment {
     /// two changes runs where the text draws its own; with `measuredTops`, each row's top is where a full layout of
     /// its pane's text puts it.
     static func expectAligned(
-        _ panes: [AlignedPane], measuredBy measuredTops: (@MainActor (AlignedPane) -> [Int: CGFloat])? = nil,
+        _ panes: [AlignedPane],
+        measuredBy measuredTops: (@MainActor (AlignedPane) -> [Int: CGFloat])? = nil,
         sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
         var separators = 0
@@ -270,15 +293,21 @@ enum RevealAlignment {
                 let baseline = pane.gutter.convert(NSPoint(x: 0, y: number.minY + ascender), to: nil).y
                 let middle = pane.gutter.convert(NSPoint(x: 0, y: number.midY), to: nil).y
                 #expect(
-                    abs(baseline - line.baseline) < 0.5, "row \(row)'s number on its baseline",
-                    sourceLocation: sourceLocation)
+                    abs(baseline - line.baseline) < 0.5,
+                    "row \(row)'s number on its baseline",
+                    sourceLocation: sourceLocation
+                )
                 #expect(
-                    line.frame.minY <= middle && middle <= line.frame.maxY, "row \(row)'s number within its line",
-                    sourceLocation: sourceLocation)
+                    line.frame.minY <= middle && middle <= line.frame.maxY,
+                    "row \(row)'s number within its line",
+                    sourceLocation: sourceLocation
+                )
                 if let measured {
                     #expect(
-                        abs(line.top - (measured[row] ?? .nan)) < 0.5, "row \(row) where a full layout puts it",
-                        sourceLocation: sourceLocation)
+                        abs(line.top - (measured[row] ?? .nan)) < 0.5,
+                        "row \(row) where a full layout puts it",
+                        sourceLocation: sourceLocation
+                    )
                 }
             }
             let gutterSeparators = pane.gutterSeparators()
@@ -310,10 +339,14 @@ final class HostedCardBody {
         wrapMode = WrapMode(wrapsLines: wrapsLines, column: 0)
         layouts = CardLayouts(rendered: diff)
         host = NSHostingView(
-            rootView: RevealCardBody(layouts: layouts, layout: layout, wrapMode: wrapMode, width: Self.width))
+            rootView: RevealCardBody(layouts: layouts, layout: layout, wrapMode: wrapMode, width: Self.width)
+        )
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
     }
@@ -331,7 +364,8 @@ final class HostedCardBody {
         try subviews(of: DiffPaneTextView.self, in: host)
             .map { textView in
                 let gutter = try #require(
-                    subviews(of: DiffGutterView.self, in: host).first { ($0.source as? NSTextView) === textView })
+                    subviews(of: DiffGutterView.self, in: host).first { ($0.source as? NSTextView) === textView }
+                )
                 return AlignedPane(gutter: gutter, textView: textView, rendered: try #require(gutter.rendered))
             }
     }
@@ -392,14 +426,29 @@ struct RevealCardBody: View {
             switch layout {
                 case .inline:
                     EmbeddedDiffTextView(
-                        layouts: layouts, side: .unified, gutter: .dual, width: width, wrapMode: wrapMode)
+                        layouts: layouts,
+                        side: .unified,
+                        gutter: .dual,
+                        width: width,
+                        wrapMode: wrapMode
+                    )
                 case .split:
                     SideBySidePanes(width: width) { paneWidth in
                         EmbeddedDiffTextView(
-                            layouts: layouts, side: .old, gutter: .old, width: paneWidth, wrapMode: wrapMode)
+                            layouts: layouts,
+                            side: .old,
+                            gutter: .old,
+                            width: paneWidth,
+                            wrapMode: wrapMode
+                        )
                     } trailing: { paneWidth in
                         EmbeddedDiffTextView(
-                            layouts: layouts, side: .new, gutter: .new, width: paneWidth, wrapMode: wrapMode)
+                            layouts: layouts,
+                            side: .new,
+                            gutter: .new,
+                            width: paneWidth,
+                            wrapMode: wrapMode
+                        )
                     }
             }
         }

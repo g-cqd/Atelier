@@ -38,7 +38,10 @@ struct GrammarTierDeadlineBenchmark {
         lines.append(start ..< text.utf8.count)
         return TierRequest(
             revision: SourceRevision(documentID: "sample", language: language, key: .content(UUID().uuidString)),
-            text: text, lineRanges: lines, visibleLines: 0 ..< min(60, lines.count))
+            text: text,
+            lineRanges: lines,
+            visibleLines: 0 ..< min(60, lines.count)
+        )
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))
@@ -47,12 +50,16 @@ struct GrammarTierDeadlineBenchmark {
         let cache = FileManager.default.temporaryDirectory.appending(path: "atelier-bench-grammar-tables")
         let artifacts = SyntaxArtifactsCache(
             registry: GrammarRegistry(cacheDirectory: cache, bundledManifest: try corpus.manifest()),
-            grammarsDirectory: corpus.grammarsDirectory)
+            grammarsDirectory: corpus.grammarsDirectory
+        )
         let json = try String(
-            contentsOf: corpus.grammarsDirectory.appending(path: "python/grammar.json"), encoding: .utf8)
+            contentsOf: corpus.grammarsDirectory.appending(path: "python/grammar.json"),
+            encoding: .utf8
+        )
         let python = try String(
             contentsOf: Self.repository.appending(path: "Apps/GitDiffViewer/scripts/main_actor_budget.py"),
-            encoding: .utf8)
+            encoding: .utf8
+        )
 
         for (language, text) in [(Language.json, json), (.python, python)] {
             let record = GrammarTierRecord()

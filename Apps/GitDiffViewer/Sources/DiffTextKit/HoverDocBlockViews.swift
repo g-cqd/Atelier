@@ -69,7 +69,10 @@ enum HoverCodeChunks {
         var location = start
         for _ in 0 ..< lines {
             let newline = text.range(
-                of: "\n", options: .literal, range: NSRange(location: location, length: text.length - location))
+                of: "\n",
+                options: .literal,
+                range: NSRange(location: location, length: text.length - location)
+            )
             guard newline.location != NSNotFound else { return text.length }
             location = newline.location + 1
         }
@@ -154,12 +157,18 @@ extension HoverDocPanel {
                             attributes: [
                                 .font: NSFont.systemFont(ofSize: size, weight: weight),
                                 .foregroundColor: NSColor.labelColor
-                            ])))
+                            ]
+                        )
+                    )
+                )
                 blocks.append(
                     .paragraph(
                         NSAttributedString(
                             string: relationship.names.joined(separator: "\n"),
-                            attributes: [.font: names, .foregroundColor: NSColor.labelColor])))
+                            attributes: [.font: names, .foregroundColor: NSColor.labelColor]
+                        )
+                    )
+                )
             }
         }
         return blocks
@@ -170,7 +179,10 @@ extension HoverDocPanel {
         .heading(
             level: 2,
             text: NSAttributedString(
-                string: title, attributes: [.font: headingFont(level: 2), .foregroundColor: NSColor.labelColor]))
+                string: title,
+                attributes: [.font: headingFont(level: 2), .foregroundColor: NSColor.labelColor]
+            )
+        )
     }
 
     /// Shows `blocks` in ``bodyDocument``, each block its own view `width` wide. Only the
@@ -187,7 +199,10 @@ extension HoverDocPanel {
         blockSlots.contentHeight = 0
         if !blocks.isEmpty {
             pendingDiscussion = PendingDiscussion(
-                blocks: ArraySlice(blocks), width: width, chipBackground: chipBackground)
+                blocks: ArraySlice(blocks),
+                width: width,
+                chipBackground: chipBackground
+            )
             buildPendingBlocks()
         }
         for slot in blockSlots.slots[blockSlots.shown ..< max(shownBefore, blockSlots.shown)] {
@@ -240,7 +255,10 @@ extension HoverDocPanel {
     /// of the block's kind and width, and otherwise in a new view that takes its place. Returns the view's slot, and a
     /// long code block's lines still to show.
     private func showNext(
-        _ block: HoverDocument.Block, at top: CGFloat, width: CGFloat, chipBackground: NSColor?
+        _ block: HoverDocument.Block,
+        at top: CGFloat,
+        width: CGFloat,
+        chipBackground: NSColor?
     ) -> (slot: HoverBlockSlot, openCode: OpenCodeBlock?) {
         let index = blockSlots.shown
         blockSlots.shown += 1
@@ -281,7 +299,9 @@ extension HoverDocPanel {
         let end = HoverCodeChunks.end(of: open.code.string as NSString, from: start)
         let lines = open.code.attributedSubstring(from: NSRange(location: start, length: end - start))
         let height = Self.measuredHeight(
-            of: lines, width: open.slot.width - 2 * HoverPanelMetrics.chipHorizontalPadding)
+            of: lines,
+            width: open.slot.width - 2 * HoverPanelMetrics.chipHorizontalPadding
+        )
         // From the newline that ends the lines shown, which the chunk measured alone does without.
         let added = open.code.attributedSubstring(from: NSRange(location: open.shownEnd, length: end - open.shownEnd))
         open.slot.textView?.textStorage?.append(added)
@@ -299,7 +319,10 @@ extension HoverDocPanel {
 
     /// Adds a view per block to `stack`, as an item's or a quote's content, spaced as the body's blocks are.
     private func fill(
-        _ stack: NSStackView, with blocks: [HoverDocument.Block], width: CGFloat, chipBackground: NSColor?
+        _ stack: NSStackView,
+        with blocks: [HoverDocument.Block],
+        width: CGFloat,
+        chipBackground: NSColor?
     ) {
         var previous: HoverBuiltBlock?
         for block in blocks {
@@ -315,7 +338,10 @@ extension HoverDocPanel {
 
     /// A new view for `block`, showing it as ``configure(_:with:chipBackground:lazily:)`` does.
     private func makeSlot(
-        for block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?, lazily: Bool
+        for block: HoverDocument.Block,
+        width: CGFloat,
+        chipBackground: NSColor?,
+        lazily: Bool
     ) -> (slot: HoverBlockSlot, openCode: OpenCodeBlock?) {
         let kind = HoverBlockSlot.Kind(block)
         let slot: HoverBlockSlot
@@ -336,7 +362,12 @@ extension HoverDocPanel {
                 slot = HoverBlockSlot(kind: kind, view: chip, width: width, textView: view, height: height)
             case .list(let ordered, let start, let items):
                 let view = listBlock(
-                    ordered: ordered, start: start, items: items, width: width, chipBackground: chipBackground)
+                    ordered: ordered,
+                    start: start,
+                    items: items,
+                    width: width,
+                    chipBackground: chipBackground
+                )
                 slot = HoverBlockSlot(kind: kind, view: view, width: width, textView: nil, height: nil)
             case .quote(let blocks):
                 let view = quoteBlock(blocks, width: width, chipBackground: chipBackground)
@@ -353,7 +384,10 @@ extension HoverDocPanel {
     /// the declaration's, on the hovered pane's background so its colors read as they do there. `lazily`, a long code
     /// block shows its first chunk of lines, and the rest are returned for the body to show as it scrolls to them.
     private func configure(
-        _ slot: HoverBlockSlot, with block: HoverDocument.Block, chipBackground: NSColor?, lazily: Bool
+        _ slot: HoverBlockSlot,
+        with block: HoverDocument.Block,
+        chipBackground: NSColor?,
+        lazily: Bool
     ) -> OpenCodeBlock? {
         switch block {
             case .paragraph(let text), .heading(_, let text):
@@ -377,7 +411,11 @@ extension HoverDocPanel {
 
     /// A row per item: its marker, a bullet or its number, then its own blocks.
     private func listBlock(
-        ordered: Bool, start: Int, items: [[HoverDocument.Block]], width: CGFloat, chipBackground: NSColor?
+        ordered: Bool,
+        start: Int,
+        items: [[HoverDocument.Block]],
+        width: CGFloat,
+        chipBackground: NSColor?
     ) -> NSView {
         let list = Self.makeBlockStack()
         list.spacing = HoverBlockMetrics.itemSpacing

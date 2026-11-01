@@ -93,7 +93,11 @@ struct LexerOffsetRegressionTests {
     {
         let rendered = DiffRenderer.render(oldText: Self.spanningOld, newText: Self.spanningNew, language: .swift)
         let panes = await DecorationFixtures.lexedPanes(
-            rendered, old: Self.spanningOld, new: Self.spanningNew, language: .swift)
+            rendered,
+            old: Self.spanningOld,
+            new: Self.spanningNew,
+            language: .swift
+        )
         for side in [RenderedSide.unified, .old, .new] {
             let text = try #require(panes[side])
             #expect(Self.colourRuns(of: text) == Self.spanningPinnedRuns[side], "\(side)")
@@ -120,7 +124,9 @@ struct LexerOffsetRegressionTests {
                 return start ..< start + line.utf8.count
             }
             let byteLines = LineTokens(
-                LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift), lineRanges: byteRanges)
+                LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift),
+                lineRanges: byteRanges
+            )
             #expect(byLine.lineCount == lines.count)
             for (index, line) in lines.enumerated() {
                 let bytes = Array(line.utf8)

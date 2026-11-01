@@ -23,7 +23,8 @@ struct ContextualExternalValidityTests {
             ("value", .choice([.string("x"), .string("z")]))
         ],
         extras: [.pattern(#"\s"#)],
-        externals: [.symbol("SEMI")])
+        externals: [.symbol("SEMI")]
+    )
 
     @Test
     func `a newline ends the value with a scanner semicolon where one is valid`() throws {
@@ -44,7 +45,10 @@ struct ContextualExternalValidityTests {
     private static func parser() throws -> GLRParser {
         let compiled = try ParseTableCompiler.compile(grammar)
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 }
 

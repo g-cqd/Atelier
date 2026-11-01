@@ -18,7 +18,8 @@ struct DocCommentIndexTests {
                     func load(_ url: URL) async throws -> Data {
                         fatalError()
                     }
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "load", preferringURI: nil)
         #expect(entries.count == 1)
@@ -37,7 +38,8 @@ struct DocCommentIndexTests {
                         /// Creates a Foo.
                         init(x: Int) {}
                     }
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "init", preferringURI: nil)
         #expect(entries.count == 1)
@@ -56,7 +58,8 @@ struct DocCommentIndexTests {
                         /// Element access.
                         subscript(index: Int) -> Int { 0 }
                     }
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "subscript", preferringURI: nil)
         #expect(entries.count == 1)
@@ -77,7 +80,8 @@ struct DocCommentIndexTests {
                         /// A constant.
                         let name: String = "x"
                     }
-                    """)
+                    """
+            )
         ])
         let countEntries = await index.documentation(forIdentifier: "count", preferringURI: nil)
         let nameEntries = await index.documentation(forIdentifier: "name", preferringURI: nil)
@@ -97,7 +101,8 @@ struct DocCommentIndexTests {
                 content: """
                     /// A type.
                     \(kind) \(name) {}
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: name, preferringURI: nil)
         #expect(entries.count == 1)
@@ -113,7 +118,8 @@ struct DocCommentIndexTests {
                 content: """
                     /// An alias.
                     typealias ID = Int
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "ID", preferringURI: nil)
         #expect(entries.first?.markdown == "An alias.")
@@ -129,7 +135,8 @@ struct DocCommentIndexTests {
                 content: """
                     /// A macro.
                     macro Stringify<T>(_ value: T) = #externalMacro(module: "M", type: "S")
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "Stringify", preferringURI: nil)
         #expect(entries.first?.markdown == "A macro.")
@@ -146,7 +153,8 @@ struct DocCommentIndexTests {
                         /// The first case.
                         case first
                     }
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "first", preferringURI: nil)
         #expect(entries.first?.markdown == "The first case.")
@@ -165,7 +173,8 @@ struct DocCommentIndexTests {
                      * More detail.
                      */
                     func run() {}
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "run", preferringURI: nil)
         #expect(entries.first?.markdown == "Summary line.\n\nMore detail.")
@@ -195,7 +204,8 @@ struct DocCommentIndexTests {
                     ) -> Int {
                         x + y
                     }
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "run", preferringURI: nil)
         #expect(entries.first?.signature == "func run( x: Int, y: Int ) -> Int")
@@ -256,7 +266,9 @@ struct DocCommentIndexTests {
         try await index.update(files: [
             DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}"),
             DocIndexFile(
-                uri: "file:///repo/Sources/Foo.swift", content: "/// Foo.\nstruct Foo: Sendable {}")
+                uri: "file:///repo/Sources/Foo.swift",
+                content: "/// Foo.\nstruct Foo: Sendable {}"
+            )
         ])
         let entries = await index.documentation(forIdentifier: "Foo", preferringURI: nil)
         #expect(entries.count == 1)
@@ -280,15 +292,19 @@ struct DocCommentIndexTests {
         let index = DocCommentIndex()
         try await index.update(files: [
             DocIndexFile(
-                uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Old doc, no conformance.\nstruct Foo {}"
+                uri: "atelier-blob://deadbeef/Sources/Foo.swift",
+                content: "/// Old doc, no conformance.\nstruct Foo {}"
             ),
             DocIndexFile(
                 uri: "file:///repo/Sources/Foo.swift",
-                content: "/// New doc, now Sendable.\nstruct Foo: Sendable {}")
+                content: "/// New doc, now Sendable.\nstruct Foo: Sendable {}"
+            )
         ])
         // The query's own blob entry survives the dedupe and sorts first, despite a newer `file://` entry at its path.
         let entries = await index.documentation(
-            forIdentifier: "Foo", preferringURI: "atelier-blob://deadbeef/Sources/Foo.swift")
+            forIdentifier: "Foo",
+            preferringURI: "atelier-blob://deadbeef/Sources/Foo.swift"
+        )
         #expect(entries.count == 2)
         #expect(entries.first?.uri == "atelier-blob://deadbeef/Sources/Foo.swift")
         #expect(entries.first?.markdown == "Old doc, no conformance.")
@@ -312,7 +328,8 @@ extension DocCommentIndexTests {
                             }
                         }
                     }
-                    """)
+                    """
+            )
         ])
         let entries = await index.documentation(forIdentifier: "displayName", preferringURI: nil)
         #expect(entries.count == 1)

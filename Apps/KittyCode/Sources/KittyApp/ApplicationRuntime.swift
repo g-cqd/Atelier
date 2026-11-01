@@ -36,8 +36,11 @@ public final class ApplicationRuntime {
     /// A runtime whose pixel chrome follows the process environment and which installs process signal handlers.
     public convenience init(connection: any TerminalConnection, taskProvider: any TaskProvider = .default) {
         self.init(
-            connection: connection, taskProvider: taskProvider, environment: ProcessInfo.processInfo.environment,
-            makeSignals: { SignalHandler(onResize: $0, onShutdown: $1) })
+            connection: connection,
+            taskProvider: taskProvider,
+            environment: ProcessInfo.processInfo.environment,
+            makeSignals: { SignalHandler(onResize: $0, onShutdown: $1) }
+        )
     }
 
     /// A runtime whose pixel chrome follows `environment` rather than the process environment.
@@ -47,7 +50,9 @@ public final class ApplicationRuntime {
     ///   - environment: The variables that decide pixel chrome.
     ///   - makeSignals: Builds the session's resize and shutdown signal delivery.
     init(
-        connection: any TerminalConnection, taskProvider: any TaskProvider, environment: [String: String],
+        connection: any TerminalConnection,
+        taskProvider: any TaskProvider,
+        environment: [String: String],
         makeSignals: @escaping SignalSessionFactory
     ) {
         self.connection = connection
@@ -91,7 +96,9 @@ public final class ApplicationRuntime {
     /// signal handler, gives it the pixel chrome for the new size when the session draws pixel chrome, then renders
     /// and redraws the whole screen.
     private func resize(
-        _ pipeline: RenderPipeline, to reportedSize: TerminalSize, drawsPixelChrome: Bool,
+        _ pipeline: RenderPipeline,
+        to reportedSize: TerminalSize,
+        drawsPixelChrome: Bool,
         render: @MainActor (RenderPipeline) -> Void
     ) {
         let newSize = TerminalCapabilities.clampedSize(reportedSize)

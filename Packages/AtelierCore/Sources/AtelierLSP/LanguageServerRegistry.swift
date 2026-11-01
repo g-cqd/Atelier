@@ -49,7 +49,8 @@ public actor LanguageServerRegistry {
     ///     the server does not resolve there, which is cached.
     ///   - makeSession: The session over a configuration; a test's runs a scripted server rather than a process.
     public init(
-        admits: @escaping Admission, makeConfiguration: @escaping ConfigurationFactory,
+        admits: @escaping Admission,
+        makeConfiguration: @escaping ConfigurationFactory,
         makeSession: @escaping SessionFactory = { LanguageServerSession(configuration: $0) }
     ) {
         self.admits = admits
@@ -61,7 +62,9 @@ public actor LanguageServerRegistry {
     /// the server's root markers between the document and `ceiling`, or at `ceiling` when none does
     /// (``workspaceRoot(forDocumentAt:within:markers:)``); nil as ``session(forRoot:server:)`` answers it.
     public func session(
-        forDocumentAt document: URL, within ceiling: URL, server: LanguageServerDescriptor
+        forDocumentAt document: URL,
+        within ceiling: URL,
+        server: LanguageServerDescriptor
     ) async -> LanguageServerSession? {
         guard let canonicalCeiling = Self.canonicalRoot(ceiling) else { return nil }
         let root = Self.workspaceRoot(forDocumentAt: document, within: canonicalCeiling, markers: server.rootMarkers)
@@ -102,7 +105,10 @@ public actor LanguageServerRegistry {
     /// Publishes one initialization's outcome to its waiters. The new service is shut down instead when its entry
     /// was removed meanwhile, and dropped uncached when the root lost its admission during the initialization.
     private func publish(
-        _ service: LanguageServerSession?, key: Key, token: Int, admitted: Bool
+        _ service: LanguageServerSession?,
+        key: Key,
+        token: Int,
+        admitted: Bool
     ) async -> LanguageServerSession? {
         guard case .inProgress(let current, let waiters) = entries[key], current == token else {
             // `shutdown(root:)` or `shutdownAll()` removed the entry and already answered its waiters.

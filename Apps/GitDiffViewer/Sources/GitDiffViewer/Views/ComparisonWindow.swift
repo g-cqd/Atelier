@@ -28,7 +28,9 @@ struct ComparisonWindow: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     init(
-        configuration: LaunchConfiguration, recents: RecentComparisons, reader: any SourceReading,
+        configuration: LaunchConfiguration,
+        recents: RecentComparisons,
+        reader: any SourceReading,
         services: AppServices
     ) {
         self.configuration = configuration
@@ -39,7 +41,11 @@ struct ComparisonWindow: View {
         _settings = State(initialValue: windowSettings)
         _model = State(
             initialValue: DiffViewerModel(
-                settings: windowSettings, reader: reader, history: CommitHistory(runner: services.runner)))
+                settings: windowSettings,
+                reader: reader,
+                history: CommitHistory(runner: services.runner)
+            )
+        )
     }
 
     var body: some View {

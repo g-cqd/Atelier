@@ -41,7 +41,8 @@ struct LanguageDetectionByFileNameTests {
         ("#!/usr/bin/env lua", .lua), ("#!/usr/bin/env swift", .swift)
     ])
     func `an extensionless script takes the language of the interpreter its first line names`(
-        firstLine: String, language: Language
+        firstLine: String,
+        language: Language
     ) {
         #expect(Language(path: "deploy", firstLine: Substring(firstLine)) == language)
     }
@@ -83,9 +84,12 @@ struct LanguageDetectionByFileNameTests {
         arguments: [
             ("dir.d/deploy", "#!/bin/sh", Language.shell), ("dir.d/deploy", nil, .plain), (".", nil, .plain),
             ("foo.", nil, .plain), ("script.unknown", "#!/bin/sh", .plain)
-        ] as [(String, String?, Language)])
+        ] as [(String, String?, Language)]
+    )
     func `only the last path component decides whether a name has an extension`(
-        path: String, firstLine: String?, language: Language
+        path: String,
+        firstLine: String?,
+        language: Language
     ) {
         #expect(Language(path: path, firstLine: firstLine.map { Substring($0) }) == language)
     }

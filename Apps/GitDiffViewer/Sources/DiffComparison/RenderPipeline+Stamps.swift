@@ -24,8 +24,10 @@ extension RenderPipeline {
     func renderLayout(for target: Target) -> RenderLayout {
         showsChangesOnly(target)
             ? .changes(
-                context: layout.context, expansions: carriedExpansions(into: target),
-                wholeWhenUnchanged: !target.isCards)
+                context: layout.context,
+                expansions: carriedExpansions(into: target),
+                wholeWhenUnchanged: !target.isCards
+            )
             : .full
     }
 
@@ -41,8 +43,12 @@ extension RenderPipeline {
             ? Set(disclosedChanges.filter { $0.fileIndex == index }.map(\.changeIndex)) : []
         let folds = carries(index, into: target) ? foldedScopes.filter { $0.key.fileIndex == index } : [:]
         return Stamp(
-            configuration: configuration, showsChangesOnly: changesOnly, expansions: expansions, disclosed: disclosed,
-            folds: folds)
+            configuration: configuration,
+            showsChangesOnly: changesOnly,
+            expansions: expansions,
+            disclosed: disclosed,
+            folds: folds
+        )
     }
 
     /// The gap expansions `target` keeps: those of every file that stays at its index under the same path, even when

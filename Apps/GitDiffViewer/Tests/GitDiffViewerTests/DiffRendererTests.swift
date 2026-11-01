@@ -18,7 +18,10 @@ struct DiffRendererTests {
     @Test
     func `the changes layout keeps hunks with context and marks the hidden rows between them`() throws {
         let rendered = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            oldText: old,
+            newText: new,
+            language: .plain,
+            layout: .changes(context: 2, expansions: [:])
         )
         let unified = try #require(rendered.unified)
         #expect(unified.gaps.map(\.marker.hiddenRows) == [7, 10, 3])
@@ -32,26 +35,36 @@ struct DiffRendererTests {
     {
         let whole = try #require(
             DiffRenderer.render(
-                oldText: old, newText: old, language: .plain,
+                oldText: old,
+                newText: old,
+                language: .plain,
                 layout: .changes(context: 2, expansions: [:], wholeWhenUnchanged: true)
             )
-            .unified)
+            .unified
+        )
         #expect(whole.rows.count == 30)
         #expect(whole.gaps.isEmpty)
 
         let hidden = try #require(
             DiffRenderer.render(
-                oldText: old, newText: old, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: old,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         #expect(hidden.rows.isEmpty)
 
         let changed = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain,
+                oldText: old,
+                newText: new,
+                language: .plain,
                 layout: .changes(context: 2, expansions: [:], wholeWhenUnchanged: true)
             )
-            .unified)
+            .unified
+        )
         #expect(changed.gaps.map(\.marker.hiddenRows) == [7, 10, 3])
     }
 
@@ -59,9 +72,13 @@ struct DiffRendererTests {
     func `a hidden run takes no row of its own`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         // Two hunks: lines 8 to 12 with line 10 changed, then lines 23 to 27 with line 25 removed.
         #expect(rendered.rows.count == 11)
         #expect(rendered.lineStarts.count == 11)
@@ -73,9 +90,13 @@ struct DiffRendererTests {
     func `line numbers jump across a hidden run, on the boundary its gap lies on`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         let between = try #require(rendered.gaps.first { !$0.marker.isLeading && !$0.marker.isTrailing })
         #expect(rendered.rows[between.boundary - 1].oldNumber == 12)
         #expect(rendered.rows[between.boundary].oldNumber == 23)
@@ -85,9 +106,13 @@ struct DiffRendererTests {
     func `a trailing gap lies on the boundary below the last row`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         let last = try #require(rendered.gaps.last)
         #expect(last.marker.isTrailing)
         #expect(last.boundary == rendered.rows.count)
@@ -99,7 +124,11 @@ struct DiffRendererTests {
         let old = "line1\nline2AAAA\nline3\nline4\nline5\nline6AAAA\nline7\n"
         let new = "line1\nline2BBBB\nline3\nline4\nline5\nline6BBBB\nline7\n"
         let rendered = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
+            oldText: old,
+            newText: new,
+            language: .plain,
+            layout: .changes(context: 0, expansions: [:])
+        )
         // With no context, the rows of the two changes touch across the gap between them.
         #expect(rendered.splitChangeStarts == [0, 1])
         #expect(rendered.unifiedChangeStarts == [0, 2])
@@ -117,10 +146,14 @@ struct DiffRendererTests {
     func `a gap's band is exactly one row tall, whatever the line height`(multiple: Double) throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, lineHeightMultiple: multiple,
+                oldText: old,
+                newText: new,
+                language: .plain,
+                lineHeightMultiple: multiple,
                 layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         #expect(rendered.gapBandHeight == rendered.lineHeight)
     }
 
@@ -128,9 +161,13 @@ struct DiffRendererTests {
     func `a gap between two rows takes its band as the paragraph spacing of the row above`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         let between = try #require(rendered.gaps.first { !$0.marker.isLeading && !$0.marker.isTrailing })
         let after = spacings(of: rendered).after
 
@@ -143,9 +180,13 @@ struct DiffRendererTests {
     func `the bands of the gaps at the top and the end of the file lie outside the text`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         let spacing = spacings(of: rendered)
 
         #expect(rendered.bandAbove == rendered.gapBandHeight)
@@ -158,20 +199,29 @@ struct DiffRendererTests {
     func `the rows' unwrapped height counts the bands between them`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         #expect(
-            rendered.unwrappedTextHeight == CGFloat(rendered.rows.count) * rendered.lineHeight + rendered.gapBandHeight)
+            rendered.unwrappedTextHeight == CGFloat(rendered.rows.count) * rendered.lineHeight + rendered.gapBandHeight
+        )
     }
 
     @Test
     func `a gap offering no handle takes no band`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: old, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: old,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         #expect(rendered.gaps.map(\.hasBand) == [false])
         #expect(rendered.bandAbove == 0)
         #expect(rendered.unwrappedTextHeight == rendered.lineHeight)
@@ -180,7 +230,11 @@ struct DiffRendererTests {
     @Test
     func `both split panes take the same bands`() throws {
         let diff = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:]))
+            oldText: old,
+            newText: new,
+            language: .plain,
+            layout: .changes(context: 2, expansions: [:])
+        )
         let oldSide = try #require(diff.old)
         let newSide = try #require(diff.new)
 
@@ -193,7 +247,9 @@ struct DiffRendererTests {
     func `expanding a gap reveals its rows`() {
         let key = GapKey(fileIndex: 0, gapIndex: 0)
         let rendered = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain,
+            oldText: old,
+            newText: new,
+            language: .plain,
             layout: .changes(context: 2, expansions: [key: GapExpansion(below: 0, above: 4)])
         )
         #expect(rendered.unified?.gaps.first?.marker.hiddenRows == 3)
@@ -204,9 +260,13 @@ struct DiffRendererTests {
     func `a leading gap lies on the boundary above the first row`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         let first = try #require(rendered.gaps.first)
         #expect(first.boundary == 0)
         #expect(first.marker.isLeading)
@@ -216,7 +276,11 @@ struct DiffRendererTests {
     @Test
     func `the split panes record the same gaps on the same boundaries`() throws {
         let diff = DiffRenderer.render(
-            oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:]))
+            oldText: old,
+            newText: new,
+            language: .plain,
+            layout: .changes(context: 2, expansions: [:])
+        )
         let oldSide = try #require(diff.old)
         let newSide = try #require(diff.new)
         #expect(oldSide.gaps.count == 3)
@@ -227,9 +291,13 @@ struct DiffRendererTests {
     func `gaps looked up by boundary are those on the boundaries asked for`() throws {
         let rendered = try #require(
             DiffRenderer.render(
-                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+                oldText: old,
+                newText: new,
+                language: .plain,
+                layout: .changes(context: 2, expansions: [:])
             )
-            .unified)
+            .unified
+        )
         let boundaries = rendered.gaps.map(\.boundary)
         try #require(boundaries.count == 3)
         #expect(rendered.gaps(on: 0 ... 0).map(\.boundary) == [0])
@@ -261,8 +329,11 @@ struct DiffRendererTests {
         var options = DiffRenderer.Options()
         options.sides = [.unified]
         let rendered = DiffRenderer.renderCombined(
-            files: [FileDiffInput(title: "a", oldText: "x\n", newText: "y\n", language: .plain)], options: options,
-            context: 1, expansions: [:])
+            files: [FileDiffInput(title: "a", oldText: "x\n", newText: "y\n", language: .plain)],
+            options: options,
+            context: 1,
+            expansions: [:]
+        )
         #expect(rendered.unified != nil)
         #expect(rendered.old == nil)
         #expect(rendered.new == nil)
@@ -271,18 +342,26 @@ struct DiffRendererTests {
     @Test
     func `rendering is deterministic under concurrency`() async throws {
         let prepared = PreparedDiff(
-            FileDiffInput(title: "a", oldText: old, newText: new, language: .swift), granularity: .syntax)
+            FileDiffInput(title: "a", oldText: old, newText: new, language: .swift),
+            granularity: .syntax
+        )
         let layout = RenderLayout.changes(context: 2, expansions: [:])
         let results = try await mapConcurrently(Array(0 ..< 16), limit: 8) { _ in
             DiffRenderer.render(
-                prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false
+                prepared: [prepared],
+                options: DiffRenderer.Options(),
+                layout: layout,
+                withHeaders: false
             )
             .unified?
             .attributed.string
         }
         let reference =
             DiffRenderer.render(
-                prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false
+                prepared: [prepared],
+                options: DiffRenderer.Options(),
+                layout: layout,
+                withHeaders: false
             )
             .unified?
             .attributed.string

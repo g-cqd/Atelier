@@ -60,7 +60,8 @@ struct BidiControlTests {
     private func point(column: Int, in rendered: RenderedText) -> NSPoint {
         NSPoint(
             x: DiffPaneMetrics.lineFragmentPadding + (CGFloat(column) + 0.5) * columnWidth(of: rendered),
-            y: DiffPaneMetrics.containerInset + 0.5 * rendered.lineHeight)
+            y: DiffPaneMetrics.containerInset + 0.5 * rendered.lineHeight
+        )
     }
 
     // MARK: The rendered text
@@ -136,8 +137,10 @@ struct BidiControlTests {
     @Test
     func `the unified, old and new texts all show placeholders`() throws {
         let diff = DiffRenderer.render(
-            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n", newText: "abc\(Self.rlo)dXf\(Self.pdf)ghi\n",
-            language: .plain)
+            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n",
+            newText: "abc\(Self.rlo)dXf\(Self.pdf)ghi\n",
+            language: .plain
+        )
         let sides = try [#require(diff.unified), #require(diff.old), #require(diff.new)]
 
         for side in sides {
@@ -149,7 +152,11 @@ struct BidiControlTests {
     @Test
     func `a file title's bidi controls show as placeholders`() throws {
         let file = FileDiffInput(
-            title: "invoice\(Self.rlo)fdp.swift", oldText: "a\n", newText: "b\n", language: .plain)
+            title: "invoice\(Self.rlo)fdp.swift",
+            oldText: "a\n",
+            newText: "b\n",
+            language: .plain
+        )
         let rendered = try #require(DiffRenderer.renderCombined(files: [file], context: 1, expansions: [:]).unified)
 
         let titleRow = NSRange(location: 0, length: rendered.lineStarts[1] - 1)
@@ -225,7 +232,8 @@ struct BidiControlTests {
         let textView = try paneTextView(showing: rendered)
 
         let hit = try #require(
-            HoverHitTester.hit(at: point(column: 14, in: rendered), textView: textView, rendered: rendered))
+            HoverHitTester.hit(at: point(column: 14, in: rendered), textView: textView, rendered: rendered)
+        )
 
         #expect(hit.utf16Column == 14)
         #expect((rendered.attributed.string as NSString).substring(with: hit.identifierRange) == "alpha")
@@ -237,7 +245,8 @@ struct BidiControlTests {
         let textView = try paneTextView(showing: rendered)
 
         let hit = try #require(
-            HoverHitTester.hit(at: point(column: 4, in: rendered), textView: textView, rendered: rendered))
+            HoverHitTester.hit(at: point(column: 4, in: rendered), textView: textView, rendered: rendered)
+        )
 
         #expect(hit.utf16Column == 4)
     }
@@ -248,13 +257,19 @@ struct BidiControlTests {
     func `intraline emphasis on a line with a control lands on the changed character`() throws {
         // Only "d" changes, to "X", at column 4: the first character the override would reverse.
         let diff = DiffRenderer.render(
-            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n", newText: "abc\(Self.rlo)Xef\(Self.pdf)ghi\n",
-            language: .plain, granularity: .character)
+            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n",
+            newText: "abc\(Self.rlo)Xef\(Self.pdf)ghi\n",
+            language: .plain,
+            granularity: .character
+        )
         let new = try #require(diff.new)
         // The emphasis the diff's phases find, which the row's fragment draws from its decorations (PERF-09).
         let model = DiffModel(
-            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n", newText: "abc\(Self.rlo)Xef\(Self.pdf)ghi\n",
-            granularity: .character, tokenRanges: CodeTokenRanges())
+            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n",
+            newText: "abc\(Self.rlo)Xef\(Self.pdf)ghi\n",
+            granularity: .character,
+            tokenRanges: CodeTokenRanges()
+        )
         let emphasis = try #require(model.splitRows.first?.new?.emphasis)
         let decorations = DiffDecorations(new: .init(emphasis: [0: emphasis]), markVersion: 1)
         try #require(decorations.emphasis(of: try #require(new.rows.first), on: .new) == [4 ..< 5])

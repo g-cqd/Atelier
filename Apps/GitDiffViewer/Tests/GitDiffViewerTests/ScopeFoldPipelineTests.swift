@@ -19,8 +19,10 @@ struct ScopeFoldPipelineTests {
     private let store = SyntaxFactsStore()
     private let sut: RenderPipeline
     private static let pair = FilePair(
-        path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
-        new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1))
+        path: "a.swift",
+        old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+        new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1)
+    )
     /// The whole of `S`, lines 0 to 10 of the new side.
     private static let s = ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: 0)
     private static let revealed = GapKey(fileIndex: 0, gapIndex: 0)
@@ -29,8 +31,11 @@ struct ScopeFoldPipelineTests {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: store)
         let options = DiffRenderer.Options(sides: [.unified])
         sut = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: options,
-            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock(), store: store))
+            preparer: preparer,
+            taskProvider: taskProvider,
+            options: options,
+            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock(), store: store)
+        )
         sut.configure(options: options, context: 1, isolatesChanges: true)
         reader.blobContents["old"] = ScopeFoldRenderingTests.old
         reader.blobContents["new"] = ScopeFoldRenderingTests.new
@@ -38,8 +43,13 @@ struct ScopeFoldPipelineTests {
 
     private func render(_ pair: FilePair = Self.pair) async throws -> RenderedDiff {
         sut.render(
-            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+            .file(pair),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         return try #require(sut.file)
     }
@@ -98,10 +108,14 @@ struct ScopeFoldPipelineTests {
         sut.changeFolds(.fold([Self.s: 10, f: 3, g: 6]))
         // A comment above `g`: `S` reaches a line further, `f` stays, and line 4 no longer opens a scope.
         reader.blobContents["new2"] = ScopeFoldRenderingTests.new.replacingOccurrences(
-            of: "    func g", with: "    // g\n    func g")
+            of: "    func g",
+            with: "    // g\n    func g"
+        )
         let changed = FilePair(
-            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
-            new: SourceEntry(relativePath: "a.swift", blobID: "new2", size: 1))
+            path: "a.swift",
+            old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new2", size: 1)
+        )
 
         let reloaded = try await render(changed)
 

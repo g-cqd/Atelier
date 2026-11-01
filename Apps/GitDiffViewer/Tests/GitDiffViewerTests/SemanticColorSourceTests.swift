@@ -24,7 +24,8 @@ struct SemanticColorSourceTests {
                 makeConfiguration: { root, _ in
                     self.roots.withLock { $0.append(root) }
                     return nil
-                })
+                }
+            )
         }
     }
 
@@ -38,7 +39,9 @@ struct SemanticColorSourceTests {
 
     /// A source reading `shownRight`, the right side's files ``entries``, over a registry that records into `log`.
     private func makeSource(
-        shownRight: ComparisonSource?, log: ConfigurationLog, enabled: Bool = true
+        shownRight: ComparisonSource?,
+        log: ConfigurationLog,
+        enabled: Bool = true
     ) -> SemanticColorSource {
         let source = SemanticColorSource()
         source.registry = log.registry()
@@ -49,7 +52,9 @@ struct SemanticColorSourceTests {
 
     private func makeRepository() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-semantic-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-semantic-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
     }
@@ -66,7 +71,10 @@ struct SemanticColorSourceTests {
 
         #expect(log.all == [canonical])
         let location = SemanticColorSource.onDiskLocation(
-            of: Self.revision("new"), shownRight: .directory(root), entries: Self.entries)
+            of: Self.revision("new"),
+            shownRight: .directory(root),
+            entries: Self.entries
+        )
         #expect(location?.document == canonical.appending(path: Self.path))
     }
 

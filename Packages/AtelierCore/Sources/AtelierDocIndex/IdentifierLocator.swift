@@ -70,7 +70,9 @@ struct ParsedSource: Sendable {
         let lineText = content[lineStart ..< lineEnd]
         guard
             let columnIndex = lineText.utf16.index(
-                lineText.utf16.startIndex, offsetBy: utf16Column, limitedBy: lineText.utf16.endIndex
+                lineText.utf16.startIndex,
+                offsetBy: utf16Column,
+                limitedBy: lineText.utf16.endIndex
             )
         else { return nil }
         return lineStarts[line] + lineText.utf8.distance(from: lineText.utf8.startIndex, to: columnIndex)

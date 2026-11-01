@@ -103,8 +103,12 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
                 context.setFillColor(color.cgColor)
                 context.fill(
                     CGRect(
-                        x: point.x + bounds.minX + start, y: point.y + bounds.minY, width: end - start,
-                        height: bounds.height))
+                        x: point.x + bounds.minX + start,
+                        y: point.y + bounds.minY,
+                        width: end - start,
+                        height: bounds.height
+                    )
+                )
                 context.restoreGState()
             }
         }
@@ -120,8 +124,12 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
         let y = point.y + bounds.maxY - 2
         guard !row.squiggles.isEmpty else {
             drawSquiggle(
-                in: context, color: color(for: row.severity), x0: point.x + bounds.minX,
-                x1: point.x + bounds.minX + bounds.width, y: y)
+                in: context,
+                color: color(for: row.severity),
+                x0: point.x + bounds.minX,
+                x1: point.x + bounds.minX + bounds.width,
+                y: y
+            )
             return
         }
         let length = line.characterRange.length
@@ -129,8 +137,12 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
             let startX = line.locationForCharacter(at: squiggle.start).x
             let endX = line.locationForCharacter(at: min(squiggle.end ?? length, length)).x
             drawSquiggle(
-                in: context, color: color(for: squiggle.severity), x0: point.x + bounds.minX + startX,
-                x1: point.x + bounds.minX + endX, y: y)
+                in: context,
+                color: color(for: squiggle.severity),
+                x0: point.x + bounds.minX + startX,
+                x1: point.x + bounds.minX + endX,
+                y: y
+            )
         }
     }
 
@@ -174,8 +186,11 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
         let row = backgroundRect(origin: origin)
         let bandTop = origin.y + layoutFragmentFrame.height - bandBelow
         return CGRect(
-            x: row.minX, y: bandTop + GapHandleLayout.separatorOffset(bandHeight: bandBelow), width: row.width,
-            height: 1)
+            x: row.minX,
+            y: bandTop + GapHandleLayout.separatorOffset(bandHeight: bandBelow),
+            width: row.width,
+            height: 1
+        )
     }
 
     private static let horizontalOverdraw: CGFloat = 8

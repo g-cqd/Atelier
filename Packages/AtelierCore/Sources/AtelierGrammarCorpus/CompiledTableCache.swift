@@ -154,7 +154,10 @@ extension CompiledTableCache {
             return nil
         }
         return Data(
-            bytesNoCopy: memory, count: size, deallocator: .custom { pointer, count in _ = munmap(pointer, count) })
+            bytesNoCopy: memory,
+            count: size,
+            deallocator: .custom { pointer, count in _ = munmap(pointer, count) }
+        )
     }
 }
 

@@ -17,7 +17,9 @@ struct LexicalToken: Sendable, Equatable {
     /// What choosing between this token and another reads of it.
     var priority: LexTokenPriority {
         LexTokenPriority(
-            completionPrecedence: completionPrecedence, implicitPrecedence: implicitPrecedence, isImmediate: isImmediate
+            completionPrecedence: completionPrecedence,
+            implicitPrecedence: implicitPrecedence,
+            isImmediate: isImmediate
         )
     }
 }
@@ -115,9 +117,13 @@ struct TokenNFA: Sendable, Equatable, Codable {
                 for scalar in value.unicodeScalars.reversed() {
                     start = add(
                         .advance(
-                            ScalarRanges(scalar: scalar.value), next: start, precedence: context.precedence,
-                            isSeparator: context.isSeparator),
-                        owner: context.owner)
+                            ScalarRanges(scalar: scalar.value),
+                            next: start,
+                            precedence: context.precedence,
+                            isSeparator: context.isSeparator
+                        ),
+                        owner: context.owner
+                    )
                 }
                 return start
             case .pattern(let pattern):
@@ -164,7 +170,8 @@ struct TokenNFA: Sendable, Equatable, Codable {
             case .characters(let characters):
                 return add(
                     .advance(characters, next: next, precedence: context.precedence, isSeparator: context.isSeparator),
-                    owner: context.owner)
+                    owner: context.owner
+                )
             case .sequence(let items):
                 var start = next
                 for item in items.reversed() {

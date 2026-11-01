@@ -39,7 +39,9 @@ struct TabBarView: View {
                     FileListTab(isActive: model.tabs.isShowingFileList) { model.showFileList() }
                     ForEach(model.tabs.tabs) { tab in
                         TabItem(
-                            tab: tab, title: model.selectionTitle(tab.path), detail: model.selectionDetail(tab.path),
+                            tab: tab,
+                            title: model.selectionTitle(tab.path),
+                            detail: model.selectionDetail(tab.path),
                             isActive: tab.id == model.tabs.activeID,
                             isFolder: !model.selectionIsFile(tab.path),
                             glyph: model.selectionStatus(tab.path).flatMap(ChangeGlyph.init),
@@ -153,7 +155,11 @@ private struct TabItem: View {
 
     var body: some View {
         let appearance = TabAppearance.resolve(
-            isPinned: tab.isPinned, isActive: isActive, isHovering: isHovering, isHoveringClose: isHoveringClose)
+            isPinned: tab.isPinned,
+            isActive: isActive,
+            isHovering: isHovering,
+            isHoveringClose: isHoveringClose
+        )
         HStack(spacing: 5) {
             slot(closeDiscOpacity: appearance.closeDiscOpacity)
                 .frame(width: ChangeGlyph.size, height: ChangeGlyph.size)

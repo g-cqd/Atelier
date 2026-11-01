@@ -116,8 +116,11 @@ package final class RenderPipeline {
     let decorator: DiffDecorator
 
     package init(
-        preparer: DiffPreparer, taskProvider: any TaskProvider, options: DiffRenderer.Options,
-        renderer: PaneRenderer = .live, decorator: DiffDecorator = DiffDecorator()
+        preparer: DiffPreparer,
+        taskProvider: any TaskProvider,
+        options: DiffRenderer.Options,
+        renderer: PaneRenderer = .live,
+        decorator: DiffDecorator = DiffDecorator()
     ) {
         self.preparer = preparer
         self.taskProvider = taskProvider
@@ -155,8 +158,12 @@ package final class RenderPipeline {
     /// way a pair with the same path, blobs and diff options as a published one borrows its prepared diff, and its
     /// rendered file when it keeps its place under a current stamp, so the views keyed on it never rebuild.
     package func render(
-        _ target: Target, left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
-        heuristics: DiffHeuristics, keepingPublished: Bool
+        _ target: Target,
+        left: ComparisonSource,
+        right: ComparisonSource,
+        granularity: IntralineGranularity,
+        heuristics: DiffHeuristics,
+        keepingPublished: Bool
     ) {
         task?.cancel()
         preparer.cancelPrefetch()
@@ -164,7 +171,10 @@ package final class RenderPipeline {
         isRendering = true
         error = nil
         let inputs = RenderInputs(
-            sources: Sources(left: left, right: right), granularity: granularity, heuristics: heuristics)
+            sources: Sources(left: left, right: right),
+            granularity: granularity,
+            heuristics: heuristics
+        )
         holdFolds(forContentOf: target)
         let loan = self.loan(for: target, inputs: inputs)
         let keeps = keepingPublished && (file != nil || !cards.isEmpty)
@@ -187,8 +197,12 @@ package final class RenderPipeline {
             publishedHeuristics = heuristics
         }
         let job = RenderJob(
-            target: target, inputs: inputs, generation: generation, keepingScroll: loan.sameFilePath,
-            loan: keeps ? nil : loan)
+            target: target,
+            inputs: inputs,
+            generation: generation,
+            keepingScroll: loan.sameFilePath,
+            loan: keeps ? nil : loan
+        )
         if keeps || lendsFiles {
             renderWhole(job)
         } else {

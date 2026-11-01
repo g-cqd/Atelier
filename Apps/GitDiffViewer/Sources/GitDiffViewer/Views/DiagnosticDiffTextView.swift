@@ -35,18 +35,28 @@ struct DiagnosticDiffTextView: View {
 
     var body: some View {
         DiffTextView(
-            rendered: rendered, gutter: gutter, keepsScrollPosition: keepsScrollPosition, wrapsLines: wrapsLines,
-            wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
-            scrollRequest: scrollRequest, splitController: splitController, onGapDrag: onGapDrag,
-            onChangeToggle: { model.toggleChange($0) }, onDisplayed: onDisplayed,
+            rendered: rendered,
+            gutter: gutter,
+            keepsScrollPosition: keepsScrollPosition,
+            wrapsLines: wrapsLines,
+            wrapColumn: wrapColumn,
+            showsMinimap: showsMinimap,
+            syncsScrolling: syncsScrolling,
+            scrollRequest: scrollRequest,
+            splitController: splitController,
+            onGapDrag: onGapDrag,
+            onChangeToggle: { model.toggleChange($0) },
+            onDisplayed: onDisplayed,
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: diagnostics.hoverResolver(docs: model.hoverDocs, palette: rendered.palette),
             hoverPanelMaterial: model.settings.hoverPanelMaterial,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
             diagnosticsVersion: diagnostics.version,
             onDiagnosticClick: diagnostics.showFindings,
-            scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath,
-            scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges,
+            scrollMemory: model.scrollMemory,
+            scrollMemoryPath: scrollMemoryPath,
+            scrollsPastEnd: model.settings.scrollsPastEnd,
+            bouncesAtEdges: model.settings.bouncesAtEdges,
             underBars: underBars
         )
         .decorated(with: model.decorations(for: rendered), viewport: model.decorationViewport)

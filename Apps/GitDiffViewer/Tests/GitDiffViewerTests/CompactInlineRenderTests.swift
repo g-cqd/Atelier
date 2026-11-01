@@ -18,15 +18,22 @@ struct CompactInlineRenderTests {
     }()
 
     private static func render(
-        disclosing disclosed: Set<Int> = [], layout: RenderLayout = .full, compact: Bool = true
+        disclosing disclosed: Set<Int> = [],
+        layout: RenderLayout = .full,
+        compact: Bool = true
     ) throws -> RenderedText {
         let prepared = PreparedDiff(
-            FileDiffInput(title: "", oldText: sides.old, newText: sides.new, language: .plain), granularity: .word)
+            FileDiffInput(title: "", oldText: sides.old, newText: sides.new, language: .plain),
+            granularity: .word
+        )
         let options = DiffRenderer.Options(
-            sides: [.unified], compactsInline: compact,
-            disclosedChanges: Set(disclosed.map { ChangeKey(fileIndex: 0, changeIndex: $0) }))
+            sides: [.unified],
+            compactsInline: compact,
+            disclosedChanges: Set(disclosed.map { ChangeKey(fileIndex: 0, changeIndex: $0) })
+        )
         return try #require(
-            DiffRenderer.render(prepared: [prepared], options: options, layout: layout, withHeaders: false).unified)
+            DiffRenderer.render(prepared: [prepared], options: options, layout: layout, withHeaders: false).unified
+        )
     }
 
     private static func lines(of text: RenderedText) -> [String] {
@@ -111,10 +118,14 @@ struct CompactInlineRenderTests {
     func `each change starts where navigation lands: its first row, or the row after a folded removal`() throws {
         let prepared = PreparedDiff(
             FileDiffInput(title: "", oldText: Self.sides.old, newText: Self.sides.new, language: .plain),
-            granularity: .word)
+            granularity: .word
+        )
         let diff = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
-            layout: .full, withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .full,
+            withHeaders: false
+        )
 
         #expect(diff.unifiedChangeStarts == [4, 11, 19])
     }
@@ -122,13 +133,18 @@ struct CompactInlineRenderTests {
     @Test
     func `a file with no new line shows its changes disclosed`() throws {
         let prepared = PreparedDiff(
-            FileDiffInput(title: "", oldText: "a\nb\n", newText: "", language: .plain), granularity: .word)
+            FileDiffInput(title: "", oldText: "a\nb\n", newText: "", language: .plain),
+            granularity: .word
+        )
         let text = try #require(
             DiffRenderer.render(
-                prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
-                layout: .full, withHeaders: false
+                prepared: [prepared],
+                options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+                layout: .full,
+                withHeaders: false
             )
-            .unified)
+            .unified
+        )
 
         #expect(text.rows.map(\.kind) == [.removed, .removed])
         #expect(text.changes.map(\.isDisclosed) == [true])

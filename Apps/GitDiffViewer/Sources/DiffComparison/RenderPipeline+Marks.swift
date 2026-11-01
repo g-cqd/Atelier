@@ -20,7 +20,9 @@ extension RenderPipeline {
                     await self.land(found, for: diff.id, stamp: stamp)
                 }
                 self.decorator.endMarks(diff.id, cancelled: Task.isCancelled)
-            }, for: diff.id)
+            },
+            for: diff.id
+        )
     }
 
     /// The changes of `file` whose lines a pane shows, or that lie around the first change when none reports its rows.
@@ -47,7 +49,9 @@ extension RenderPipeline {
     /// ``marksDeadline`` passes on `clock`, whichever comes first.
     @concurrent
     static func findMarks(
-        of diff: PreparedDiff, first: [Int], clock: any Clock<Duration>,
+        of diff: PreparedDiff,
+        first: [Int],
+        clock: any Clock<Duration>,
         land: @escaping @Sendable (MarksFound) async -> Void
     ) async {
         await withinDeadline(marksDeadline, on: clock) { await findEveryMark(of: diff, first: first, land: land) }
@@ -56,7 +60,9 @@ extension RenderPipeline {
     /// Runs `work` until it ends or `deadline` passes on `clock`, whichever comes first; past the deadline `work` is
     /// cancelled, and keeps whatever it handed on before.
     nonisolated static func withinDeadline(
-        _ deadline: Duration, on clock: any Clock<Duration>, _ work: @escaping @Sendable () async -> Void
+        _ deadline: Duration,
+        on clock: any Clock<Duration>,
+        _ work: @escaping @Sendable () async -> Void
     ) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await work() }
@@ -70,7 +76,9 @@ extension RenderPipeline {
     /// The moved lines, then the emphasis of `first`, then of the other changes a chunk at a time; stops at the first
     /// check after its task is cancelled.
     private nonisolated static func findEveryMark(
-        of diff: PreparedDiff, first: [Int], land: @Sendable (MarksFound) async -> Void
+        of diff: PreparedDiff,
+        first: [Int],
+        land: @Sendable (MarksFound) async -> Void
     ) async {
         let model = diff.model
         let structure = model.structure
@@ -86,8 +94,15 @@ extension RenderPipeline {
         for chunk in chunks {
             guard
                 let emphasis = try? await IntralineEmphasis.emphasis(
-                    for: chunk, in: structure, pairs: model.changePairs, old: old, new: new,
-                    granularity: diff.granularity, refiners: diff.pipeline.intralineRefiners, tokens: tokens)
+                    for: chunk,
+                    in: structure,
+                    pairs: model.changePairs,
+                    old: old,
+                    new: new,
+                    granularity: diff.granularity,
+                    refiners: diff.pipeline.intralineRefiners,
+                    tokens: tokens
+                )
             else { return }
             await land(byLine(emphasis, in: model))
         }

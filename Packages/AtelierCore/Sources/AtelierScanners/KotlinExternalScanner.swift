@@ -73,7 +73,8 @@ public struct KotlinExternalScanner: GrammarExternalScanner {
     }
 
     private mutating func scanStringAndTrailingTokens(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool]
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool]
     ) -> Bool {
         // Content or end.
         if validSymbols[TokenType.stringContent.rawValue] {

@@ -19,9 +19,13 @@ package enum DiffRenderer {
         package var foldedScopes: [ScopeFoldKey: Int] = [:]
 
         package init(
-            granularity: IntralineGranularity = .word, palette: DiffPalette = .system, lineHeightMultiple: Double = 0,
-            sides: Set<RenderedSide> = [.unified, .old, .new], compactsInline: Bool = false,
-            disclosedChanges: Set<ChangeKey> = [], foldedScopes: [ScopeFoldKey: Int] = [:]
+            granularity: IntralineGranularity = .word,
+            palette: DiffPalette = .system,
+            lineHeightMultiple: Double = 0,
+            sides: Set<RenderedSide> = [.unified, .old, .new],
+            compactsInline: Bool = false,
+            disclosedChanges: Set<ChangeKey> = [],
+            foldedScopes: [ScopeFoldKey: Int] = [:]
         ) {
             self.foldedScopes = foldedScopes
             self.granularity = granularity
@@ -44,14 +48,20 @@ package enum DiffRenderer {
     ) -> RenderedDiff {
         let options = Options(granularity: granularity, palette: palette, lineHeightMultiple: lineHeightMultiple)
         let prepared = PreparedDiff(
-            FileDiffInput(title: "", oldText: oldText, newText: newText, language: language), granularity: granularity)
+            FileDiffInput(title: "", oldText: oldText, newText: newText, language: language),
+            granularity: granularity
+        )
         return render(prepared: [prepared], options: options, layout: layout, withHeaders: false)
     }
 
     /// Renders prepared files one after another; with headers each file is introduced by a row with its title.
     /// Gap keys count files from `firstFileIndex`, so files rendered separately keep distinct keys.
     package static func render(
-        prepared: [PreparedDiff], options: Options, layout: RenderLayout, withHeaders: Bool, firstFileIndex: Int = 0
+        prepared: [PreparedDiff],
+        options: Options,
+        layout: RenderLayout,
+        withHeaders: Bool,
+        firstFileIndex: Int = 0
     ) -> RenderedDiff {
         var unifiedRows: [RenderRow] = []
         var splitRows: [RenderRow] = []
@@ -68,7 +78,12 @@ package enum DiffRenderer {
             let unified =
                 options.compactsInline
                 ? compactRows(
-                    of: file, fileIndex: index, layout: layout, header: header, disclosed: options.disclosedChanges)
+                    of: file,
+                    fileIndex: index,
+                    layout: layout,
+                    header: header,
+                    disclosed: options.disclosedChanges
+                )
                 : rows(of: file, fileIndex: index, layout: layout, header: header, split: false)
             let split = rows(of: file, fileIndex: index, layout: layout, header: header, split: true)
             unifiedOpen += unified
@@ -97,12 +112,18 @@ package enum DiffRenderer {
 
     /// Convenience for tests and callers holding raw inputs.
     package static func renderCombined(
-        files: [FileDiffInput], options: Options = Options(), context: Int, expansions: [GapKey: GapExpansion]
+        files: [FileDiffInput],
+        options: Options = Options(),
+        context: Int,
+        expansions: [GapKey: GapExpansion]
     ) -> RenderedDiff {
         let prepared = files.map { PreparedDiff($0, granularity: options.granularity) }
         return render(
-            prepared: prepared, options: options, layout: .changes(context: context, expansions: expansions),
-            withHeaders: true)
+            prepared: prepared,
+            options: options,
+            layout: .changes(context: context, expansions: expansions),
+            withHeaders: true
+        )
     }
 
     // MARK: Row selection
@@ -137,9 +158,14 @@ package enum DiffRenderer {
                 }
                 let fileExpansions = Dictionary(
                     uniqueKeysWithValues: expansions.filter { $0.key.fileIndex == fileIndex }
-                        .map { ($0.key.gapIndex, $0.value) })
+                        .map { ($0.key.gapIndex, $0.value) }
+                )
                 let layout = HunkLayout.layout(
-                    changeRanges: changeRanges, rowCount: all.count, context: context, expansions: fileExpansions)
+                    changeRanges: changeRanges,
+                    rowCount: all.count,
+                    context: context,
+                    expansions: fileExpansions
+                )
                 var cursor = 0
                 // Gap keys follow the base hunks, so a gap keeps its key when an expansion merges hunks around it.
                 for hunk in layout.hunks {
@@ -149,8 +175,11 @@ package enum DiffRenderer {
                                 GapMarker(
                                     key: GapKey(fileIndex: fileIndex, gapIndex: hunk.firstBase),
                                     hiddenRows: hunk.rows.lowerBound - cursor,
-                                    isLeading: hunk.firstBase == 0, isTrailing: false
-                                )))
+                                    isLeading: hunk.firstBase == 0,
+                                    isTrailing: false
+                                )
+                            )
+                        )
                     }
                     rows += all[hunk.rows].map { .diff($0, fileIndex: fileIndex, file: file) }
                     cursor = hunk.rows.upperBound
@@ -161,8 +190,11 @@ package enum DiffRenderer {
                             GapMarker(
                                 key: GapKey(fileIndex: fileIndex, gapIndex: layout.baseCount),
                                 hiddenRows: all.count - cursor,
-                                isLeading: layout.hunks.isEmpty, isTrailing: true
-                            )))
+                                isLeading: layout.hunks.isEmpty,
+                                isTrailing: true
+                            )
+                        )
+                    )
                 }
         }
         return rows
@@ -193,46 +225,33 @@ package enum DiffRenderer {
                 case .folded(let diffRow, let fileIndex, let file):
                     // The line as the new file reads: no tint and no emphasis, numbered on the new side alone.
                     if let line = shownLine(of: diffRow, in: file, side: side) {
-                        text.append(contentsOf: placeholders.reveal(line, at: offset))
-                        length = line.utf16.count
-                        for unit in line.utf16 where unit == 9 { tabs += 1 }
+                        (length, tabs) = appendShown(line, at: offset, to: &text, placeholders: &placeholders)
                     }
-                    metas.append(
-                        RowMeta(
-                            kind: .context, oldNumber: nil, newNumber: diffRow.new.map { $0.index + 1 },
-                            fileIndex: fileIndex))
+                    metas.append(meta(of: diffRow, kind: .context, numbersOld: false, fileIndex: fileIndex))
                 case .diff(let diffRow, let fileIndex, let file):
                     let line = shownLine(of: diffRow, in: file, side: side)
                     if let line {
-                        text.append(contentsOf: placeholders.reveal(line, at: offset))
-                        length = line.utf16.count
-                        for unit in line.utf16 where unit == 9 { tabs += 1 }
+                        (length, tabs) = appendShown(line, at: offset, to: &text, placeholders: &placeholders)
                     }
-                    metas.append(
-                        RowMeta(
-                            kind: displayedKind(of: diffRow, side: side, hasLine: line != nil),
-                            oldNumber: diffRow.old.map { $0.index + 1 }, newNumber: diffRow.new.map { $0.index + 1 },
-                            fileIndex: fileIndex))
+                    let kind = displayedKind(of: diffRow, side: side, hasLine: line != nil)
+                    metas.append(meta(of: diffRow, kind: kind, numbersOld: true, fileIndex: fileIndex))
                 case .gap(let marker):
                     // The rows it hides take none of their own: the gap lies on the boundary between the rows
                     // around them (book DIFF-02).
                     gaps.append(RenderedGap(boundary: metas.count, marker: marker))
                     continue
                 case .header(let title, let fileIndex):
-                    text.append(contentsOf: placeholders.reveal(Substring(title), at: offset))
-                    length = title.utf16.count
-                    for unit in title.utf16 where unit == 9 { tabs += 1 }
+                    (length, tabs) = appendShown(Substring(title), at: offset, to: &text, placeholders: &placeholders)
                     metas.append(RowMeta(kind: .header, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
                 case .scopeFold(let band, let fileIndex):
                     let shown = band.text(on: side)
-                    text.append(contentsOf: placeholders.reveal(Substring(shown.text), at: offset))
-                    length = shown.text.utf16.count
-                    for unit in shown.text.utf16 where unit == 9 { tabs += 1 }
-                    folds.append(
-                        RenderedFold(
-                            key: band.key, lastLine: band.lastLine, firstRow: metas.count - 1, bandRow: metas.count,
-                            holdsChange: band.holdsChange,
-                            marker: (offset + shown.marker.lowerBound) ..< (offset + shown.marker.upperBound)))
+                    (length, tabs) = appendShown(
+                        Substring(shown.text),
+                        at: offset,
+                        to: &text,
+                        placeholders: &placeholders
+                    )
+                    folds.append(fold(band, marker: shown.marker, at: offset, row: metas.count))
                     metas.append(RowMeta(kind: .context, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
             }
             text.append("\n")
@@ -247,92 +266,27 @@ package enum DiffRenderer {
         }
 
         let styled = attributed(
-            text, placeholders: placeholders, metas: metas, lineStarts: lineStarts, options: options)
+            text,
+            placeholders: placeholders,
+            metas: metas,
+            lineStarts: lineStarts,
+            options: options
+        )
         styleFoldMarkers(folds, palette: options.palette, in: styled.attributed)
         addBands(of: gaps, lineStarts: lineStarts, lineHeight: styled.lineHeight, to: styled.attributed)
         return RenderedText(
-            side: side, palette: options.palette, attributed: styled.attributed, rows: metas, gaps: gaps,
-            lineStarts: lineStarts, longestLine: longestLine, baselineOffset: styled.baselineOffset,
-            lineHeight: styled.lineHeight, changes: changes, folds: folds
+            side: side,
+            palette: options.palette,
+            attributed: styled.attributed,
+            rows: metas,
+            gaps: gaps,
+            lineStarts: lineStarts,
+            longestLine: longestLine,
+            baselineOffset: styled.baselineOffset,
+            lineHeight: styled.lineHeight,
+            changes: changes,
+            folds: folds
         )
-    }
-
-    /// Applies the palette to the assembled text: font, the text colour, paragraph style, the placeholders of the bidi
-    /// controls the rows show, which keep the source's offsets, and bold headers. The text is plain (PERF-09 stage 0):
-    /// syntax colour and emphasis are drawn over it once they land, and change no layout (`DiffDecorations`).
-    private static func attributed(
-        _ text: String, placeholders: BidiControls.Placeholders, metas: [RowMeta], lineStarts: [Int], options: Options
-    ) -> (attributed: NSMutableAttributedString, baselineOffset: CGFloat, lineHeight: CGFloat) {
-        let palette = options.palette
-        let spaceWidth = (" " as NSString).size(withAttributes: [.font: palette.font]).width
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.tabStops = []
-        paragraphStyle.defaultTabInterval = 4 * spaceWidth
-        paragraphStyle.headIndent = 2 * spaceWidth
-        // A taller line gets all of its extra space above the glyphs, which leaves the text on the floor of its
-        // row. The layout keeps it that way, so heights, hit testing and the baseline TextKit reports all stay
-        // consistent, and the panes raise the glyphs by half the extra when they draw them. A baseline offset
-        // would be the obvious tool and is the wrong one: it feeds back into the line height it is measured from.
-        let multiple = max(options.lineHeightMultiple > 0 ? options.lineHeightMultiple : palette.lineHeightMultiple, 1)
-        paragraphStyle.lineHeightMultiple = multiple
-        let baselineOffset = (multiple - 1) * palette.defaultLineHeight / 2
-
-        let attributed = NSMutableAttributedString(
-            string: text,
-            attributes: [.font: palette.font, .foregroundColor: palette.textColor, .paragraphStyle: paragraphStyle]
-        )
-        attributed.beginEditing()
-        placeholders.apply(to: attributed, palette: palette)
-        let boldFont =
-            NSFont(descriptor: palette.font.fontDescriptor.withSymbolicTraits(.bold), size: palette.font.pointSize)
-            ?? palette.font
-        for (index, meta) in metas.enumerated() where meta.kind == .header {
-            let end = index + 1 < lineStarts.count ? lineStarts[index + 1] - 1 : attributed.length
-            attributed.addAttribute(
-                .font, value: boldFont, range: NSRange(location: lineStarts[index], length: end - lineStarts[index]))
-        }
-        attributed.endEditing()
-
-        return (attributed, baselineOffset, multiple * palette.defaultLineHeight)
-    }
-
-    /// Gives each gap between two rows its empty band (book DIFF-02), as the paragraph spacing of the row above it,
-    /// newline and all. The bands above the first row and below the last are the views' to keep: TextKit ignores the
-    /// spacing before a text's first paragraph and after its last.
-    private static func addBands(
-        of gaps: [RenderedGap], lineStarts: [Int], lineHeight: CGFloat, to text: NSMutableAttributedString
-    ) {
-        for gap in gaps where gap.hasBand && gap.boundary > 0 && gap.boundary < lineStarts.count {
-            // A row before another ends with its newline, so it has a unit to read its style from.
-            let start = lineStarts[gap.boundary - 1]
-            guard let style = text.attribute(.paragraphStyle, at: start, effectiveRange: nil) as? NSParagraphStyle,
-                let banded = style.mutableCopy() as? NSMutableParagraphStyle
-            else { continue }
-            banded.paragraphSpacing = RenderedText.gapBandHeight(lineHeight: lineHeight)
-            text.addAttribute(
-                .paragraphStyle, value: banded,
-                range: NSRange(location: start, length: lineStarts[gap.boundary] - start))
-        }
-    }
-
-    /// The source line `row` shows on `side`: a unified row its new line, or its old one when it has no new line.
-    private static func shownLine(of row: DiffRow, in file: PreparedDiff, side: RenderedSide) -> Substring? {
-        let old = row.old.map { file.model.oldLines[$0.index] }
-        let new = row.new.map { file.model.newLines[$0.index] }
-        switch side {
-            case .unified: return new ?? old
-            case .old: return old
-            case .new: return new
-        }
-    }
-
-    private static func displayedKind(of row: DiffRow, side: RenderedSide, hasLine: Bool) -> RowKind {
-        guard hasLine else { return .filler }
-        switch (row.kind, side) {
-            case (.modified, .old): return .removed
-            case (.modified, .new): return .added
-            default: return row.kind
-        }
     }
 }
 

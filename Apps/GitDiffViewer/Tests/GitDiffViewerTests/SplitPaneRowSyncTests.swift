@@ -13,14 +13,16 @@ struct SplitPaneRowSyncTests {
     /// deep row lies differ by a line for each long line above it, which one shared offset would show as rows apart.
     @Test(arguments: [PaneLayout.sideBySide, .stacked], [false, true])
     func `scrolled deep, the other pane shows the row this one shows at its top, as far into it`(
-        layout: PaneLayout, wrapsLines: Bool
+        layout: PaneLayout,
+        wrapsLines: Bool
     ) throws {
         let sut = HostedPanes(showing: .longLines(600), layout: layout, wrapsLines: wrapsLines, underBars: 40)
         let first = try #require(try sut.panes().first)
         let layoutManager = try #require(first.textView.textLayoutManager)
         let content = try #require(layoutManager.textContentManager)
         let middle = try #require(
-            content.location(layoutManager.documentRange.location, offsetBy: first.rendered.lineStarts[300]))
+            content.location(layoutManager.documentRange.location, offsetBy: first.rendered.lineStarts[300])
+        )
         let above = try #require(NSTextRange(location: layoutManager.documentRange.location, end: middle))
         layoutManager.ensureLayout(for: above)
 
@@ -43,14 +45,18 @@ struct SplitPaneRowSyncTests {
         throws
     {
         let sut = HostedPanes(
-            showing: .longLines(600, foldedFrom: 20, through: 200), layout: .sideBySide, wrapsLines: false)
+            showing: .longLines(600, foldedFrom: 20, through: 200),
+            layout: .sideBySide,
+            wrapsLines: false
+        )
         let first = try #require(try sut.panes().first)
         let band = try #require(first.rendered.folds.first?.bandRow)
         for pane in try sut.panes() { #expect(pane.rendered.folds.map(\.bandRow) == [band]) }
         let layoutManager = try #require(first.textView.textLayoutManager)
         let content = try #require(layoutManager.textContentManager)
         let middle = try #require(
-            content.location(layoutManager.documentRange.location, offsetBy: first.rendered.lineStarts[band + 150]))
+            content.location(layoutManager.documentRange.location, offsetBy: first.rendered.lineStarts[band + 150])
+        )
         let above = try #require(NSTextRange(location: layoutManager.documentRange.location, end: middle))
         layoutManager.ensureLayout(for: above)
 

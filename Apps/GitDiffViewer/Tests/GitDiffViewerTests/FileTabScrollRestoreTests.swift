@@ -197,8 +197,11 @@ private final class HostedTabPane {
         self.memory = memory
         host = NSHostingView(rootView: Slot())
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
     }
@@ -210,14 +213,25 @@ private final class HostedTabPane {
 
     /// Shows a new render of the file at `path`, as opening its tab does, in a detail area `height` points tall.
     func show(
-        _ rendered: RenderedText, path: String, wrapsLines: Bool = false, scrollsPastEnd: Bool = false,
-        height: CGFloat = 300, underBars: CGFloat = 0
+        _ rendered: RenderedText,
+        path: String,
+        wrapsLines: Bool = false,
+        scrollsPastEnd: Bool = false,
+        height: CGFloat = 300,
+        underBars: CGFloat = 0
     ) {
         host.rootView = Slot(
             pane: DiffTextView(
-                rendered: rendered, gutter: .dual, wrapsLines: wrapsLines, scrollMemory: memory,
-                scrollMemoryPath: path, scrollsPastEnd: scrollsPastEnd, underBars: underBars),
-            height: height)
+                rendered: rendered,
+                gutter: .dual,
+                wrapsLines: wrapsLines,
+                scrollMemory: memory,
+                scrollMemoryPath: path,
+                scrollsPastEnd: scrollsPastEnd,
+                underBars: underBars
+            ),
+            height: height
+        )
         settle()
     }
 
@@ -247,7 +261,8 @@ private final class HostedTabPane {
             let content = layoutManager.textContentManager,
             let rendered = Self.first(DiffGutterView.self, in: host)?.rendered,
             let fragment = layoutManager.textLayoutFragment(
-                for: CGPoint(x: 0, y: textView.visibleRect.minY - textView.textContainerOrigin.y))
+                for: CGPoint(x: 0, y: textView.visibleRect.minY - textView.textContainerOrigin.y)
+            )
         else { return nil }
         let start = layoutManager.documentRange.location
         let row = rendered.rowIndex(containing: content.offset(from: start, to: fragment.rangeInElement.location))

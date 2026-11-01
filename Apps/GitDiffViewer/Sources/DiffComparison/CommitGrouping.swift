@@ -132,8 +132,12 @@ package struct CommitGrouping: Sendable, Equatable {
     /// - Returns: The sections, newest first, and whether the listing left the first-parent chain.
     /// - Complexity: O(changes + rows log rows), dictionary lookups per change.
     package static func build(
-        comparison: Comparison, commits: [GitCommitChanges], uncommitted: [GitFileChange]?, isComplete: Bool,
-        unlistedCommitCount: Int? = nil, baseCommit: String? = nil
+        comparison: Comparison,
+        commits: [GitCommitChanges],
+        uncommitted: [GitFileChange]?,
+        isComplete: Bool,
+        unlistedCommitCount: Int? = nil,
+        baseCommit: String? = nil
     ) -> CommitGrouping {
         var tracker = IdentityTracker()
         // Oldest first, so each rename moves a file's identity before a newer commit names it; the working tree last.
@@ -151,8 +155,10 @@ package struct CommitGrouping: Sendable, Equatable {
                 for key in keys where rows[key] == nil {
                     let shown = comparison.displayPath(for: key)
                     rows[key] = Row(
-                        path: key, pathInChange: touch.change.path == shown ? nil : touch.change.path,
-                        change: touch.change)
+                        path: key,
+                        pathInChange: touch.change.path == shown ? nil : touch.change.path,
+                        change: touch.change
+                    )
                 }
             }
             attributed.formUnion(rows.keys)
@@ -171,7 +177,8 @@ package struct CommitGrouping: Sendable, Equatable {
         }
         if !unattributed.isEmpty || !isComplete {
             sections.append(
-                Section(kind: .earlier(unlistedCommitCount: unlistedCommitCount), rows: sorted(unattributed)))
+                Section(kind: .earlier(unlistedCommitCount: unlistedCommitCount), rows: sorted(unattributed))
+            )
         }
         let leaves =
             isComplete && baseCommit != nil && commits.last.map { $0.parentIDs.first != baseCommit } == true
@@ -182,13 +189,22 @@ package struct CommitGrouping: Sendable, Equatable {
     /// always off the main actor.
     @concurrent
     package static func buildOffMain(
-        comparison: Comparison, commits: [GitCommitChanges], uncommitted: [GitFileChange]?, isComplete: Bool,
-        unlistedCommitCount: Int? = nil, baseCommit: String? = nil
+        comparison: Comparison,
+        commits: [GitCommitChanges],
+        uncommitted: [GitFileChange]?,
+        isComplete: Bool,
+        unlistedCommitCount: Int? = nil,
+        baseCommit: String? = nil
     ) async -> CommitGrouping {
         assert(!isOnMainThread(), "buildOffMain must run off the main actor")
         return build(
-            comparison: comparison, commits: commits, uncommitted: uncommitted, isComplete: isComplete,
-            unlistedCommitCount: unlistedCommitCount, baseCommit: baseCommit)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: uncommitted,
+            isComplete: isComplete,
+            unlistedCommitCount: unlistedCommitCount,
+            baseCommit: baseCommit
+        )
     }
 
     /// The flat list's order: `localizedStandardCompare` on the row key, as `PathNode.flatList` sorts.

@@ -38,7 +38,12 @@ package struct PaneRenderer: Sendable {
         -> RenderedDiff
     {
         DiffRenderer.render(
-            prepared: [job.diff], options: options, layout: layout, withHeaders: false, firstFileIndex: job.index)
+            prepared: [job.diff],
+            options: options,
+            layout: layout,
+            withHeaders: false,
+            firstFileIndex: job.index
+        )
     }
 
     package static let live = PaneRenderer { jobs, options, layout in

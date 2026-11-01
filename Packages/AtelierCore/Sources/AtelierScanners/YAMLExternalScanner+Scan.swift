@@ -92,9 +92,17 @@ extension YAMLExternalScanner {
         if has(.r_als_ctn) && isR { return scanAliasContent(&lexer, .r_als_ctn) }
 
         if let result = scanPunctuation(
-            &lexer, validSymbols: validSymbols, isR: isR, isBr: isBr, isB: isB, isS: isS,
-            beginningRow: beginningRow, beginningCol: beginningCol, currentIndent: currentIndent,
-            currentIndentType: currentIndentType, hasTabIndent: hasTabIndent
+            &lexer,
+            validSymbols: validSymbols,
+            isR: isR,
+            isBr: isBr,
+            isB: isB,
+            isS: isS,
+            beginningRow: beginningRow,
+            beginningCol: beginningCol,
+            currentIndent: currentIndent,
+            currentIndentType: currentIndentType,
+            hasTabIndent: hasTabIndent
         ) {
             return result
         }

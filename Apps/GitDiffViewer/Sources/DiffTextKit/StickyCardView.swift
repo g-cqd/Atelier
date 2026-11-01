@@ -126,7 +126,11 @@ package final class StickyCardView: NSView {
         bodyView.setFrameSize(CGSize(width: width, height: geometry.bodyFrameHeight(bodyHeight: bodyHeight)))
         // Inset by the outline, which is drawn above it, so the two never overlap.
         hairlineView.frame = CGRect(
-            x: Self.lineWidth, y: headerHeight, width: max(width - 2 * Self.lineWidth, 0), height: Self.lineWidth)
+            x: Self.lineWidth,
+            y: headerHeight,
+            width: max(width - 2 * Self.lineWidth, 0),
+            height: Self.lineWidth
+        )
         apply(geometry, after: nil)
         let showsBody = geometry.showsBody
         guard showsBody != showedBody else { return }
@@ -167,8 +171,11 @@ package final class StickyCardView: NSView {
         if let clip {
             clip.postsBoundsChangedNotifications = true
             center.addObserver(
-                self, selector: #selector(placementDidChange(_:)), name: NSView.boundsDidChangeNotification,
-                object: clip)
+                self,
+                selector: #selector(placementDidChange(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: clip
+            )
         }
         placementDidChange(nil)
     }
@@ -184,8 +191,11 @@ package final class StickyCardView: NSView {
         if let superview {
             superview.postsFrameChangedNotifications = true
             center.addObserver(
-                self, selector: #selector(placementDidChange(_:)), name: NSView.frameDidChangeNotification,
-                object: superview)
+                self,
+                selector: #selector(placementDidChange(_:)),
+                name: NSView.frameDidChangeNotification,
+                object: superview
+            )
         }
     }
 
@@ -203,7 +213,11 @@ package final class StickyCardView: NSView {
     private func pinY() -> CGFloat {
         guard let clip = observedClipView else { return -.infinity }
         let line = StickyCardGeometry.pinY(
-            clipBounds: clip.bounds, topInset: clip.contentInsets.top, gap: stickyGap, isFlipped: clip.isFlipped)
+            clipBounds: clip.bounds,
+            topInset: clip.contentInsets.top,
+            gap: stickyGap,
+            isFlipped: clip.isFlipped
+        )
         return convert(NSPoint(x: 0, y: line), from: clip).y
     }
 

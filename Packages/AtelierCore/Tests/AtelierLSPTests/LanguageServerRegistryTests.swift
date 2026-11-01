@@ -21,7 +21,9 @@ private actor ConfigurationSpy {
         roots.append(root)
         guard resolves else { return nil }
         return LanguageServerSession.Configuration(
-            serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: root)
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            workspaceRoot: root
+        )
     }
 }
 
@@ -62,11 +64,13 @@ private final class ScratchRoot: Sendable {
 }
 
 private func makeRegistry(
-    spy: ConfigurationSpy, admission: AdmissionScript = AdmissionScript(admitted: true)
+    spy: ConfigurationSpy,
+    admission: AdmissionScript = AdmissionScript(admitted: true)
 ) -> LanguageServerRegistry {
     LanguageServerRegistry(
         admits: { root, _ in await admission.admits(root) },
-        makeConfiguration: { root, _ in await spy.makeConfiguration(for: root) })
+        makeConfiguration: { root, _ in await spy.makeConfiguration(for: root) }
+    )
 }
 
 @Suite struct LanguageServerRegistryTests {
@@ -123,7 +127,8 @@ private func makeRegistry(
                 entered.open()
                 try? await gate.wait()
                 return await spy.makeConfiguration(for: root)
-            })
+            }
+        )
         let root = scratch.url
 
         async let first = registry.session(forRoot: root, server: .sourceKitLSP)
@@ -263,7 +268,8 @@ private func makeRegistry(
                 entered.open()
                 try? await gate.wait()
                 return await spy.makeConfiguration(for: root)
-            })
+            }
+        )
 
         async let pending = registry.session(forRoot: scratch.url, server: .sourceKitLSP)
         try await entered.wait()
@@ -313,7 +319,8 @@ private func makeRegistry(
                 entered.open()
                 try? await gate.wait()
                 return await spy.makeConfiguration(for: root)
-            })
+            }
+        )
 
         async let pending = registry.session(forRoot: scratch.url, server: .sourceKitLSP)
         try await entered.wait()
@@ -336,8 +343,12 @@ private func makeRegistry(
             makeConfiguration: { root, server in
                 configured.withLock { $0.append(server.id) }
                 return LanguageServerSession.Configuration(
-                    descriptor: server, serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: root)
-            })
+                    descriptor: server,
+                    serverExecutable: URL(filePath: "/usr/bin/true"),
+                    workspaceRoot: root
+                )
+            }
+        )
 
         let swift = await registry.session(forRoot: scratch.url, server: .sourceKitLSP)
         let go = await registry.session(forRoot: scratch.url, server: .gopls)
@@ -356,7 +367,8 @@ private func makeRegistry(
         let spy = ConfigurationSpy()
         let registry = LanguageServerRegistry(
             admits: { _, server in server == .sourceKitLSP },
-            makeConfiguration: { root, _ in await spy.makeConfiguration(for: root) })
+            makeConfiguration: { root, _ in await spy.makeConfiguration(for: root) }
+        )
 
         #expect(await registry.session(forRoot: scratch.url, server: .typeScriptLanguageServer) == nil)
         #expect(await registry.session(forRoot: scratch.url, server: .sourceKitLSP) != nil)
@@ -403,7 +415,9 @@ private func makeRegistry(
         for name in names {
             let url = scratch.url.appending(path: name)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try Data().write(to: url)
         }
     }
@@ -415,8 +429,10 @@ private func makeRegistry(
         try touch(["go.mod", "tools/go.mod", "tools/cmd/main.go"], in: scratch)
 
         let root = LanguageServerRegistry.workspaceRoot(
-            forDocumentAt: ceiling.appending(path: "tools/cmd/main.go"), within: ceiling,
-            markers: ["go.work", "go.mod"])
+            forDocumentAt: ceiling.appending(path: "tools/cmd/main.go"),
+            within: ceiling,
+            markers: ["go.work", "go.mod"]
+        )
 
         #expect(root == ceiling.appending(path: "tools", directoryHint: .isDirectory))
     }
@@ -428,8 +444,10 @@ private func makeRegistry(
         try touch(["web/tsconfig.json", "web/app/package.json", "web/app/src/a.ts"], in: scratch)
 
         let root = LanguageServerRegistry.workspaceRoot(
-            forDocumentAt: ceiling.appending(path: "web/app/src/a.ts"), within: ceiling,
-            markers: LanguageServerDescriptor.typeScriptLanguageServer.rootMarkers)
+            forDocumentAt: ceiling.appending(path: "web/app/src/a.ts"),
+            within: ceiling,
+            markers: LanguageServerDescriptor.typeScriptLanguageServer.rootMarkers
+        )
 
         #expect(root == ceiling.appending(path: "web", directoryHint: .isDirectory))
     }
@@ -459,9 +477,15 @@ private func makeRegistry(
         let ceiling = try #require(LanguageServerRegistry.canonicalRoot(scratch.url))
 
         let go = await registry.session(
-            forDocumentAt: ceiling.appending(path: "svc/main.go"), within: scratch.url, server: .gopls)
+            forDocumentAt: ceiling.appending(path: "svc/main.go"),
+            within: scratch.url,
+            server: .gopls
+        )
         let swift = await registry.session(
-            forDocumentAt: ceiling.appending(path: "svc/main.swift"), within: scratch.url, server: .sourceKitLSP)
+            forDocumentAt: ceiling.appending(path: "svc/main.swift"),
+            within: scratch.url,
+            server: .sourceKitLSP
+        )
 
         #expect(go?.workspaceRoot == ceiling.appending(path: "svc", directoryHint: .isDirectory))
         #expect(swift?.workspaceRoot == ceiling)

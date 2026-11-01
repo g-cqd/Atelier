@@ -31,7 +31,9 @@ extension SwiftExternalScanner {
     }
 
     mutating func eatRawStringPart(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], symbolResult: inout TokenType?
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        symbolResult: inout TokenType?
     ) -> Bool {
         var hashCount = ongoingRawStringHashCount
         if !validSymbols[TokenType.rawStrPart.rawValue] {

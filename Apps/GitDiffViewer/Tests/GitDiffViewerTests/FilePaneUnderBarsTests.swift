@@ -29,10 +29,15 @@ struct FilePaneUnderBarsTests {
 
     @Test(arguments: PaneLayout.allCases, [false, true])
     func `beneath the bars, a file opens with its first change three lines below them`(
-        layout: PaneLayout, wrapsLines: Bool
+        layout: PaneLayout,
+        wrapsLines: Bool
     ) async throws {
         let sut = HostedPanes(
-            showing: .longLines(60, changedAt: 30), layout: layout, wrapsLines: wrapsLines, underBars: Self.bars)
+            showing: .longLines(60, changedAt: 30),
+            layout: layout,
+            wrapsLines: wrapsLines,
+            underBars: Self.bars
+        )
         try await sut.alignSides()
 
         let row = try #require(sut.requestedRow)

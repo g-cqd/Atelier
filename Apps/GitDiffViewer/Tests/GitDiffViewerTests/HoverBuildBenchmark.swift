@@ -44,7 +44,8 @@ struct HoverBuildBenchmark {
             var scrolls: [Double] = []
             for _ in 0 ..< Self.runs {
                 render.append(
-                    Self.milliseconds { reused.prepareOffscreenForTests(document: document, appearance: appearance) })
+                    Self.milliseconds { reused.prepareOffscreenForTests(document: document, appearance: appearance) }
+                )
                 let root = try #require(reused.contentViewForTests)
                 let bitmap = try #require(root.bitmapImageRepForCachingDisplay(in: root.bounds))
                 display.append(Self.milliseconds { root.cacheDisplay(in: root.bounds, to: bitmap) })
@@ -52,7 +53,8 @@ struct HoverBuildBenchmark {
                 scrolls += Self.scrollThrough(reused)
                 let fresh = HoverDocPanel(ordersWindowIn: false)
                 firstRender.append(
-                    Self.milliseconds { fresh.prepareOffscreenForTests(document: document, appearance: appearance) })
+                    Self.milliseconds { fresh.prepareOffscreenForTests(document: document, appearance: appearance) }
+                )
             }
             print(
                 "BENCH hover build, \(name), \(Self.blockCount(document.discussion)) blocks: "
@@ -63,7 +65,8 @@ struct HoverBuildBenchmark {
                     + (scrolls.isEmpty
                         ? "every block built by the render"
                         : "\(scrolls.count / Self.runs) scrolls building the rest, each \(Self.summary(scrolls)), "
-                            + "longest \(String(format: "%.2f", scrolls.max() ?? 0)) ms"))
+                            + "longest \(String(format: "%.2f", scrolls.max() ?? 0)) ms")
+            )
         }
     }
 
@@ -76,7 +79,8 @@ struct HoverBuildBenchmark {
                 case 1:
                     parts.append(
                         "Paragraph \(index) says what the configuration holds, with `inline code`, *emphasis* and "
-                            + "a [link](https://example.com/\(index)), long enough to wrap over two lines.")
+                            + "a [link](https://example.com/\(index)), long enough to wrap over two lines."
+                    )
                 default: parts.append("- first item of list \(index)\n- second item, with `code`")
             }
             if index == 50 {
@@ -96,7 +100,8 @@ struct HoverBuildBenchmark {
             samples.append(
                 milliseconds {
                     clip.scroll(to: NSPoint(x: 0, y: max(panel.bodyDocument.frame.height - clip.bounds.height, 0)))
-                })
+                }
+            )
         }
         return samples
     }
@@ -111,7 +116,9 @@ struct HoverBuildBenchmark {
                         _ = HoverDocPanel.measuredHeight(of: text, width: width)
                     case .code(let code):
                         _ = HoverDocPanel.measuredHeight(
-                            of: code, width: width - 2 * HoverPanelMetrics.chipHorizontalPadding)
+                            of: code,
+                            width: width - 2 * HoverPanelMetrics.chipHorizontalPadding
+                        )
                     case .list(_, _, let items):
                         for item in items { measure(item, width: width - HoverBlockMetrics.markerWidth) }
                     case .quote(let blocks):

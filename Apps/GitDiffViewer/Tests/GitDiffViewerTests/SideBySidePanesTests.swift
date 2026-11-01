@@ -14,7 +14,8 @@ struct SideBySidePanesTests {
                 Color.clear.frame(height: 100)
             } trailing: { _ in
                 Color.clear.frame(height: 60)
-            })
+            }
+        )
         host.sizingOptions = []
         return host
     }

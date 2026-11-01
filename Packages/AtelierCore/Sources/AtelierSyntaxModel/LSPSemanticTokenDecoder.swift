@@ -62,11 +62,17 @@ public enum LSPSemanticTokenDecoder: Sendable {
             let startByte =
                 lineStartByte
                 + charOffsetToByteOffset(
-                    utf8: utf8, lineStart: lineStartByte, charOffset: Int(currentChar))
+                    utf8: utf8,
+                    lineStart: lineStartByte,
+                    charOffset: Int(currentChar)
+                )
             let endByte =
                 startByte
                 + charOffsetToByteOffset(
-                    utf8: utf8, lineStart: startByte, charOffset: Int(length))
+                    utf8: utf8,
+                    lineStart: startByte,
+                    charOffset: Int(length)
+                )
 
             guard startByte < utf8.count, endByte <= utf8.count, startByte < endByte else {
                 continue
@@ -81,8 +87,10 @@ public enum LSPSemanticTokenDecoder: Sendable {
 
             let modifiers = decodeLSPModifiers(tokenModifierBits, legend: legend)
             let role = CaptureRoleMapper.mapLSPTokenType(
-                tokenType, isDefaultLibrary: modifiers.contains(.defaultLibrary),
-                isDeclaration: modifiers.contains(.declaration) || modifiers.contains(.definition))
+                tokenType,
+                isDefaultLibrary: modifiers.contains(.defaultLibrary),
+                isDeclaration: modifiers.contains(.declaration) || modifiers.contains(.definition)
+            )
 
             tokens.append(
                 HighlightToken(
@@ -91,7 +99,8 @@ public enum LSPSemanticTokenDecoder: Sendable {
                     modifiers: modifiers,
                     layer: .semantic,
                     priority: 0
-                ))
+                )
+            )
         }
 
         return tokens
@@ -160,7 +169,9 @@ public enum LSPSemanticTokenDecoder: Sendable {
     }
 
     private static func charOffsetToByteOffset(
-        utf8: [UInt8], lineStart: Int, charOffset: Int
+        utf8: [UInt8],
+        lineStart: Int,
+        charOffset: Int
     ) -> Int {
         // Simple approximation: for ASCII, char == byte.
         // For multi-byte UTF-8, we walk forward counting UTF-16 code units.

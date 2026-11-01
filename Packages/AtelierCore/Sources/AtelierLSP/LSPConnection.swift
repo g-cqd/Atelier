@@ -51,7 +51,9 @@ public actor LSPConnection {
     /// - Throws: ``LSPConnectionError/malformedResponse(_:)`` when the server's result was absent or null;
     ///   use ``requestOptional(_:_:as:)`` when a null/absent result is a meaningful answer (e.g. hover).
     public func request<P: Encodable & Sendable, R: Decodable & Sendable>(
-        _ method: String, _ params: P, as type: R.Type
+        _ method: String,
+        _ params: P,
+        as type: R.Type
     ) async throws -> R {
         guard let result = try await requestOptional(method, params, as: R.self) else {
             throw LSPConnectionError.malformedResponse("\(method): expected a result, got null/absent")
@@ -62,7 +64,9 @@ public actor LSPConnection {
     /// Sends a request and decodes its result as `R`, or `nil` when the result is `null` or absent, which is how
     /// LSP says there is nothing to show.
     public func requestOptional<P: Encodable & Sendable, R: Decodable & Sendable>(
-        _ method: String, _ params: P, as type: R.Type
+        _ method: String,
+        _ params: P,
+        as type: R.Type
     ) async throws -> R? {
         let payload = try await performRequest(method: method, params: params)
         guard let payload, payload != Self.jsonNull else { return nil }
@@ -72,7 +76,9 @@ public actor LSPConnection {
     /// Decodes `payload`, the `result` of a response to `method`, as `R`, at most ``maximumResultDepth`` levels deep.
     /// - Throws: ``LSPConnectionError/malformedResponse(_:)`` when `payload` is not an `R`, or nests deeper.
     static func decodeResult<R: Decodable>(
-        _ type: R.Type, from payload: Data, method: String
+        _ type: R.Type,
+        from payload: Data,
+        method: String
     ) throws(LSPConnectionError) -> R {
         var decoder = AemiJSON.JSONDecoder()
         // The parser itself is iterative and keeps its own limit; only the decode recurses.
@@ -187,7 +193,8 @@ public actor LSPConnection {
             message = try IncomingMessage.decode(payload)
         } catch {
             Self.logger.error(
-                "Dropped a frame that is not a JSON-RPC message: \(String(describing: error), privacy: .public)")
+                "Dropped a frame that is not a JSON-RPC message: \(String(describing: error), privacy: .public)"
+            )
             // A response that cannot be read still settles its request now, rather than as a timeout later.
             if let id = IncomingMessage.responseID(ofUndecodable: payload) {
                 failPending(id, with: LSPConnectionError.malformedResponse("\(error)"))

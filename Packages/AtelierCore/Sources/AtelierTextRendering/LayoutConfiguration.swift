@@ -31,8 +31,13 @@ public struct LayoutConfiguration: Hashable, Sendable {
     public var bidi: BidiPolicy
 
     public init(
-        wrap: Wrap, lineHeight: Double, lineHeightMultiple: Double = 1, tabWidth: Int = 4,
-        continuationIndent: Int = 2, padding: Double = 0, bidi: BidiPolicy = .forceLeftToRight
+        wrap: Wrap,
+        lineHeight: Double,
+        lineHeightMultiple: Double = 1,
+        tabWidth: Int = 4,
+        continuationIndent: Int = 2,
+        padding: Double = 0,
+        bidi: BidiPolicy = .forceLeftToRight
     ) {
         self.wrap = wrap
         self.lineHeight = lineHeight

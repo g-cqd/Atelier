@@ -48,24 +48,39 @@ public enum ComparisonSource: Hashable, Sendable {
         switch self {
             case .gitRef(let repositoryURL, let ref):
                 SourceDescriptor(
-                    symbol: .branch, context: repositoryURL.lastPathComponent, primary: GitCommit.abbreviated(ref),
-                    detail: "\(ref) in \(repositoryURL.path(percentEncoded: false))")
+                    symbol: .branch,
+                    context: repositoryURL.lastPathComponent,
+                    primary: GitCommit.abbreviated(ref),
+                    detail: "\(ref) in \(repositoryURL.path(percentEncoded: false))"
+                )
             case .directory(let url) where url.standardizedFileURL == repository?.root.standardizedFileURL:
                 SourceDescriptor(
-                    symbol: .workingTree, context: url.lastPathComponent, primary: "Working Tree",
-                    detail: url.path(percentEncoded: false))
+                    symbol: .workingTree,
+                    context: url.lastPathComponent,
+                    primary: "Working Tree",
+                    detail: url.path(percentEncoded: false)
+                )
             case .directory(let url):
                 SourceDescriptor(
-                    symbol: .folder, context: url.deletingLastPathComponent().lastPathComponent,
-                    primary: url.lastPathComponent, detail: url.path(percentEncoded: false))
+                    symbol: .folder,
+                    context: url.deletingLastPathComponent().lastPathComponent,
+                    primary: url.lastPathComponent,
+                    detail: url.path(percentEncoded: false)
+                )
             case .file(let url):
                 SourceDescriptor(
-                    symbol: .file, context: url.deletingLastPathComponent().lastPathComponent,
-                    primary: url.lastPathComponent, detail: url.path(percentEncoded: false))
+                    symbol: .file,
+                    context: url.deletingLastPathComponent().lastPathComponent,
+                    primary: url.lastPathComponent,
+                    detail: url.path(percentEncoded: false)
+                )
             case .patch(let url, let side):
                 SourceDescriptor(
-                    symbol: .patch, context: url.lastPathComponent, primary: side == .old ? "before" : "after",
-                    detail: url.path(percentEncoded: false))
+                    symbol: .patch,
+                    context: url.lastPathComponent,
+                    primary: side == .old ? "before" : "after",
+                    detail: url.path(percentEncoded: false)
+                )
         }
     }
 }

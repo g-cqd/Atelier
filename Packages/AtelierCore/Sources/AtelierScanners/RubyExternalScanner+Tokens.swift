@@ -125,9 +125,13 @@ extension RubyExternalScanner {
             guard canAddLiteral() else { return false }
             literalStack.append(
                 Literal(
-                    type: .symbolStart, openDelimiter: quote, closeDelimiter: quote,
-                    nestingDepth: 1, allowsInterpolation: quote == c("\"")
-                ))
+                    type: .symbolStart,
+                    openDelimiter: quote,
+                    closeDelimiter: quote,
+                    nestingDepth: 1,
+                    allowsInterpolation: quote == c("\"")
+                )
+            )
             lexer.resultSymbol = TokenType.symbolStart.rawValue
             return true
         }

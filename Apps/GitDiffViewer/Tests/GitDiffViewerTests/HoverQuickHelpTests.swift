@@ -69,7 +69,8 @@ import Testing
     func `a code block is colored as Swift`() throws {
         let document = Self.build(HoverFixtures.sdkBool, source: .sdk)
         let code = try #require(
-            document.discussion.compactMap { if case .code(let code) = $0 { code } else { nil } }.first)
+            document.discussion.compactMap { if case .code(let code) = $0 { code } else { nil } }.first
+        )
         var colors: Set<NSColor> = []
         code.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: code.length)) { value, _, _ in
             if let color = value as? NSColor { colors.insert(color) }
@@ -135,7 +136,8 @@ import Testing
         #expect(
             Self.codeText(in: document.discussion) == [
                 "let config = try load(from: url)\nif config.retryCount > 0 {\n    print(config)\n}"
-            ])
+            ]
+        )
     }
 
     /// The doc-comment tier's own answer, from its provider over a `///` comment, not a transcription of it.
@@ -163,8 +165,11 @@ import Testing
         try await index.update(files: [DocIndexFile(uri: "file:///Manifest.swift", content: source)])
         let line = source.components(separatedBy: "\n").count - 1
         let query = HoverQuery(
-            documentURI: "file:///Manifest.swift", content: source, line: line,
-            utf16Column: "func use() { try? parseMan".utf16.count)
+            documentURI: "file:///Manifest.swift",
+            content: source,
+            line: line,
+            utf16Column: "func use() { try? parseMan".utf16.count
+        )
         let content = try #require(try await DocIndexHoverProvider(index: index).hover(query))
 
         let document = HoverDocument.build(from: content, palette: .system)
@@ -214,7 +219,8 @@ import Testing
             try #require(shown.first { $0.text.hasPrefix(prefix) }?.view, "nothing shows \(prefix)")
         }
         let divider = try #require(
-            descendants(of: root, as: NSBox.self).first { $0.boxType == .separator && !$0.isHiddenOrHasHiddenAncestor })
+            descendants(of: root, as: NSBox.self).first { $0.boxType == .separator && !$0.isHiddenOrHasHiddenAncestor }
+        )
         let ordered: [NSView] = [
             try #require(shown.first { $0.text == "Bool" }?.view), try view(startingWith: "A value type"),
             try view(startingWith: "@frozen\nstruct Bool"), divider, try view(startingWith: "Overview"),

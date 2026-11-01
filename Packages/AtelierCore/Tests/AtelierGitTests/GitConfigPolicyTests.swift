@@ -46,7 +46,8 @@ struct GitConfigPolicyTests {
         // Two fields instead of three: the scope and the origin of an entry whose key never arrived.
         #expect(
             GitConfigPolicy.entries(inListing: Data("local\0file:.git/config\0".utf8), relativeTo: Self.directory)
-                == nil)
+                == nil
+        )
     }
 
     @Test(arguments: [
@@ -141,7 +142,8 @@ struct GitConfigPolicyTests {
             flags == [
                 "-c", "filter.x.clean=", "-c", "filter.x.smudge=", "-c", "filter.x.process=",
                 "-c", "filter.x.required=false"
-            ])
+            ]
+        )
     }
 
     @Test(arguments: [
@@ -174,9 +176,13 @@ struct GitConfigGateTests {
     /// A directory holding a real `.git/config`, so the gate's stamps have a file to watch.
     private func makeRepository() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "atelier-gate-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "atelier-gate-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(
-            at: root.appending(path: ".git", directoryHint: .isDirectory), withIntermediateDirectories: true)
+            at: root.appending(path: ".git", directoryHint: .isDirectory),
+            withIntermediateDirectories: true
+        )
         try "[core]\n\tbare = false\n".write(to: root.appending(path: ".git/config"), atomically: true, encoding: .utf8)
         return root
     }
@@ -186,7 +192,8 @@ struct GitConfigGateTests {
             gitConfigListing([
                 GitConfigLine(.local, "core.bare", "false", file: root.appending(path: ".git/config").path)
             ])
-            .utf8)
+            .utf8
+        )
     }
 
     @Test
@@ -315,7 +322,8 @@ struct GitConfigGateTests {
                 await gate.verdict(in: root, isolation: .strict) {
                     reads.record(())
                     return Data("local\0file:.git/config\0".utf8)
-                })
+                }
+            )
         }
 
         #expect(verdicts.allSatisfy { !$0.isApproved })

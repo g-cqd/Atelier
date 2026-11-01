@@ -162,7 +162,10 @@ public final class SyntaxFactsStore: Sendable {
 
     /// Drops the least recently used facts or kinds, but the entry just kept, until `state` is within `limit`.
     private static func evict(
-        _ state: inout State, limit: Int, keepingFacts facts: Key? = nil, keepingKinds kinds: Key? = nil
+        _ state: inout State,
+        limit: Int,
+        keepingFacts facts: Key? = nil,
+        keepingKinds kinds: Key? = nil
     ) {
         while state.bytes > limit, state.entries.count + state.symbolKinds.count > 1 {
             let oldestFacts = state.entries.filter { $0.key != facts }.min { $0.value.use < $1.value.use }

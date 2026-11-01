@@ -45,8 +45,11 @@ public struct TOMLExternalScanner: GrammarExternalScanner {
     public mutating func deserialize(_ state: ArraySlice<UInt8>) {}
 
     private static func scanMultilineStringEnd(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], delimiter: UInt32,
-        contentSymbol: TokenType, endSymbol: TokenType
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        delimiter: UInt32,
+        contentSymbol: TokenType,
+        endSymbol: TokenType
     ) -> Bool {
         guard validSymbols[endSymbol.rawValue], lexer.lookahead == delimiter else { return false }
 
@@ -83,14 +86,20 @@ public struct TOMLExternalScanner: GrammarExternalScanner {
         guard validSymbols.count >= Self.externalNames.count else { return false }
         if lexer.lookahead == 0x22 && validSymbols[TokenType.multilineBasicStringEnd.rawValue] {
             return Self.scanMultilineStringEnd(
-                &lexer, validSymbols: validSymbols, delimiter: 0x22,
-                contentSymbol: .multilineBasicStringContent, endSymbol: .multilineBasicStringEnd
+                &lexer,
+                validSymbols: validSymbols,
+                delimiter: 0x22,
+                contentSymbol: .multilineBasicStringContent,
+                endSymbol: .multilineBasicStringEnd
             )
         }
         if lexer.lookahead == 0x27 && validSymbols[TokenType.multilineLiteralStringEnd.rawValue] {
             return Self.scanMultilineStringEnd(
-                &lexer, validSymbols: validSymbols, delimiter: 0x27,
-                contentSymbol: .multilineLiteralStringContent, endSymbol: .multilineLiteralStringEnd
+                &lexer,
+                validSymbols: validSymbols,
+                delimiter: 0x27,
+                contentSymbol: .multilineLiteralStringContent,
+                endSymbol: .multilineLiteralStringEnd
             )
         }
 

@@ -136,8 +136,12 @@ public final class GLRParser: Sendable {
             let outcome = Self.withUTF8(of: source) { utf8 in
                 Result { () throws(ParseError) in
                     try parseWithExternals(
-                        source, utf8: utf8, scanner: scanner,
-                        externalScanner: externalScanner, isCancelled: isCancelled)
+                        source,
+                        utf8: utf8,
+                        scanner: scanner,
+                        externalScanner: externalScanner,
+                        isCancelled: isCancelled
+                    )
                 }
             }
             return try outcome.get()
@@ -149,7 +153,11 @@ public final class GLRParser: Sendable {
         }
         let outcome = Self.withUTF8(of: source) { utf8 in
             var tokens = ScannedTokenSource(
-                utf8, scanner: scanner, tokens: lexTable.tokens, tokenTerminals: tokenTerminals)
+                utf8,
+                scanner: scanner,
+                tokens: lexTable.tokens,
+                tokenTerminals: tokenTerminals
+            )
             return Result { () throws(ParseError) in try parse(source, from: &tokens, isCancelled: isCancelled) }
         }
         return try outcome.get()
@@ -199,7 +207,10 @@ public final class GLRParser: Sendable {
         let errorByteCount = best.errorByteCount
         let root = try buildRootNode(from: consume best, byteCount: source.utf8.count, endPoint: tokens.end)
         return SyntaxTree(
-            root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
+            root: attachingExtras(extras, to: consume root),
+            source: source,
+            errorByteCount: errorByteCount
+        )
     }
 
     // MARK: - Private
@@ -232,7 +243,9 @@ public final class GLRParser: Sendable {
         let reduced = applyReduces(to: consume stacks, lookahead: lookahead, exceededDepth: &exceededDepth)
         guard !exceededDepth else { throw Self.treeTooDeep }
         var next = ParseStack.mergingIdenticalHistories(
-            shift(consume reduced, token: token, lookahead: lookahead), ranks: symbolRanks)
+            shift(consume reduced, token: token, lookahead: lookahead),
+            ranks: symbolRanks
+        )
         guard !next.isEmpty else {
             throw .parsingFailed("No valid parse at token \(tokenIndex): \(token.type)")
         }
@@ -322,65 +335,6 @@ public final class GLRParser: Sendable {
         }
         return ready
     }
-
-    /// Shifts `token` onto every stack whose state allows it, forking when several shifts do. A stack that cannot
-    /// shift it keeps its state and takes the token as an ERROR node: error recovery skips the token for that stack.
-    private func shift(_ stacks: consuming [ParseStack], token: ParseToken, lookahead: Int) -> [ParseStack] {
-        var pending = consume stacks
-        pending.reverse()
-        var shifted: [ParseStack] = []
-        shifted.reserveCapacity(pending.count)
-        let leaf = SyntaxNode(
-            type: token.type,
-            byteRange: token.byteRange,
-            pointRange: token.pointRange,
-            isNamed: token.isNamed
-        )
-        while var stack = pending.popLast() {
-            let shiftTargets: [Int]
-            switch parseTable.actions[stack.state, lookahead] {
-                case .shift(let nextState):
-                    stack.pushNode(leaf)
-                    stack.state = nextState
-                    stack.isRecovering = false
-                    shifted.append(consume stack)
-                    continue
-                case .accept:
-                    shifted.append(consume stack)
-                    continue
-                case .conflict(let actions):
-                    shiftTargets = actions.compactMap { action -> Int? in
-                        if case .shift(let nextState) = action { return nextState }
-                        return nil
-                    }
-                case .reduce:
-                    // A reduction left unmade: the shift precedence set against it, if there was one.
-                    shiftTargets = lostShift(of: lookahead, in: stack.state).map { [$0] } ?? []
-                case .error:
-                    shiftTargets = []
-            }
-            guard let lastTarget = shiftTargets.last else {
-                stack.pushNode(
-                    SyntaxNode(type: "ERROR", byteRange: token.byteRange, pointRange: token.pointRange, isError: true))
-                stack.isRecovering = true
-                shifted.append(consume stack)
-                continue
-            }
-            // Forks copy the stack; the last shift takes it over.
-            for nextState in shiftTargets.dropLast() {
-                var fork = stack
-                fork.pushNode(leaf)
-                fork.state = nextState
-                fork.isRecovering = false
-                shifted.append(consume fork)
-            }
-            stack.pushNode(leaf)
-            stack.state = lastTarget
-            stack.isRecovering = false
-            shifted.append(consume stack)
-        }
-        return shifted
-    }
 }
 
 // MARK: - Reducing
@@ -441,7 +395,8 @@ extension GLRParser {
                 fields: nodeFields,
                 isNamed: true
             ),
-            height: height)
+            height: height
+        )
         stack.addDynamicPrecedence(dynamicPrecedence)
         stack.state = target
         stack.restoreSkipped(skippedAbove)
@@ -504,7 +459,8 @@ extension GLRParser {
                     pointRange: token.pointRange,
                     isExtra: true,
                     isNamed: token.isNamed
-                ))
+                )
+            )
         }
         root.children.sort {
             ($0.byteRange.lowerBound, $0.byteRange.upperBound) < ($1.byteRange.lowerBound, $1.byteRange.upperBound)

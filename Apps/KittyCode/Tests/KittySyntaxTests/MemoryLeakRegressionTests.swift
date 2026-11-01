@@ -85,7 +85,10 @@ struct MemoryLeakRegressionTests {
 
         func highlightOnce() {
             _ = LanguageHighlighter.highlightDocument(
-                source: bashScript, language: "bash", theme: theme)
+                source: bashScript,
+                language: "bash",
+                theme: theme
+            )
         }
 
         // Warm up so caches (grammar tables, allocator arenas) stabilize before measuring.
@@ -101,7 +104,10 @@ struct MemoryLeakRegressionTests {
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         let theme = Theme(defaultStyle: Style())
         let session = LanguageHighlighter.makeSession(
-            language: "bash", theme: theme, preferGrammar: true)
+            language: "bash",
+            theme: theme,
+            preferGrammar: true
+        )
 
         func highlightOnce() {
             _ = session.highlightDocument(source: bashScript)
@@ -134,7 +140,8 @@ struct MemoryLeakRegressionTests {
                 second batch of \(iterationsPerBatch) calls allocated \(secondBatch) vs \
                 \(firstBatch) for the first — possible per-call accumulation
                 """,
-                sourceLocation: sourceLocation)
+                sourceLocation: sourceLocation
+            )
         }
     }
 }

@@ -121,7 +121,8 @@ public struct TextEditor: View, Sendable {
     ) {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
             .map(
-                String.init)
+                String.init
+            )
         self.source = ArrayDocumentSource(lines)
         self.lineSpans = LineHighlights(lines.map { _ in spans })
         self.scrollOffset = scrollOffset

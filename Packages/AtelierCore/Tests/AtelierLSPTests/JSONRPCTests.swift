@@ -104,7 +104,8 @@ struct JSONRPCTests {
             { try IncomingMessage.decode(payload) },
             where: { (error: JSONError) in
                 if case .invalidString = error { true } else { false }
-            })
+            }
+        )
         #expect(IncomingMessage.responseID(ofUndecodable: payload) == .number(7))
     }
 

@@ -21,7 +21,9 @@ struct BetaSettingsTests {
         let defaults = scratchDefaults.defaults
 
         let kind = TextBackendKind.developerDefault(
-            environment: [:], stored: defaults.string(forKey: TextBackendKind.defaultsKey))
+            environment: [:],
+            stored: defaults.string(forKey: TextBackendKind.defaultsKey)
+        )
 
         #expect(kind == .textKit2)
     }
@@ -32,7 +34,9 @@ struct BetaSettingsTests {
         defaults.set(TextBackendKind.coreText.rawValue, forKey: TextBackendKind.defaultsKey)
 
         let kind = TextBackendKind.developerDefault(
-            environment: [:], stored: defaults.string(forKey: TextBackendKind.defaultsKey))
+            environment: [:],
+            stored: defaults.string(forKey: TextBackendKind.defaultsKey)
+        )
 
         #expect(kind == .coreText)
     }
@@ -45,7 +49,9 @@ struct BetaSettingsTests {
         defaults.set(TextBackendKind.textKit2.rawValue, forKey: TextBackendKind.defaultsKey)
 
         let kind = TextBackendKind.developerDefault(
-            environment: [:], stored: defaults.string(forKey: TextBackendKind.defaultsKey))
+            environment: [:],
+            stored: defaults.string(forKey: TextBackendKind.defaultsKey)
+        )
         #expect(kind == .textKit2)
     }
 }

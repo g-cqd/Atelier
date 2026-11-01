@@ -82,7 +82,10 @@ extension DiffRenderer {
 
     /// The band of the fold of `mine` whose first line `shown` shows, the new side's first; nil when none starts there.
     private static func band(
-        startingAt shown: (old: Int?, new: Int?), in file: PreparedDiff, _ fileIndex: Int, _ mine: [ScopeFoldKey: Int]
+        startingAt shown: (old: Int?, new: Int?),
+        in file: PreparedDiff,
+        _ fileIndex: Int,
+        _ mine: [ScopeFoldKey: Int]
     ) -> ScopeFoldBand? {
         for (line, isOld) in [(shown.new, false), (shown.old, true)] {
             guard let line else { continue }
@@ -92,7 +95,11 @@ extension DiffRenderer {
             let first = lines.indices.contains(line) ? lines[line] : ""
             let closing = lines.indices.contains(last) ? lines[last].drop { $0 == " " || $0 == "\t" } : nil
             return ScopeFoldBand(
-                key: key, lastLine: last, indent: first.prefix { $0 == " " || $0 == "\t" }, closing: closing)
+                key: key,
+                lastLine: last,
+                indent: first.prefix { $0 == " " || $0 == "\t" },
+                closing: closing
+            )
         }
         return nil
     }
@@ -145,7 +152,8 @@ extension DiffRenderer {
             let range = NSRange(location: fold.marker.lowerBound, length: fold.marker.count)
             text.addAttributes(
                 [.foregroundColor: palette.gutterText, .backgroundColor: palette.textColor.withAlphaComponent(0.08)],
-                range: range)
+                range: range
+            )
         }
     }
 }

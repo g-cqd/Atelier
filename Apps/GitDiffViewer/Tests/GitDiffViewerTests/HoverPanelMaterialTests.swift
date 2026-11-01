@@ -13,17 +13,24 @@ struct HoverPanelMaterialTests {
     private static let document = HoverDocument(
         declaration: NSAttributedString(
             string: "struct CameraConfiguration",
-            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)]),
+            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)]
+        ),
         summary: NSAttributedString(
             string: "A value type describing how a capture session should be configured.",
-            attributes: [.font: NSFont.systemFont(ofSize: 12)]))
+            attributes: [.font: NSFont.systemFont(ofSize: 12)]
+        )
+    )
 
     private func preparedPanel(
-        _ document: HoverDocument, material: HoverPanelMaterial = .liquidGlass,
+        _ document: HoverDocument,
+        material: HoverPanelMaterial = .liquidGlass,
         panel: HoverDocPanel = HoverDocPanel(ordersWindowIn: false)
     ) throws -> HoverDocPanel {
         panel.prepareOffscreenForTests(
-            document: document, material: material, appearance: try #require(NSAppearance(named: .aqua)))
+            document: document,
+            material: material,
+            appearance: try #require(NSAppearance(named: .aqua))
+        )
         return panel
     }
 

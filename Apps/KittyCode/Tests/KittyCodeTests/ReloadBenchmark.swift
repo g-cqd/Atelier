@@ -38,8 +38,12 @@ struct ReloadBenchmark {
             }
             .sorted()
         return String(
-            format: "median %.1f ms, p10 %.1f, p90 %.1f, n %d", milliseconds[milliseconds.count / 2],
-            milliseconds[milliseconds.count / 10], milliseconds[milliseconds.count * 9 / 10], milliseconds.count)
+            format: "median %.1f ms, p10 %.1f, p90 %.1f, n %d",
+            milliseconds[milliseconds.count / 2],
+            milliseconds[milliseconds.count / 10],
+            milliseconds[milliseconds.count * 9 / 10],
+            milliseconds.count
+        )
     }
 
     /// Returns once `state`'s status message satisfies `isDone`, woken by each change to it.
@@ -67,7 +71,11 @@ struct ReloadBenchmark {
 
         let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
         let state = EditorState(
-            rootPath: directory.path, config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+            rootPath: directory.path,
+            config: KittyConfig(),
+            taskProvider: tasks,
+            searchPool: EditorTestPool.shared
+        )
         defer { state.shutdown() }
         state.lastRenderRows = 60
         state.openFileByPath(file.path)

@@ -13,7 +13,9 @@ import Testing
 @Suite(.mainActorLane)
 struct ScratchDefaultsTests {
     private nonisolated static let preferences = URL.libraryDirectory.appending(
-        path: "Preferences", directoryHint: .isDirectory)
+        path: "Preferences",
+        directoryHint: .isDirectory
+    )
 
     @Test
     func `a scratch suite keeps its plist out of the user's preferences`() async throws {

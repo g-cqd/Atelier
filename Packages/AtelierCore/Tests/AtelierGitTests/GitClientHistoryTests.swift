@@ -23,7 +23,8 @@ struct GitClientHistoryTests {
         #expect(try await client.isAncestor("main", of: "feature"))
         #expect(
             runner.commandSpecs.first?.arguments.suffix(5)
-                == ["merge-base", "--is-ancestor", "--end-of-options", "main", "feature"])
+                == ["merge-base", "--is-ancestor", "--end-of-options", "main", "feature"]
+        )
     }
 
     @Test
@@ -97,7 +98,8 @@ struct GitClientHistoryTests {
             arguments == [
                 ["rev-list", "--count", "--first-parent", "--end-of-options", "main..feature"],
                 ["rev-list", "--count", "--end-of-options", "main..feature"]
-            ])
+            ]
+        )
     }
 
     @Test
@@ -157,7 +159,8 @@ struct GitClientHistoryTests {
                     "log", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-color", "--no-relative",
                     "--no-abbrev", "--root", "--raw", "-M", "-z", GitParsers.commitChangesFormat, "--first-parent",
                     "--diff-merges=first-parent", "-n", "200", "--end-of-options", "main..feature", "--"
-                ])
+                ]
+        )
     }
 
     @Test
@@ -210,7 +213,9 @@ struct GitClientHistoryTests {
         try repository.git("mv", "a.txt", "b.txt")
         try repository.commit("first move")
         try FileManager.default.createDirectory(
-            at: repository.root.appending(path: "dir"), withIntermediateDirectories: true)
+            at: repository.root.appending(path: "dir"),
+            withIntermediateDirectories: true
+        )
         try repository.git("mv", "b.txt", "dir/c d.txt")
         let tip = try repository.commit("second move")
 

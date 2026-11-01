@@ -17,7 +17,8 @@ struct CSSExternalScannerTests {
         #expect(
             CSSExternalScanner.externalNames == [
                 "_descendant_operator", "_pseudo_class_selector_colon", "__error_recovery"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["css"] != nil)
     }
 
@@ -37,7 +38,8 @@ struct CSSExternalScannerTests {
     func `pseudo class colon needs a selector block and ignores braces in comments`() {
         #expect(
             scan(":hover { color: red; }", allowing: ["_pseudo_class_selector_colon"]).0
-                == "_pseudo_class_selector_colon")
+                == "_pseudo_class_selector_colon"
+        )
         #expect(scan(":not(.x) { }", allowing: ["_pseudo_class_selector_colon"]).1.tokenEnd == 1)
         #expect(scan(": red;", allowing: ["_pseudo_class_selector_colon"]).0 == nil)
         #expect(scan("::before { }", allowing: ["_pseudo_class_selector_colon"]).0 == nil)

@@ -13,8 +13,10 @@ public final class SyntaxTree: Sendable {
     /// - Complexity: O(n + e log e) for n nodes, e of them outermost error nodes.
     public convenience init(root: SyntaxNode, source: String) {
         self.init(
-            root: root, source: source,
-            errorByteCount: Self.errorByteCount(of: root, sourceCount: source.utf8.count))
+            root: root,
+            source: source,
+            errorByteCount: Self.errorByteCount(of: root, sourceCount: source.utf8.count)
+        )
     }
 
     /// A tree whose error bytes are already known, as a parse knows them: it counts each error token it pushes.

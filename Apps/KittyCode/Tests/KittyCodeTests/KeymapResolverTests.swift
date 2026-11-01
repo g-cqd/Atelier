@@ -35,7 +35,8 @@ struct KeymapResolverTests {
     func ctrlHCycleFileVisibility() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.h, .ctrl), context: .tree) == .cycleFileVisibility)
+            resolver.resolve(stroke(AsciiKey.h, .ctrl), context: .tree) == .cycleFileVisibility
+        )
     }
 
     // MARK: - Tab navigation
@@ -50,7 +51,8 @@ struct KeymapResolverTests {
     func ctrlPageUpPreviousTab() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(Key.pageUp.rawValue, .ctrl), context: .editor) == .previousTab)
+            resolver.resolve(stroke(Key.pageUp.rawValue, .ctrl), context: .editor) == .previousTab
+        )
     }
 
     // MARK: - Close tab (nano vs vim)
@@ -141,7 +143,8 @@ struct KeymapResolverTests {
     func cmdShiftZRedo() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.z, [.super, .shift]), context: .editor) == .redo)
+            resolver.resolve(stroke(AsciiKey.z, [.super, .shift]), context: .editor) == .redo
+        )
     }
 
     @Test

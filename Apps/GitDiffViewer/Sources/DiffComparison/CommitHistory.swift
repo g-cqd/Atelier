@@ -47,7 +47,11 @@ package struct CommitHistory: Sendable {
     }
 
     package func commitChanges(
-        from base: String, to tip: String, firstParent: Bool, limit: Int, in repository: URL
+        from base: String,
+        to tip: String,
+        firstParent: Bool,
+        limit: Int,
+        in repository: URL
     ) async throws -> GitCommitPage {
         try await git(repository).commitChanges(from: base, to: tip, firstParent: firstParent, limit: limit)
     }

@@ -8,11 +8,18 @@ struct LayeredLineTokensTests {
 
     /// An update over one line holding `tokens`.
     private static func update(
-        _ layer: HighlightLayer, _ coverage: TierCoverage, line: Int = 0, _ tokens: [HighlightToken]
+        _ layer: HighlightLayer,
+        _ coverage: TierCoverage,
+        line: Int = 0,
+        _ tokens: [HighlightToken]
     ) -> TierUpdate {
         TierUpdate(
-            layer: layer, coverage: coverage, revision: revision, lines: line ..< line + 1,
-            tokens: LineTokens(tokens, lineRanges: [0 ..< 100]))
+            layer: layer,
+            coverage: coverage,
+            revision: revision,
+            lines: line ..< line + 1,
+            tokens: LineTokens(tokens, lineRanges: [0 ..< 100])
+        )
     }
 
     @Test
@@ -21,11 +28,13 @@ struct LayeredLineTokensTests {
         var layered = LayeredLineTokens(lineCount: 2)
         let keyword = HighlightToken(byteRange: 0 ..< 3, role: .keyword, layer: .lexical)
         layered.apply(
-            Self.update(.lexical, .complete, [keyword, .init(byteRange: 4 ..< 7, role: .keyword, layer: .lexical)]))
+            Self.update(.lexical, .complete, [keyword, .init(byteRange: 4 ..< 7, role: .keyword, layer: .lexical)])
+        )
         layered.apply(Self.update(.lexical, .complete, line: 1, [keyword]))
 
         layered.apply(
-            Self.update(.syntactic, .complete, [.init(byteRange: 0 ..< 3, role: .keyword, layer: .syntactic)]))
+            Self.update(.syntactic, .complete, [.init(byteRange: 0 ..< 3, role: .keyword, layer: .syntactic)])
+        )
 
         #expect(layered.merged(line: 0) == [LineToken(range: 0 ..< 3, role: .keyword)])
         #expect(layered.merged(line: 1) == [LineToken(range: 0 ..< 3, role: .keyword)])
@@ -37,11 +46,14 @@ struct LayeredLineTokensTests {
         var layered = LayeredLineTokens(lineCount: 1)
         layered.apply(
             Self.update(
-                .syntactic, .complete,
+                .syntactic,
+                .complete,
                 [
                     .init(byteRange: 0 ..< 3, role: .keyword, layer: .syntactic),
                     .init(byteRange: 10 ..< 14, role: .string, layer: .syntactic)
-                ]))
+                ]
+            )
+        )
 
         layered.apply(Self.update(.semantic, .sparse, [.init(byteRange: 4 ..< 7, role: .variable, layer: .semantic)]))
 
@@ -90,17 +102,21 @@ struct LayeredLineTokensTests {
         var layered = LayeredLineTokens(lineCount: 1)
         layered.apply(
             Self.update(
-                .lexical, .complete,
+                .lexical,
+                .complete,
                 [
                     HighlightToken(byteRange: 0 ..< 6, role: .string),
                     HighlightToken(byteRange: 4 ..< 9, role: .comment),
                     HighlightToken(byteRange: 9 ..< 9, role: .number)
-                ]))
+                ]
+            )
+        )
 
         #expect(
             layered.merged(line: 0) == [
                 LineToken(range: 0 ..< 6, role: .string), LineToken(range: 6 ..< 9, role: .comment)
-            ])
+            ]
+        )
     }
 
     /// Ascending, disjoint tokens of `layer` somewhere in the first 60 bytes of a line.
@@ -112,8 +128,12 @@ struct LayeredLineTokensTests {
             let role = HighlightRole.allCases[Int(random.next() % UInt64(HighlightRole.allCases.count))]
             tokens.append(
                 HighlightToken(
-                    byteRange: cursor ..< cursor + length, role: role,
-                    modifiers: HighlightModifierSet(rawValue: UInt16(random.next() % 4)), layer: layer))
+                    byteRange: cursor ..< cursor + length,
+                    role: role,
+                    modifiers: HighlightModifierSet(rawValue: UInt16(random.next() % 4)),
+                    layer: layer
+                )
+            )
             cursor += length + Int(random.next() % 6)
         }
         return tokens

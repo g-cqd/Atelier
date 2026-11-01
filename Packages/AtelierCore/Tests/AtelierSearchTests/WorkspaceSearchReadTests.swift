@@ -26,8 +26,13 @@ struct WorkspaceSearchReadTests {
     {
         await withPool { pool in
             await searchWorkspace(
-                query: SearchQuery(text: text), files: [path], openBuffers: [:], pool: pool,
-                maximumFileSize: maximumFileSize, onProgress: { _ in })
+                query: SearchQuery(text: text),
+                files: [path],
+                openBuffers: [:],
+                pool: pool,
+                maximumFileSize: maximumFileSize,
+                onProgress: { _ in }
+            )
         }
     }
 
@@ -39,7 +44,9 @@ struct WorkspaceSearchReadTests {
         defer { file.close() }
 
         let lines = searchableLines(
-            of: TruncatedAfterSizing(file: file, path: path), maximumSize: maximumSearchedFileSize)
+            of: TruncatedAfterSizing(file: file, path: path),
+            maximumSize: maximumSearchedFileSize
+        )
 
         #expect(lines == nil)
     }

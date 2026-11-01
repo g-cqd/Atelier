@@ -36,7 +36,10 @@ public func scanMatches(in lines: [String], pattern: SearchPattern, maxMatches: 
 
 /// The deadline seam lets tests exercise expiry without waiting for real time to pass.
 func scanMatches(
-    in lines: [String], pattern: SearchPattern, maxMatches: Int, deadline: ContinuousClock.Instant?
+    in lines: [String],
+    pattern: SearchPattern,
+    maxMatches: Int,
+    deadline: ContinuousClock.Instant?
 ) -> SearchScanResult {
     guard maxMatches > 0 else {
         return SearchScanResult(matches: [], isComplete: lines.isEmpty, didHitLimit: !lines.isEmpty)
@@ -57,7 +60,10 @@ func scanMatches(
                 var searchStartColumn = 0
                 while searchStart < line.endIndex,
                     let range = line.range(
-                        of: text, options: options, range: searchStart ..< line.endIndex)
+                        of: text,
+                        options: options,
+                        range: searchStart ..< line.endIndex
+                    )
                 {
                     if Task.isCancelled {
                         return SearchScanResult(matches: matches, isComplete: false, didHitLimit: false)
@@ -97,7 +103,10 @@ func scanMatches(
                 }
                 if !finishedLine || Task.isCancelled || ContinuousClock.now >= deadline {
                     return SearchScanResult(
-                        matches: matches, isComplete: false, didHitLimit: matches.count == maxMatches)
+                        matches: matches,
+                        isComplete: false,
+                        didHitLimit: matches.count == maxMatches
+                    )
                 }
             }
     }

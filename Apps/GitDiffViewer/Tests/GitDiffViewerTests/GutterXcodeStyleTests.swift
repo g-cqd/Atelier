@@ -28,10 +28,15 @@ struct GutterXcodeStyleTests {
         let old = "let a = 1\nlet b = 2\nlet c = 3\n"
         let new = "let a = 1\nlet added = true\nlet b = 2\nlet c = 3\n"
         let prepared = PreparedDiff(
-            FileDiffInput(title: "", oldText: old, newText: new, language: .plain), granularity: .word)
+            FileDiffInput(title: "", oldText: old, newText: new, language: .plain),
+            granularity: .word
+        )
         let diff = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
-            layout: .full, withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .full,
+            withHeaders: false
+        )
         let rendered = try #require(diff.unified)
         let layout = StaticTextLayout(rendered: rendered)
         layout.layOut(mode: .none, viewportWidth: 400)
@@ -80,9 +85,14 @@ struct GutterXcodeStyleTests {
         let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .swift).new)
         let facts = try #require(SwiftSyntaxFacts.extract(text))
         let scopes = ScopeLines(
-            facts.scopes, text: text, lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text)))
+            facts.scopes,
+            text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text))
+        )
         let pane = try HostedDecoratedPane(
-            rendered: rendered, decorations: DiffDecorations(new: .init(scopes: scopes), markVersion: 1))
+            rendered: rendered,
+            decorations: DiffDecorations(new: .init(scopes: scopes), markVersion: 1)
+        )
         let content = try #require(pane.window.contentView)
         let gutter = try #require(firstSubview(DiffGutterView.self, in: content))
         return (pane, gutter)
@@ -103,7 +113,9 @@ struct GutterXcodeStyleTests {
         let hovered = try pane.pixels()
 
         let band = gutter.convert(
-            NSRect(x: gutter.ribbonX, y: 0, width: DiffGutterView.ribbonWidth, height: gutter.bounds.height), to: nil)
+            NSRect(x: gutter.ribbonX, y: 0, width: DiffGutterView.ribbonWidth, height: gutter.bounds.height),
+            to: nil
+        )
         #expect(hovered.differing(from: resting, in: band) > 0)
     }
 
@@ -114,13 +126,20 @@ struct GutterXcodeStyleTests {
         let old = "let a = 1\nlet old1 = 1\nlet old2 = 2\nlet z = 9\n"
         let new = "let a = 1\nlet new1 = 1\nlet new2 = 2\nlet z = 9\n"
         let prepared = PreparedDiff(
-            FileDiffInput(title: "", oldText: old, newText: new, language: .plain), granularity: .word)
+            FileDiffInput(title: "", oldText: old, newText: new, language: .plain),
+            granularity: .word
+        )
         let key = ChangeKey(fileIndex: 0, changeIndex: 0)
         let diff = DiffRenderer.render(
             prepared: [prepared],
             options: DiffRenderer.Options(
-                sides: [.unified], compactsInline: true, disclosedChanges: disclosed ? [key] : []),
-            layout: .full, withHeaders: false)
+                sides: [.unified],
+                compactsInline: true,
+                disclosedChanges: disclosed ? [key] : []
+            ),
+            layout: .full,
+            withHeaders: false
+        )
         let rendered = try #require(diff.unified)
         let layout = StaticTextLayout(rendered: rendered)
         layout.layOut(mode: .none, viewportWidth: 400)

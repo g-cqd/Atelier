@@ -22,7 +22,9 @@ enum BundledLanguageManifest {
 
     /// Reports a missing or corrupt bundled manifest.
     private static let logger = Logger(
-        subsystem: "kittycode.kittysyntax", category: "bundled-language-manifest")
+        subsystem: "kittycode.kittysyntax",
+        category: "bundled-language-manifest"
+    )
 
     private static func loadManifest() -> GrammarManifest? {
         guard let corpus = KittySyntaxResources.corpus else { return nil }

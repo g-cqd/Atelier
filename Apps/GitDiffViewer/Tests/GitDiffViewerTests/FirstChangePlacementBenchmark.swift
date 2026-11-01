@@ -20,8 +20,10 @@ import Testing
 struct FirstChangePlacementBenchmark {
     // Serialized: the layouts would otherwise share the main thread and time each other.
     @Test(
-        .serialized, .enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil),
-        arguments: [(PaneLayout.inline, true), (.inline, false), (.sideBySide, true), (.sideBySide, false)])
+        .serialized,
+        .enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil),
+        arguments: [(PaneLayout.inline, true), (.inline, false), (.sideBySide, true), (.sideBySide, false)]
+    )
     func `opening a long file at a change near its top and near its end`(layout: PaneLayout, wrapsLines: Bool)
         throws
     {
@@ -51,7 +53,8 @@ struct FirstChangePlacementBenchmark {
                 + "opening near the top \(Self.summary(samples.nearOpening)), "
                 + "near the end \(Self.summary(samples.deepOpening)); "
                 + "leaving near the top \(Self.summary(samples.nearLeaving)), "
-                + "near the end \(Self.summary(samples.deepLeaving))")
+                + "near the end \(Self.summary(samples.deepLeaving))"
+        )
     }
 
     /// Milliseconds per opening and per leaving, by where the change was.

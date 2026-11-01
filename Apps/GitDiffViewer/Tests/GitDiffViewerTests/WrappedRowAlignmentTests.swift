@@ -44,7 +44,10 @@ extension PaneText {
         let old = (1 ... rows).map { line("old", $0, length: 60) }
         let new = (1 ... rows).map { line("new", $0, length: 15) }
         let rendered = DiffRenderer.render(
-            oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n", language: .plain)
+            oldText: old.joined(separator: "\n") + "\n",
+            newText: new.joined(separator: "\n") + "\n",
+            language: .plain
+        )
         return PaneText(rendered: rendered, asksForChange: false)
     }
 }

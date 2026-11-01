@@ -24,7 +24,12 @@ struct GitConfigGateBenchmark {
         _ = try await GitClient(repository: root, runner: runner, gate: warm).status()
         let cachedGate = try await Self.median(rounds) {
             _ = try await GitClient.approvedConfiguration(
-                in: root, runner: runner, timeout: nil, isolation: .strict, gate: warm)
+                in: root,
+                runner: runner,
+                timeout: nil,
+                isolation: .strict,
+                gate: warm
+            )
         }
 
         // One `git status`, with the verdict cached and with it re-read every time.
@@ -39,7 +44,8 @@ struct GitConfigGateBenchmark {
             """
             BENCH git status over \(rounds) rounds at \(root.path(percentEncoded: false)): \
             verdict cached \(cachedCall), verdict re-read \(uncachedCall), gate alone on a hit \(cachedGate)
-            """)
+            """
+        )
     }
 
     private static func median(_ rounds: Int, _ body: () async throws -> Void) async rethrows -> Duration {

@@ -23,8 +23,11 @@ struct HoverDocPanelTests {
     private func makeHostTextView() -> NSTextView {
         let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 200), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView?.addSubview(textView)
         retainedWindows.append(window)
         return textView
@@ -40,7 +43,8 @@ struct HoverDocPanelTests {
 
     /// Asserts the panel's height matches its laid-out content height for `document`, within a point.
     private func assertNoWastedSpace(
-        _ document: HoverDocument, sourceLocation: SourceLocation = #_sourceLocation
+        _ document: HoverDocument,
+        sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
         let panel = HoverDocPanel(ordersWindowIn: false)
         let textView = makeHostTextView()
@@ -54,7 +58,9 @@ struct HoverDocPanelTests {
 
     @Test func aDeclarationOnlyDocumentHasNoWastedSpace() throws {
         let document = HoverDocument(
-            declaration: codeAttributed("struct CameraConfiguration"), chipBackground: .textBackgroundColor)
+            declaration: codeAttributed("struct CameraConfiguration"),
+            chipBackground: .textBackgroundColor
+        )
         try assertNoWastedSpace(document)
     }
 
@@ -62,7 +68,8 @@ struct HoverDocPanelTests {
         let document = HoverDocument(
             declaration: codeAttributed("struct CameraConfiguration"),
             summary: prose("A value type describing how a capture session should be configured."),
-            chipBackground: .textBackgroundColor)
+            chipBackground: .textBackgroundColor
+        )
         try assertNoWastedSpace(document)
     }
 
@@ -80,9 +87,11 @@ struct HoverDocPanelTests {
             extraCandidates: [
                 HoverDocument.Candidate(
                     declaration: codeAttributed("func configure(session: CaptureSession) -> Bool"),
-                    summary: prose("An older overload kept for source compatibility."))
+                    summary: prose("An older overload kept for source compatibility.")
+                )
             ],
-            chipBackground: .textBackgroundColor)
+            chipBackground: .textBackgroundColor
+        )
         try assertNoWastedSpace(document)
     }
 
@@ -93,7 +102,8 @@ struct HoverDocPanelTests {
         let text = String(repeating: "The description wraps over several lines in the panel. ", count: 4)
         let document = HoverDocument(
             summary: prose("Configures a capture session."),
-            parameters: [HoverDocument.Field(name: name, text: prose(text))])
+            parameters: [HoverDocument.Field(name: name, text: prose(text))]
+        )
         let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
         let root = try #require(panel.contentViewForTests)
@@ -115,20 +125,28 @@ struct HoverDocPanelTests {
     /// A provenance adds nothing to the panel's height: the panel draws no footer.
     @Test func provenanceStillHasNoFooterFootprint() throws {
         let withProvenance = HoverDocument(
-            declaration: codeAttributed("struct CameraConfiguration"), provenance: .languageServer,
-            chipBackground: .textBackgroundColor)
+            declaration: codeAttributed("struct CameraConfiguration"),
+            provenance: .languageServer,
+            chipBackground: .textBackgroundColor
+        )
         let withoutProvenance = HoverDocument(
-            declaration: codeAttributed("struct CameraConfiguration"), provenance: .unknown,
-            chipBackground: .textBackgroundColor)
+            declaration: codeAttributed("struct CameraConfiguration"),
+            provenance: .unknown,
+            chipBackground: .textBackgroundColor
+        )
 
         let panelWith = HoverDocPanel(ordersWindowIn: false)
         panelWith.show(
-            document: withProvenance, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
-            in: makeHostTextView())
+            document: withProvenance,
+            anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
+            in: makeHostTextView()
+        )
         let panelWithout = HoverDocPanel(ordersWindowIn: false)
         panelWithout.show(
-            document: withoutProvenance, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
-            in: makeHostTextView())
+            document: withoutProvenance,
+            anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
+            in: makeHostTextView()
+        )
 
         let heightWith = try #require(panelWith.laidOutContentHeightForTests)
         let heightWithout = try #require(panelWithout.laidOutContentHeightForTests)
@@ -158,7 +176,9 @@ struct HoverDocPanelTests {
     @Test(arguments: [HoverFixtures.languageServerUndocumentedVariable, HoverFixtures.sdkUndocumentedProperty])
     func `an undocumented symbol's hover shows its declaration alone`(markdown: String) throws {
         let document = HoverDocument.build(
-            from: HoverContent(markdown: markdown, source: .languageServer), palette: .system)
+            from: HoverContent(markdown: markdown, source: .languageServer),
+            palette: .system
+        )
         let declaration = try #require(document.declaration?.string)
         #expect(try shownTexts(ofPanelFor: document) == [declaration])
     }

@@ -47,7 +47,9 @@ public enum WorkspaceFileLoading {
     ///   `CocoaError(.fileReadInapplicableStringEncoding)` when the file is not UTF-8; otherwise the `CocoaError`
     ///   Foundation's own reads give, a file that shrank while it was read among them.
     public static func readUTF8File(
-        at path: String, maximumSize: Int = maxFileSize, offload: BlockingFileRead
+        at path: String,
+        maximumSize: Int = maxFileSize,
+        offload: BlockingFileRead
     ) async throws -> LoadedFile {
         try Task.checkCancellation()
         return try await offload { try decode(try contents(atPath: path, maximumSize: maximumSize)) }

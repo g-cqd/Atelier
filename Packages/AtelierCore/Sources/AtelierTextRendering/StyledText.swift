@@ -61,8 +61,11 @@ extension StyledText {
         }
         rowStarts.append(UInt32(utf8.count))
         return StyledText(
-            utf8: utf8, rowStarts: rowStarts, runs: .empty(rowCount: rows.count),
-            styles: StyleSheet(font: font, styles: [plainStyle]))
+            utf8: utf8,
+            rowStarts: rowStarts,
+            runs: .empty(rowCount: rows.count),
+            styles: StyleSheet(font: font, styles: [plainStyle])
+        )
     }
 
     /// Builds a text from plain `String` rows, for tests and simple hosts.

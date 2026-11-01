@@ -239,13 +239,17 @@ extension EditorState {
                 let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
                 return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
                     await self.createTreeFile(
-                        at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+                        at: self.resolvePromptPath(trimmedPath),
+                        suggestedDirectory: directory
+                    )
                 }
             case .createDirectory(let directory):
                 let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
                 return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
                     await self.createTreeDirectory(
-                        at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+                        at: self.resolvePromptPath(trimmedPath),
+                        suggestedDirectory: directory
+                    )
                 }
             case .rename(let path):
                 let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -387,8 +391,11 @@ extension EditorState {
                 let buffer = bufferManager.buffers[bufferIdx]
                 let lines = buffer.textBuffer.lines
                 let (newLines, count) = applyReplacements(
-                    to: lines, matches: fileResult.matches,
-                    pattern: pattern, replacement: replacement)
+                    to: lines,
+                    matches: fileResult.matches,
+                    pattern: pattern,
+                    replacement: replacement
+                )
                 if count > 0 {
                     buffer.textBuffer = TerminalKitText.TextBuffer(lines: newLines)
                     buffer.isDirty = true
@@ -408,17 +415,23 @@ extension EditorState {
 
                 let lines =
                     content.split(
-                        separator: "\n", omittingEmptySubsequences: false
+                        separator: "\n",
+                        omittingEmptySubsequences: false
                     )
                     .map(String.init)
                 let (newLines, count) = applyReplacements(
-                    to: lines, matches: fileResult.matches,
-                    pattern: pattern, replacement: replacement)
+                    to: lines,
+                    matches: fileResult.matches,
+                    pattern: pattern,
+                    replacement: replacement
+                )
                 if count > 0 {
                     let newContent = newLines.joined(separator: "\n")
                     try? newContent.write(
-                        toFile: fileResult.filePath, atomically: true,
-                        encoding: String.Encoding.utf8)
+                        toFile: fileResult.filePath,
+                        atomically: true,
+                        encoding: String.Encoding.utf8
+                    )
                     totalReplaced += count
                     filesChanged += 1
                 }

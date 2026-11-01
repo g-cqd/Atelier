@@ -31,9 +31,9 @@ package final class DocHoverController: NSObject {
     package let debounce: Duration
 
     private let clock: any Clock<Duration>
-    private let taskProvider: any TaskProvider
-    private weak var textView: NSTextView?
-    private var renderedProvider: (@MainActor () -> RenderedText?)?
+    let taskProvider: any TaskProvider
+    weak var textView: NSTextView?
+    var renderedProvider: (@MainActor () -> RenderedText?)?
     private var trackingArea: NSTrackingArea?
     private var generation = 0
     private var pendingTask: Task<Void, Never>?
@@ -71,7 +71,8 @@ package final class DocHoverController: NSObject {
     ///   - panel: Builds the panel documents show in, on the first hover and again on the first after a detach;
     ///     one that orders no window in, for tests.
     package init(
-        clock: any Clock<Duration> = ContinuousClock(), taskProvider: any TaskProvider = .default,
+        clock: any Clock<Duration> = ContinuousClock(),
+        taskProvider: any TaskProvider = .default,
         debounce: Duration = .milliseconds(300),
         panel: @autoclosure @escaping @MainActor () -> HoverDocPanel = HoverDocPanel()
     ) {
@@ -95,13 +96,19 @@ package final class DocHoverController: NSObject {
         renderedProvider = rendered
         let area = NSTrackingArea(
             rect: .zero,
-            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self,
-            userInfo: nil)
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
         textView.addTrackingArea(area)
         trackingArea = area
         followEnclosingClipViews()
         NotificationCenter.default.addObserver(
-            self, selector: #selector(windowDidResignKey(_:)), name: NSWindow.didResignKeyNotification, object: nil)
+            self,
+            selector: #selector(windowDidResignKey(_:)),
+            name: NSWindow.didResignKeyNotification,
+            object: nil
+        )
         (textView as? DiffPaneTextView)?.contextMenuItems = { [weak self] point in
             self?.contextMenuItems(at: point) ?? []
         }
@@ -148,8 +155,11 @@ package final class DocHoverController: NSObject {
             clipView.postsBoundsChangedNotifications = true
             scrollOrigins[ObjectIdentifier(clipView)] = clipView.bounds.origin
             NotificationCenter.default.addObserver(
-                self, selector: #selector(clipViewBoundsDidChange(_:)), name: NSView.boundsDidChangeNotification,
-                object: clipView)
+                self,
+                selector: #selector(clipViewBoundsDidChange(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: clipView
+            )
         }
     }
 
@@ -249,8 +259,10 @@ package final class DocHoverController: NSObject {
     /// Looks `hit` up with `resolve` once `delay` passes, or at once without one, after any lookup still in flight, and
     /// shows its document unless a newer lookup or a drop supersedes it; a hit with nothing to show closes the shown
     /// panel after the grace delay.
-    private func lookUp(
-        _ hit: HoverHit, with resolve: @escaping @Sendable (HoverHit) async -> HoverDocument?, after delay: Duration?
+    func lookUp(
+        _ hit: HoverHit,
+        with resolve: @escaping @Sendable (HoverHit) async -> HoverDocument?,
+        after delay: Duration?
     ) {
         cancelClose()
         generation += 1
@@ -296,49 +308,6 @@ package final class DocHoverController: NSObject {
             default:
                 return event
         }
-    }
-
-    // MARK: Context menu
-
-    /// The items a context menu over `point`, in the attached text view's coordinates, starts with (book HOVER-14):
-    /// Show Documentation over an identifier while hover is on, which opens its hover panel at once, and Show Issue
-    /// over the underlined range of a finding, which opens the findings under `point` in the popover a click on the
-    /// row's line number opens.
-    package func contextMenuItems(at point: NSPoint) -> [NSMenuItem] {
-        guard let textView, let rendered = renderedProvider?() else { return [] }
-        var items: [NSMenuItem] = []
-        if isEnabled, let resolve, let hit = HoverHitTester.hit(at: point, textView: textView, rendered: rendered) {
-            items.append(
-                menuItem("Show Documentation") { [weak self] in self?.lookUp(hit, with: resolve, after: nil) })
-        }
-        if let gutter = paneGutter,
-            let position = HoverHitTester.position(at: point, textView: textView, rendered: rendered),
-            let findings = gutter.overlay?.row(position.row)?.findings(underColumn: position.utf16Column),
-            !findings.isEmpty
-        {
-            items.append(
-                menuItem("Show Issue") { [weak gutter] in gutter?.showFindings(findings, ofRow: position.row) })
-        }
-        return items
-    }
-
-    /// The gutter of the pane the text view shows in, which holds the pane's findings and opens them.
-    private var paneGutter: DiffGutterView? {
-        guard let textView else { return nil }
-        return sequence(first: textView as NSView, next: \.superview).lazy.compactMap { $0 as? DiffPaneView }.first?
-            .gutterView
-    }
-
-    /// A menu item that runs `action` when chosen.
-    private func menuItem(_ title: String, action: @escaping @MainActor () -> Void) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: #selector(performMenuAction(_:)), keyEquivalent: "")
-        item.target = self
-        item.representedObject = MenuAction(action)
-        return item
-    }
-
-    @objc private func performMenuAction(_ sender: NSMenuItem) {
-        (sender.representedObject as? MenuAction)?.run()
     }
 
     /// Over the panel, the reader is reading it: a lookup the path to it started, over another identifier, would
@@ -425,7 +394,7 @@ package final class DocHoverController: NSObject {
 
 /// What a context menu item of ``DocHoverController`` runs, held by the item.
 @MainActor
-private final class MenuAction: NSObject {
+final class MenuAction: NSObject {
     let run: @MainActor () -> Void
 
     init(_ run: @escaping @MainActor () -> Void) {

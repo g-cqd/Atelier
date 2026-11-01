@@ -115,12 +115,12 @@ public actor LanguageServerSession {
     /// Builds an unstarted connection for a session; the service starts it and performs the `initialize` handshake.
     public typealias ConnectionFactory = @Sendable (Configuration) async throws -> LSPConnection
 
-    private struct OpenDocument {
+    struct OpenDocument {
         var version: Int
         var contentHash: Int
     }
 
-    private let configuration: Configuration
+    let configuration: Configuration
     private nonisolated let clock: any Clock<Duration>
     private let connectionFactory: ConnectionFactory
 
@@ -133,14 +133,14 @@ public actor LanguageServerSession {
     private var restartsUsed = 0
     private var permanentlyUnavailable = false
 
-    private var openDocuments: [String: OpenDocument] = [:]
+    var openDocuments: [String: OpenDocument] = [:]
     /// Least-recently-used order, oldest first.
-    private var openOrder: [String] = []
+    var openOrder: [String] = []
 
     /// What the server said of semantic tokens when it initialized; nil when it has none, or before it initialized.
     private var semanticSupport: InitializeResult.SemanticTokensSupport?
     /// Each open document's last semantic tokens, which a delta request names and applies to.
-    private var semanticStates: [String: LSPSemanticTokenDecoder.SemanticTokensState] = [:]
+    var semanticStates: [String: LSPSemanticTokenDecoder.SemanticTokensState] = [:]
 
     /// Bumped per scheduled idle shutdown; a timer that fires with a stale generation does nothing.
     private var idleGeneration = 0
@@ -169,7 +169,11 @@ public actor LanguageServerSession {
     /// when no answer came, so that a caller caches answers alone. Opens `uri` with `content` on the server first, and
     /// restarts the idle timer.
     public func hover(
-        uri: String, languageID: String, content: String, line: Int, utf16Column: Int
+        uri: String,
+        languageID: String,
+        content: String,
+        line: Int,
+        utf16Column: Int
     ) async -> HoverOutcome {
         guard !permanentlyUnavailable else { return .unavailable }
         defer { scheduleIdleShutdown() }
@@ -178,7 +182,9 @@ public actor LanguageServerSession {
         await ensureOpen(uri: uri, languageID: languageID, content: content, on: connection)
 
         let params = HoverParams(
-            textDocument: TextDocumentIdentifier(uri: uri), position: Position(line: line, character: utf16Column))
+            textDocument: TextDocumentIdentifier(uri: uri),
+            position: Position(line: line, character: utf16Column)
+        )
 
         do {
             let hover = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
@@ -265,7 +271,8 @@ public actor LanguageServerSession {
                 let attempts = restartsUsed
                 let server = serverName
                 Self.logger.error(
-                    "\(server, privacy: .public) failed to start \(attempts, privacy: .public) times; no more restarts")
+                    "\(server, privacy: .public) failed to start \(attempts, privacy: .public) times; no more restarts"
+                )
                 permanentlyUnavailable = true
             } else {
                 do {
@@ -293,9 +300,11 @@ public actor LanguageServerSession {
         await connection.start()
         let root = configuration.workspaceRoot
         let params = InitializeParams(
-            processId: Int(ProcessInfo.processInfo.processIdentifier), rootUri: root.absoluteString,
+            processId: Int(ProcessInfo.processInfo.processIdentifier),
+            rootUri: root.absoluteString,
             initializationOptions: configuration.initializationOptions,
-            workspaceFolders: [WorkspaceFolder(uri: root.absoluteString, name: root.lastPathComponent)])
+            workspaceFolders: [WorkspaceFolder(uri: root.absoluteString, name: root.lastPathComponent)]
+        )
         let result = try await raceAgainstTimeout(clock: clock, timeout: configuration.initializeTimeout) {
             try await connection.request("initialize", params, as: InitializeResult.self)
         }
@@ -333,7 +342,7 @@ public actor LanguageServerSession {
 
     /// Sends a notification, logging a failure: a dead transport also fails the next request, which tears the
     /// connection down.
-    private func send(_ method: String, _ params: some Encodable & Sendable, on connection: LSPConnection) async {
+    func send(_ method: String, _ params: some Encodable & Sendable, on connection: LSPConnection) async {
         do {
             try await connection.notify(method, params)
         } catch {
@@ -371,76 +380,6 @@ public actor LanguageServerSession {
         semanticSupport = nil
         await gracefulTeardown(connection)
     }
-
-    // MARK: - Open document tracking
-
-    private func ensureOpen(uri: String, languageID: String, content: String, on connection: LSPConnection) async {
-        let hash = content.hashValue
-
-        if let existing = openDocuments[uri] {
-            guard existing.contentHash != hash else {
-                touch(uri)
-                return
-            }
-            // The whole new text, one version on: the server keeps the document, and a semantic tokens delta against
-            // its last result stays meaningful.
-            let newVersion = existing.version + 1
-            openDocuments[uri] = OpenDocument(version: newVersion, contentHash: hash)
-            await send(
-                "textDocument/didChange",
-                DidChangeTextDocumentParams(
-                    textDocument: VersionedTextDocumentIdentifier(uri: uri, version: newVersion),
-                    contentChanges: [TextDocumentContentChangeEvent(text: content)]),
-                on: connection)
-            touch(uri)
-            return
-        }
-
-        if openOrder.count >= configuration.openDocumentLimit {
-            await evictOldest(on: connection)
-        }
-
-        openDocuments[uri] = OpenDocument(version: 1, contentHash: hash)
-        openOrder.append(uri)
-        await send(
-            "textDocument/didOpen",
-            DidOpenTextDocumentParams(
-                textDocument: TextDocumentItem(uri: uri, languageId: languageID, version: 1, text: content)),
-            on: connection)
-    }
-
-    private func touch(_ uri: String) {
-        guard let index = openOrder.firstIndex(of: uri) else { return }
-        openOrder.remove(at: index)
-        openOrder.append(uri)
-    }
-
-    private func evictOldest(on connection: LSPConnection) async {
-        guard !openOrder.isEmpty else { return }
-        let oldest = openOrder.removeFirst()
-        openDocuments.removeValue(forKey: oldest)
-        semanticStates.removeValue(forKey: oldest)
-        await send(
-            "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: oldest)),
-            on: connection)
-    }
-
-    // MARK: - The real-world factory
-
-    /// The server process `configuration` describes, not yet started: its executable, arguments and environment, run
-    /// in the workspace root.
-    static func processSession(for configuration: Configuration) -> ProcessSession {
-        ProcessSession(
-            executable: configuration.serverExecutable, arguments: configuration.serverArguments,
-            environment: configuration.environment, workingDirectory: configuration.workspaceRoot)
-    }
-
-    private static func defaultConnectionFactory(_ configuration: Configuration) async throws -> LSPConnection {
-        let session = processSession(for: configuration)
-        try await session.start()
-        let transport = ProcessSessionTransport(session: session)
-        return LSPConnection(transport: transport)
-    }
 }
 
 // MARK: - Semantic tokens
@@ -467,7 +406,8 @@ extension LanguageServerSession {
                     try await connection.requestOptional(
                         "textDocument/semanticTokens/full/delta",
                         SemanticTokensDeltaParams(textDocument: document, previousResultId: previousID),
-                        as: SemanticTokensDeltaResult.self)
+                        as: SemanticTokensDeltaResult.self
+                    )
                 }
                 // The delta applies to the result it names, which a concurrent request may have replaced.
                 guard isCurrent(uri, version: version, generation: generation),
@@ -481,8 +421,10 @@ extension LanguageServerSession {
             } else {
                 let reply = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
                     try await connection.requestOptional(
-                        "textDocument/semanticTokens/full", SemanticTokensParams(textDocument: document),
-                        as: SemanticTokensResult.self)
+                        "textDocument/semanticTokens/full",
+                        SemanticTokensParams(textDocument: document),
+                        as: SemanticTokensResult.self
+                    )
                 }
                 guard isCurrent(uri, version: version, generation: generation) else { return .superseded }
                 state.applyFull(resultId: reply?.resultId, data: reply?.data ?? [])
@@ -495,7 +437,8 @@ extension LanguageServerSession {
         } catch LSPConnectionError.transportClosed(let reason) {
             let server = serverName
             Self.logger.error(
-                "\(server, privacy: .public) went away during semantic tokens: \(reason, privacy: .public)")
+                "\(server, privacy: .public) went away during semantic tokens: \(reason, privacy: .public)"
+            )
             await abruptTeardown()
             return .unavailable
         } catch {
@@ -519,7 +462,11 @@ extension LanguageServerSession {
     /// the symbol, for its name and labels, and about the type its chain starts with, whose module files the page even
     /// when another module declares the symbol, as Foundation does `String.Encoding.utf8`. Restarts the idle timer.
     public func documentationPage(
-        uri: String, languageID: String, content: String, line: Int, utf16Column: Int
+        uri: String,
+        languageID: String,
+        content: String,
+        line: Int,
+        utf16Column: Int
     ) async -> HoverContent.DocumentationPage? {
         guard !permanentlyUnavailable,
             let chain = DocumentationChain(content: content, line: line, utf16Column: utf16Column)
@@ -542,10 +489,15 @@ extension LanguageServerSession {
     /// The name and top-level module of the system symbol at the position, as `textDocument/symbolInfo` gives them;
     /// nil for a symbol with sources, or when no answer comes.
     private func systemSymbol(
-        uri: String, line: Int, utf16Column: Int, on connection: LSPConnection
+        uri: String,
+        line: Int,
+        utf16Column: Int,
+        on connection: LSPConnection
     ) async -> (name: String, module: String)? {
         let params = HoverParams(
-            textDocument: TextDocumentIdentifier(uri: uri), position: Position(line: line, character: utf16Column))
+            textDocument: TextDocumentIdentifier(uri: uri),
+            position: Position(line: line, character: utf16Column)
+        )
         do {
             let symbols = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
                 try await connection.requestOptional("textDocument/symbolInfo", params, as: [SymbolDetails].self)

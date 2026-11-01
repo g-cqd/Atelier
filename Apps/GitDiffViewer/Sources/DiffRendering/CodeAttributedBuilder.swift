@@ -8,12 +8,16 @@ package enum CodeAttributedBuilder {
     /// `code` colored over `palette`'s font and text color, lexed as the fence's `languageTag`: as Swift when there is
     /// no tag, and as plain text when the tag names a language the lexers do not know.
     package static func attributedString(
-        for code: String, languageTag: String? = nil, palette: DiffPalette
+        for code: String,
+        languageTag: String? = nil,
+        palette: DiffPalette
     ) -> NSAttributedString {
         guard !code.isEmpty else { return NSAttributedString() }
         let language = languageTag.map { Language(name: $0) ?? .plain } ?? .swift
         let result = NSMutableAttributedString(
-            string: code, attributes: [.font: palette.font, .foregroundColor: palette.textColor])
+            string: code,
+            attributes: [.font: palette.font, .foregroundColor: palette.textColor]
+        )
         guard language != .plain else { return result }
         let utf16Length = (code as NSString).length
         let units = Array(code.utf16)

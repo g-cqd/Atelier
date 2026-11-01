@@ -100,9 +100,12 @@ public enum GitConfigPolicy {
             let separator = pair.firstIndex(of: "\n")
             entries.append(
                 GitConfigEntry(
-                    scope: scope, file: Self.file(fromOrigin: origin, relativeTo: directory),
+                    scope: scope,
+                    file: Self.file(fromOrigin: origin, relativeTo: directory),
                     key: separator.map { String(pair[..<$0]) } ?? pair,
-                    value: separator.map { String(pair[pair.index(after: $0)...]) }))
+                    value: separator.map { String(pair[pair.index(after: $0)...]) }
+                )
+            )
         }
         return entries
     }
@@ -131,8 +134,12 @@ public enum GitConfigPolicy {
             if !isInert(parts) { refused.append(entry.key) }
         }
         return GitConfigVerdict(
-            refusedKeys: refused, filterDrivers: drivers, entries: owned, userCredentialHelpers: helpers,
-            files: files.sorted())
+            refusedKeys: refused,
+            filterDrivers: drivers,
+            entries: owned,
+            userCredentialHelpers: helpers,
+            files: files.sorted()
+        )
     }
 
     /// True when a repository may hold `key` without git running anything the repository chose.
@@ -294,7 +301,8 @@ public enum GitConfigPolicy {
             flags.compactMap { flag in
                 guard let equals = flag.firstIndex(of: "=") else { return nil }
                 return String(flag[..<equals]).lowercased()
-            })
+            }
+        )
     }()
 
     /// The absolute path an origin names, or nil when the origin is not a file. Git prints a repository's own files
@@ -353,7 +361,9 @@ public final class GitConfigGate: Sendable {
     /// - Throws: Whatever `read` throws.
     /// - Complexity: O(files) `stat` calls on a hit; one git process on a miss.
     public func verdict(
-        in directory: URL, isolation: GitIsolation, reading read: @Sendable () async throws -> Data
+        in directory: URL,
+        isolation: GitIsolation,
+        reading read: @Sendable () async throws -> Data
     ) async rethrows -> GitConfigVerdict {
         let key = Key(path: directory.path(percentEncoded: false), isolation: isolation)
         if let cached = cachedVerdict(forKey: key) { return cached }
@@ -361,8 +371,12 @@ public final class GitConfigGate: Sendable {
         guard let entries = GitConfigPolicy.entries(inListing: data, relativeTo: directory) else {
             // Truncated output: nothing can be judged, so nothing may run, and nothing is cached either.
             return GitConfigVerdict(
-                refusedKeys: [Self.unreadableConfiguration], filterDrivers: [], entries: [],
-                userCredentialHelpers: [], files: [])
+                refusedKeys: [Self.unreadableConfiguration],
+                filterDrivers: [],
+                entries: [],
+                userCredentialHelpers: [],
+                files: []
+            )
         }
         let verdict = GitConfigPolicy.verdict(for: entries)
         store(verdict, forKey: key)
@@ -426,8 +440,13 @@ private struct GitFileStamp: Sendable, Hashable {
         return GitFileStamp(
             path: path,
             identity: Identity(
-                device: Int64(status.st_dev), inode: status.st_ino, size: status.st_size,
-                seconds: Int64(status.st_mtimespec.tv_sec), nanoseconds: Int64(status.st_mtimespec.tv_nsec)))
+                device: Int64(status.st_dev),
+                inode: status.st_ino,
+                size: status.st_size,
+                seconds: Int64(status.st_mtimespec.tv_sec),
+                nanoseconds: Int64(status.st_mtimespec.tv_nsec)
+            )
+        )
     }
 
     var isCurrent: Bool {

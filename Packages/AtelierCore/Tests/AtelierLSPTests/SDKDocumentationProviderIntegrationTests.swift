@@ -19,7 +19,10 @@ struct SDKDocumentationProviderIntegrationTests {
 
         let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
         let provider = SDKDocumentationProvider.scratch(
-            serverExecutable: serverExecutable, probeDirectory: probeDirectory, locateSDK: { _ in nil })
+            serverExecutable: serverExecutable,
+            probeDirectory: probeDirectory,
+            locateSDK: { _ in nil }
+        )
 
         let content = "import AppKit\nlet material = NSVisualEffectView.Material.hudWindow"
         // Inside "hudWindow", counted on the hovered line alone.
@@ -39,13 +42,19 @@ struct SDKDocumentationProviderIntegrationTests {
         let serverExecutable = try #require(Self.resolveSourceKitLSP(), "sourcekit-lsp not found")
         let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
         let provider = SDKDocumentationProvider.scratch(
-            serverExecutable: serverExecutable, probeDirectory: probeDirectory, locateSDK: { _ in nil },
-            resolvesDocumentationPages: true)
+            serverExecutable: serverExecutable,
+            probeDirectory: probeDirectory,
+            locateSDK: { _ in nil },
+            resolvesDocumentationPages: true
+        )
 
         func page(of line: String) async throws -> HoverContent.DocumentationPage? {
             let query = HoverQuery(
-                documentURI: "file:///probe.swift", content: "import Foundation\n" + line, line: 1,
-                utf16Column: line.utf16.count - 1)
+                documentURI: "file:///probe.swift",
+                content: "import Foundation\n" + line,
+                line: 1,
+                utf16Column: line.utf16.count - 1
+            )
             return try await provider.hover(query)?.documentationPage
         }
         let utf8 = try await page(of: "let encoding = String.Encoding.utf8")
@@ -67,13 +76,19 @@ struct SDKDocumentationProviderIntegrationTests {
         let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
         // A cold module cache takes a quarter of a minute to load UIKit here.
         let provider = SDKDocumentationProvider.scratch(
-            serverExecutable: serverExecutable, probeDirectory: probeDirectory,
-            locateSDK: { platform in await SDKLocation.locate(platform, runner: runner) }, requestTimeout: .seconds(120)
+            serverExecutable: serverExecutable,
+            probeDirectory: probeDirectory,
+            locateSDK: { platform in await SDKLocation.locate(platform, runner: runner) },
+            requestTimeout: .seconds(120)
         )
 
         let content = "import UIKit\nlet view = UIView()"
         let query = HoverQuery(
-            documentURI: "file:///probe.swift", content: content, line: 1, utf16Column: "let view = UIV".utf16.count)
+            documentURI: "file:///probe.swift",
+            content: content,
+            line: 1,
+            utf16Column: "let view = UIV".utf16.count
+        )
         let result = try await provider.hover(query)
         await provider.shutdown()
         try FileManager.default.removeItem(at: probeDirectory)

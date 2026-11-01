@@ -74,7 +74,8 @@ struct StickyCardGeometryTests {
 
     @Test(arguments: [(300, 270), (120, 90), (30, 0), (20, 0)] as [(CGFloat, CGFloat)])
     func `the body's clip is the card below its header, and nothing once only the header is left`(
-        height: CGFloat, clip: CGFloat
+        height: CGFloat,
+        clip: CGFloat
     ) {
         let sut = makeSUT(pinY: 0, size: CGSize(width: 400, height: height))
         #expect(sut.bodyClipHeight == clip)
@@ -99,9 +100,11 @@ struct StickyCardGeometryTests {
 
     @Test(
         arguments: [(0, 300), (0.25, 232.5), (0.5, 165), (1, 30), (-0.5, 300), (1.5, 30), (.nan, 300)]
-            as [(CGFloat, CGFloat)])
+            as [(CGFloat, CGFloat)]
+    )
     func `a folding card is its header and the part of the body the fold has not clipped yet`(
-        progress: CGFloat, height: CGFloat
+        progress: CGFloat,
+        height: CGFloat
     ) {
         #expect(StickyCardGeometry.cardHeight(headerHeight: 30, bodyHeight: 270, foldProgress: progress) == height)
     }
@@ -121,7 +124,8 @@ struct StickyCardGeometryTests {
     @Test(
         arguments: [
             .nan, .infinity, -.infinity, -1, .greatestFiniteMagnitude, StickyCardGeometry.maximumLength + 1
-        ] as [CGFloat])
+        ] as [CGFloat]
+    )
     func `a non-finite, negative or unbounded length falls back to the last good one`(length: CGFloat) {
         #expect(!StickyCardGeometry.isAcceptable(length))
         #expect(StickyCardGeometry.length(length, fallback: 216) == 216)
@@ -132,7 +136,8 @@ struct StickyCardGeometryTests {
         #expect(StickyCardGeometry.length(.nan, fallback: .nan) == 0)
         #expect(
             StickyCardGeometry.length(.infinity, fallback: .greatestFiniteMagnitude)
-                == StickyCardGeometry.maximumLength)
+                == StickyCardGeometry.maximumLength
+        )
     }
 
     @Test

@@ -34,7 +34,8 @@ struct ScrollViewTests {
         #expect(ScrollViewLayout.contentWidth(for: scrollView, in: rect) == 9)
         #expect(
             ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect)
-                == Rect(x: 9, y: 0, width: 1, height: 5))
+                == Rect(x: 9, y: 0, width: 1, height: 5)
+        )
     }
 
     @Test
@@ -70,7 +71,10 @@ struct ScrollViewTests {
         #expect(gripOffset == 0)
 
         let offset = ScrollViewLayout.scrollOffset(
-            for: scrollView, in: rect, pointerRow: 4, gripOffset: 0
+            for: scrollView,
+            in: rect,
+            pointerRow: 4,
+            gripOffset: 0
         )
         #expect(offset == 15)
     }

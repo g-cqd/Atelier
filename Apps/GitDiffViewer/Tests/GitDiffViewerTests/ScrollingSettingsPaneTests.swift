@@ -149,8 +149,11 @@ struct ScrollingSettingsPaneTests {
     /// The detail area, as the window hosts it, in a window that is never ordered in.
     private static func window(showing model: DiffViewerModel) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: DiffDetailView(model: model))
         return window

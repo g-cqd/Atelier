@@ -160,9 +160,13 @@ public struct RubyExternalScanner: GrammarExternalScanner {
             guard depth > 0 else { return }
             literals.append(
                 Literal(
-                    type: type, openDelimiter: UInt32(open), closeDelimiter: UInt32(close),
-                    nestingDepth: Int(depth), allowsInterpolation: interpolation != 0
-                ))
+                    type: type,
+                    openDelimiter: UInt32(open),
+                    closeDelimiter: UInt32(close),
+                    nestingDepth: Int(depth),
+                    allowsInterpolation: interpolation != 0
+                )
+            )
         }
         guard let heredocCount = read() else { return }
         var heredocs: [Heredoc] = []
@@ -174,9 +178,12 @@ public struct RubyExternalScanner: GrammarExternalScanner {
             let end = state.index(index, offsetBy: Int(wordCount))
             heredocs.append(
                 Heredoc(
-                    word: Array(state[index ..< end]), endWordIndentationAllowed: indentation != 0,
-                    allowsInterpolation: interpolation != 0, started: started != 0
-                ))
+                    word: Array(state[index ..< end]),
+                    endWordIndentationAllowed: indentation != 0,
+                    allowsInterpolation: interpolation != 0,
+                    started: started != 0
+                )
+            )
             index = end
         }
         guard index == state.endIndex else { return }

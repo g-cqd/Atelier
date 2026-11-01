@@ -56,7 +56,9 @@ struct TreeRefreshRegressionTests {
     @Test
     func `a new state lists its root only once loadInitialTree scans it off the main actor`() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
         try Data().write(to: rootURL.appendingPathComponent("listed.txt"))

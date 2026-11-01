@@ -2,7 +2,9 @@ import AtelierParser
 
 extension PythonExternalScanner {
     mutating func scanStringPart(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], errorRecoveryMode: Bool
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        errorRecoveryMode: Bool
     ) -> Bool? {
         var advancedOnce = false
         if validSymbols[TokenType.escapeInterpolation.rawValue], let delimiter = delimiters.last,
@@ -49,7 +51,9 @@ extension PythonExternalScanner {
     }
 
     private func scanBackslash(
-        _ lexer: inout some ScannerLexer, delimiter: Delimiter, hasContent: Bool
+        _ lexer: inout some ScannerLexer,
+        delimiter: Delimiter,
+        hasContent: Bool
     ) -> Bool? {
         if delimiter.isRaw {
             // Step over the backslash.
@@ -84,7 +88,9 @@ extension PythonExternalScanner {
     }
 
     private mutating func scanClosingQuote(
-        _ lexer: inout some ScannerLexer, delimiter: Delimiter, hasContent: Bool
+        _ lexer: inout some ScannerLexer,
+        delimiter: Delimiter,
+        hasContent: Bool
     ) -> Bool {
         if delimiter.isTriple {
             lexer.markEnd()

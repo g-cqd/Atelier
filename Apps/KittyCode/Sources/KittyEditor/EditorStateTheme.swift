@@ -74,14 +74,21 @@ extension EditorState {
             gitDeleted: Style(fg: theme.gitDeletedForeground.color),
             gitConflicted: Style(fg: theme.gitConflictedForeground.color, bold: true),
             whitespaceIndentation: Style(
-                fg: (theme.whitespaceIndentationForeground ?? whitespaceDefault).color, dim: true),
+                fg: (theme.whitespaceIndentationForeground ?? whitespaceDefault).color,
+                dim: true
+            ),
             whitespaceSpace: Style(
-                fg: (theme.whitespaceSpaceForeground ?? whitespaceDefault).color, dim: true),
+                fg: (theme.whitespaceSpaceForeground ?? whitespaceDefault).color,
+                dim: true
+            ),
             whitespaceLineBreak: Style(
-                fg: (theme.whitespaceLineBreakForeground ?? whitespaceDefault).color, dim: true),
+                fg: (theme.whitespaceLineBreakForeground ?? whitespaceDefault).color,
+                dim: true
+            ),
             whitespaceUnexpected: Style(
                 fg: (theme.whitespaceUnexpectedForeground ?? ColorRGB(r: 0xff, g: 0x7b, b: 0x72))
-                    .color),
+                    .color
+            ),
             verticalScrollIndicator: VerticalScrollIndicatorStyle(
                 trackStyle: scrollTrack,
                 thumbStyle: scrollThumb,
@@ -156,7 +163,8 @@ extension EditorState {
                 guard index < 256 else { return true }
                 if terminalPalette.ansi.count <= index {
                     terminalPalette.ansi.append(
-                        contentsOf: repeatElement(nil, count: index + 1 - terminalPalette.ansi.count))
+                        contentsOf: repeatElement(nil, count: index + 1 - terminalPalette.ansi.count)
+                    )
                 }
                 terminalPalette.ansi[index] = ThemeColor(color)
             case .end:

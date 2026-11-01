@@ -102,7 +102,9 @@ struct TokenScanner: Sendable {
     ///
     /// - Complexity: O(n) in the scalars the automaton reads.
     func scan(
-        _ utf8: UnsafeBufferPointer<UInt8>, from cursor: Cursor, mode: Int,
+        _ utf8: UnsafeBufferPointer<UInt8>,
+        from cursor: Cursor,
+        mode: Int,
         suppressEmptyAt: Int? = nil
     ) -> Outcome {
         var state = modeStarts[mode]
@@ -141,7 +143,9 @@ struct TokenScanner: Sendable {
     /// `scanned` as the keyword its text spells, when it is the word token and `validTokens` holds that keyword: as
     /// tree-sitter does, the lexer reads a word and then looks it up among the grammar's keywords.
     func classifyingKeyword(
-        _ scanned: Scanned, in utf8: UnsafeBufferPointer<UInt8>, validTokens: Set<Int>
+        _ scanned: Scanned,
+        in utf8: UnsafeBufferPointer<UInt8>,
+        validTokens: Set<Int>
     ) -> Scanned {
         guard scanned.token == wordToken else { return scanned }
         var node = 0
@@ -160,7 +164,9 @@ struct TokenScanner: Sendable {
     ///
     /// - Complexity: O(n) in the scalars read, plus the states built on the way.
     func scan(
-        _ utf8: UnsafeBufferPointer<UInt8>, from cursor: Cursor, lazyMode mode: inout LazyLexMode,
+        _ utf8: UnsafeBufferPointer<UInt8>,
+        from cursor: Cursor,
+        lazyMode mode: inout LazyLexMode,
         suppressEmptyAt: Int? = nil
     ) -> Outcome? {
         do throws(GrammarError) {

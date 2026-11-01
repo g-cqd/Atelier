@@ -90,13 +90,18 @@ public enum SwiftSyntaxHighlights {
                 if share > SwiftSyntaxHighlights.maximumUnexpectedShare { throw .tooManyUnexpectedBytes(share: share) }
             }
             self.init(
-                tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences,
-                keywordAttributeRanges: walk.keywordAttributeRanges)
+                tree: tree,
+                declarationNames: walk.declarationNames,
+                typeReferences: walk.typeReferences,
+                keywordAttributeRanges: walk.keywordAttributeRanges
+            )
         }
 
         /// A tree parsed and walked already, as the facts' extraction has it.
         init(
-            tree: SourceFileSyntax, declarationNames: [Int: HighlightRole], typeReferences: Set<Int>,
+            tree: SourceFileSyntax,
+            declarationNames: [Int: HighlightRole],
+            typeReferences: Set<Int>,
             keywordAttributeRanges: [Range<Int>] = []
         ) {
             self.tree = tree
@@ -113,7 +118,8 @@ public enum SwiftSyntaxHighlights {
             let classifications =
                 bytes.map {
                     tree.classifications(
-                        in: AbsolutePosition(utf8Offset: $0.lowerBound) ..< AbsolutePosition(utf8Offset: $0.upperBound))
+                        in: AbsolutePosition(utf8Offset: $0.lowerBound) ..< AbsolutePosition(utf8Offset: $0.upperBound)
+                    )
                 } ?? tree.classifications
             var tokens: [HighlightToken] = []
             tokens.reserveCapacity((bytes?.count ?? tree.totalLength.utf8Length) / 8)
@@ -130,7 +136,8 @@ public enum SwiftSyntaxHighlights {
                     let role = declarationNames[range.lowerBound]
                 {
                     tokens.append(
-                        HighlightToken(byteRange: range, role: role, modifiers: .declaration, layer: .syntactic))
+                        HighlightToken(byteRange: range, role: role, modifiers: .declaration, layer: .syntactic)
+                    )
                 } else if classified.kind == .identifier, typeReferences.contains(range.lowerBound) {
                     tokens.append(HighlightToken(byteRange: range, role: .type, layer: .syntactic))
                 } else if classified.kind == .attribute,

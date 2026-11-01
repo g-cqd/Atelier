@@ -19,7 +19,9 @@ public struct HeightIndex: Sendable {
             if columns > 0 {
                 for index in 0 ..< rowCount {
                     let cells = Self.estimatedCells(
-                        bytes: text.bytes(ofRow: RowIndex(index)), tabWidth: configuration.tabWidth)
+                        bytes: text.bytes(ofRow: RowIndex(index)),
+                        tabWidth: configuration.tabWidth
+                    )
                     let lines = max(1, Int((Double(cells) / Double(columns)).rounded(.up)))
                     initial[index] = lineHeight * Float(lines)
                     exact[index] = lines <= 1

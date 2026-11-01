@@ -13,7 +13,9 @@ package struct SideBySidePanes<Leading: View, Trailing: View>: View {
     ///   - leading: The pane on the left, given its width.
     ///   - trailing: The pane on the right, given its width.
     package init(
-        width: CGFloat, @ViewBuilder leading: (CGFloat) -> Leading, @ViewBuilder trailing: (CGFloat) -> Trailing
+        width: CGFloat,
+        @ViewBuilder leading: (CGFloat) -> Leading,
+        @ViewBuilder trailing: (CGFloat) -> Trailing
     ) {
         let paneWidth = Self.paneWidth(forWidth: width)
         self.leading = leading(paneWidth)

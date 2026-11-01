@@ -20,7 +20,10 @@ struct DiagnosticsEngineCacheIdentityTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: DiagnosticsEngineTests.sarifOutput(root: root))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         // The same content under a new path: a key of hashes alone would answer from cache under the old path.
@@ -30,9 +33,14 @@ struct DiagnosticsEngineCacheIdentityTests {
                 root: root,
                 files: [
                     DiagnosticsEngine.FileTarget(
-                        path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
+                        path: "A.swift",
+                        contentHash: "hash-1",
+                        url: root.appending(path: "A.swift")
+                    )
                 ],
-                tool: .arcleak, customPath: executable.path)
+                tool: .arcleak,
+                customPath: executable.path
+            )
         )
         let second = try await engine.run(
             .arcleak,
@@ -40,9 +48,14 @@ struct DiagnosticsEngineCacheIdentityTests {
                 root: root,
                 files: [
                     DiagnosticsEngine.FileTarget(
-                        path: "B.swift", contentHash: "hash-1", url: root.appending(path: "B.swift"))
+                        path: "B.swift",
+                        contentHash: "hash-1",
+                        url: root.appending(path: "B.swift")
+                    )
                 ],
-                tool: .arcleak, customPath: executable.path)
+                tool: .arcleak,
+                customPath: executable.path
+            )
         )
 
         #expect(!first.fromCache)
@@ -60,21 +73,40 @@ struct DiagnosticsEngineCacheIdentityTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: DiagnosticsEngineTests.sarifOutput(root: rootA))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let fileA = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "hash-1", url: rootA.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "hash-1",
+            url: rootA.appending(path: "A.swift")
+        )
         let fileB = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "hash-1", url: rootB.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "hash-1",
+            url: rootB.appending(path: "A.swift")
+        )
         let first = try await engine.run(
             .arcleak,
             request: DiagnosticsEngineTests.request(
-                root: rootA, files: [fileA], tool: .arcleak, customPath: executable.path))
+                root: rootA,
+                files: [fileA],
+                tool: .arcleak,
+                customPath: executable.path
+            )
+        )
         let second = try await engine.run(
             .arcleak,
             request: DiagnosticsEngineTests.request(
-                root: rootB, files: [fileB], tool: .arcleak, customPath: executable.path))
+                root: rootB,
+                files: [fileB],
+                tool: .arcleak,
+                customPath: executable.path
+            )
+        )
 
         #expect(!first.fromCache)
         #expect(!second.fromCache)

@@ -18,13 +18,15 @@ struct ComparisonTests {
             right: [
                 entry("a.swift", "1"), entry("b.swift", "9"), entry("new/name.swift", "3"), entry("added.swift", "4")
             ],
-            leftSource: nil, rightSource: nil
+            leftSource: nil,
+            rightSource: nil
         )
 
         #expect(
             comparison.statuses == [
                 "a.swift": .same, "b.swift": .different, "old/name.swift": .renamed, "added.swift": .onlyRight
-            ])
+            ]
+        )
         #expect(comparison.counterpartPath(of: "old/name.swift", in: .left) == "new/name.swift")
         #expect(comparison.counterpartPath(of: "new/name.swift", in: .right) == "old/name.swift")
         #expect(comparison.changedPaths(under: nil, limit: 10) == ["added.swift", "b.swift", "old/name.swift"])
@@ -35,8 +37,11 @@ struct ComparisonTests {
     @Test
     func `git renames refine the comparison without overriding exact ones`() {
         var comparison = Comparison(
-            left: [entry("a.swift", "1"), entry("x.swift", "5")], right: [entry("b.swift", "2"), entry("y.swift", "5")],
-            leftSource: nil, rightSource: nil)
+            left: [entry("a.swift", "1"), entry("x.swift", "5")],
+            right: [entry("b.swift", "2"), entry("y.swift", "5")],
+            leftSource: nil,
+            rightSource: nil
+        )
         #expect(comparison.statuses["a.swift"] == .onlyLeft)
 
         comparison.merge(gitRenames: ["a.swift": "b.swift", "x.swift": "elsewhere.swift"])
@@ -52,7 +57,8 @@ struct ComparisonTests {
         let comparison = Comparison(
             left: [entry("old/name.swift", "3"), entry("same.swift", "1")],
             right: [entry("new/name.swift", "3"), entry("same.swift", "2")],
-            leftSource: nil, rightSource: nil
+            leftSource: nil,
+            rightSource: nil
         )
 
         #expect(comparison.cardLabel(for: "old/name.swift").text == "new/name.swift ← old/name.swift")
@@ -67,18 +73,29 @@ struct ComparisonTests {
         let comparison = Comparison(
             left: [entry("z/same.swift", "1"), entry("a/x/changed.swift", "2")],
             right: [entry("z/same.swift", "1"), entry("a/x/changed.swift", "8")],
-            leftSource: nil, rightSource: nil
+            leftSource: nil,
+            rightSource: nil
         )
         let leftTree = PathNode.tree(from: ["z/same.swift", "a/x/changed.swift"])
 
         let full = ExplorerTrees.build(
-            comparison: comparison, leftTree: leftTree, rightTree: leftTree, showsChangesOnly: false, style: .hierarchy)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: leftTree,
+            showsChangesOnly: false,
+            style: .hierarchy
+        )
         #expect(full.statuses["a"] == .different)
         #expect(full.statuses["z"] == .same)
         #expect(full.left.map(\.id) == ["a", "z"])
 
         let filtered = ExplorerTrees.build(
-            comparison: comparison, leftTree: leftTree, rightTree: leftTree, showsChangesOnly: true, style: .flat)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: leftTree,
+            showsChangesOnly: true,
+            style: .flat
+        )
         #expect(filtered.left.map(\.id) == ["a/x/changed.swift"])
     }
 

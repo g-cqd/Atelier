@@ -49,7 +49,10 @@ public struct ItemSet: Sendable, Equatable, Hashable {
             // Compute lookaheads: FIRST(β a) where β = symbols after dot+1, a = item.lookahead
             let betaSymbols = Array(prod.symbols.dropFirst(item.dotPosition + 1))
             let lookaheads = computeFirst(
-                symbols: betaSymbols, fallback: item.lookahead, firstSets: firstSets)
+                symbols: betaSymbols,
+                fallback: item.lookahead,
+                firstSets: firstSets
+            )
 
             for ruleIdx in ruleIndices {
                 for la in lookaheads {
@@ -87,7 +90,8 @@ public struct ItemSet: Sendable, Equatable, Hashable {
                         ruleIndex: item.ruleIndex,
                         dotPosition: item.dotPosition + 1,
                         lookahead: item.lookahead
-                    ))
+                    )
+                )
             }
         }
         return try ItemSet(items: kernel)

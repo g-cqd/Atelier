@@ -68,7 +68,8 @@ struct ProgressiveHighlightingBenchmark {
             "BENCH progressive-lexing bytes \(text.utf8.count) lines \(lines.lineCount): visible lines before "
                 + "\(Self.summary(before)) ms CPU, after \(Self.summary(visibleCPU)) ms CPU; whole side "
                 + "\(Self.summary(wholeCPU)) ms CPU (\(Self.format(wholePer100KB)) ms per 100 KB); lexAll x4 "
-                + "\(Self.summary(parallelWall)) ms wall, \(Self.summary(parallelCPU)) ms CPU")
+                + "\(Self.summary(parallelWall)) ms wall, \(Self.summary(parallelCPU)) ms CPU"
+        )
         #expect(Self.median(visibleCPU) <= 1)
         #expect(wholePer100KB <= 2)
     }

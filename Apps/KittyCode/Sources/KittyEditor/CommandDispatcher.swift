@@ -59,7 +59,9 @@ public func dispatchCommand(
                 ribbonWidth: max(
                     0,
                     pipeline.columns
-                        - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
+                        - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)
+                )
+            )
             return true
 
         case .previousTab:
@@ -70,7 +72,9 @@ public func dispatchCommand(
                 ribbonWidth: max(
                     0,
                     pipeline.columns
-                        - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
+                        - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)
+                )
+            )
             return true
 
         case .copy:
@@ -309,7 +313,9 @@ public func dispatchCommand(
         case .editorMoveDownPage:
             let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
             state.cursorRow = min(
-                state.cursorRow + layout.contentRows, max(0, state.fileLineCount - 1))
+                state.cursorRow + layout.contentRows,
+                max(0, state.fileLineCount - 1)
+            )
             let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
             state.cursorCol = min(state.cursorCol, rowLength)
             ensureEditorVisibleFull(state: state, pipeline: pipeline)
@@ -337,7 +343,9 @@ public func dispatchCommand(
         case .editorInsertNewline:
             let previousSnapshot = state.activeBufferSnapshot()
             let mutation = TextOperations.insertNewline(
-                into: &state.textBuffer, at: &state.textCursor)
+                into: &state.textBuffer,
+                at: &state.textCursor
+            )
             state.textDidChange(mutation, previousSnapshot: previousSnapshot)
             ensureEditorVisibleFull(state: state, pipeline: pipeline)
             return true
@@ -345,8 +353,9 @@ public func dispatchCommand(
         case .editorDeleteBackward:
             let previousSnapshot = state.activeBufferSnapshot()
             if let mutation = TextOperations.deleteBackward(
-                in: &state.textBuffer, at: &state.textCursor)
-            {
+                in: &state.textBuffer,
+                at: &state.textCursor
+            ) {
                 state.textDidChange(mutation, previousSnapshot: previousSnapshot)
             }
             ensureEditorVisibleFull(state: state, pipeline: pipeline)
@@ -434,7 +443,9 @@ public func dispatchCommand(
 
         case .treeDown:
             state.selectedTreeIndex = min(
-                state.selectedTreeIndex + 1, max(0, state.cachedFlatTree.count - 1))
+                state.selectedTreeIndex + 1,
+                max(0, state.cachedFlatTree.count - 1)
+            )
             updateSelectedTreePath(state)
             let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
             ensureTreeVisible(state, contentRows: layout.contentRows)
@@ -494,7 +505,8 @@ public func dispatchCommand(
             state.vimVisualAnchor = (line: state.cursorRow, col: state.cursorCol)
             state.selection = TextSelection(
                 anchor: TextPosition(row: state.cursorRow, col: state.cursorCol),
-                head: TextPosition(row: state.cursorRow, col: state.cursorCol))
+                head: TextPosition(row: state.cursorRow, col: state.cursorCol)
+            )
             state.statusMessage = "-- VISUAL -- [\(state.fileName)]"
             return true
 
@@ -504,7 +516,8 @@ public func dispatchCommand(
             let visualLineLen = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
             state.selection = TextSelection(
                 anchor: TextPosition(row: state.cursorRow, col: 0),
-                head: TextPosition(row: state.cursorRow, col: visualLineLen))
+                head: TextPosition(row: state.cursorRow, col: visualLineLen)
+            )
             state.statusMessage = "-- VISUAL LINE -- [\(state.fileName)]"
             return true
 
@@ -589,7 +602,8 @@ private func updateVisualSelection(state: EditorState) {
     else { return }
     state.selection = TextSelection(
         anchor: TextPosition(row: anchor.line, col: anchor.col),
-        head: TextPosition(row: state.cursorRow, col: state.cursorCol))
+        head: TextPosition(row: state.cursorRow, col: state.cursorCol)
+    )
 }
 
 @MainActor

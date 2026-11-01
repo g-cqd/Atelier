@@ -22,7 +22,10 @@ struct HighlightTokenTests {
         ])
         let matches = QueryMatcher.execute(query: query, tree: tree)
         let tokens = highlighter.buildTokens(
-            matches: matches, roles: CaptureRoles(captureNames: query.captureNames), layer: .structural)
+            matches: matches,
+            roles: CaptureRoles(captureNames: query.captureNames),
+            layer: .structural
+        )
 
         #expect(tokens.count == 1)
         #expect(tokens[0].role == .keyword)
@@ -41,7 +44,10 @@ struct HighlightTokenTests {
         ]
 
         let spans = highlighter.tokensToSpans(
-            tokens: tokens, source: "let x =", resolver: resolver)
+            tokens: tokens,
+            source: "let x =",
+            resolver: resolver
+        )
         #expect(spans.count == 2)
         #expect(spans[0].text == "let")
         #expect(spans[0].style.bold)
@@ -93,17 +99,27 @@ struct HighlightTokenTests {
         // Span path
         let spanResult = Highlighter(theme: theme)
             .highlight(
-                source: tree.source, tree: tree, query: query)
+                source: tree.source,
+                tree: tree,
+                query: query
+            )
 
         // Token path
         let highlighter = Highlighter(theme: theme)
         let matches = QueryMatcher.execute(query: query, tree: tree)
         let tokens = highlighter.buildTokens(
-            matches: matches, roles: CaptureRoles(captureNames: query.captureNames), layer: .structural)
+            matches: matches,
+            roles: CaptureRoles(captureNames: query.captureNames),
+            layer: .structural
+        )
         let merged = HighlightMerger.merge(tokens, sourceByteCount: 6)
         let resolver = RoleBasedThemeResolver(theme: theme)
         let tokenResult = HighlightMerger.resolveToSpans(
-            tokens: merged, source: tree.source, resolver: resolver, defaultStyle: theme.defaultStyle)
+            tokens: merged,
+            source: tree.source,
+            resolver: resolver,
+            defaultStyle: theme.defaultStyle
+        )
 
         // Both paths should produce the same style for the string
         #expect(spanResult.first?.style == keyStyle)

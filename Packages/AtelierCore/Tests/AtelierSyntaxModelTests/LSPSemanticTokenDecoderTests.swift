@@ -123,7 +123,9 @@ struct LSPSemanticTokenDecoderTests {
         let previous: [UInt32] = [0, 0, 3, 0, 0]
         let edits = [
             LSPSemanticTokenDecoder.SemanticTokenEdit(
-                start: 5, deleteCount: 0, data: [1, 0, 3, 1, 0]
+                start: 5,
+                deleteCount: 0,
+                data: [1, 0, 3, 1, 0]
             )
         ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
@@ -135,7 +137,9 @@ struct LSPSemanticTokenDecoderTests {
         let previous: [UInt32] = [0, 0, 3, 0, 0, 1, 0, 3, 1, 0]
         let edits = [
             LSPSemanticTokenDecoder.SemanticTokenEdit(
-                start: 5, deleteCount: 5, data: []
+                start: 5,
+                deleteCount: 5,
+                data: []
             )
         ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
@@ -147,7 +151,9 @@ struct LSPSemanticTokenDecoderTests {
         let previous: [UInt32] = [0, 0, 3, 0, 0]
         let edits = [
             LSPSemanticTokenDecoder.SemanticTokenEdit(
-                start: 2, deleteCount: 1, data: [5]
+                start: 2,
+                deleteCount: 1,
+                data: [5]
             )
         ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
@@ -168,7 +174,8 @@ struct LSPSemanticTokenDecoderTests {
             resultId: "2",
             edits: [
                 LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8])
-            ])
+            ]
+        )
         #expect(state.resultId == "2")
         #expect(state.data == [0, 0, 3, 0, 0, 1, 0, 8, 1, 0])
     }

@@ -21,7 +21,8 @@ struct GitClientGateTests {
                     "fetch", "--no-recurse-submodules", "--end-of-options", "git@github.com:aemi/atelier.git",
                     "+refs/heads/*:refs/remotes/origin/*"
                 ]
-                .suffix(4))
+                .suffix(4)
+        )
         #expect(spec.arguments.last == "+refs/heads/*:refs/remotes/origin/*")
         #expect(!spec.arguments.contains("--prune"))
         #expect(!spec.arguments.contains("origin"))
@@ -126,12 +127,18 @@ struct GitClientGateTests {
                 for: GitConfigPolicy.verdict(
                     for: try #require(
                         GitConfigPolicy.entries(
-                            inListing: Data(gitConfigListing(lines).utf8), relativeTo: Self.repository))),
-                isolation: .strict)
+                            inListing: Data(gitConfigListing(lines).utf8),
+                            relativeTo: Self.repository
+                        )
+                    )
+                ),
+                isolation: .strict
+            )
                 == [
                     "-c", "filter.x.clean=", "-c", "filter.x.smudge=", "-c", "filter.x.process=", "-c",
                     "filter.x.required=false"
-                ])
+                ]
+        )
     }
 
     @Test

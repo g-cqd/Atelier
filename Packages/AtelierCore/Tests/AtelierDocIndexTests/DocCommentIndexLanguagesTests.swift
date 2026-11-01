@@ -36,7 +36,8 @@ struct DocCommentIndexLanguagesTests {
         let provider = DocIndexHoverProvider(index: index)
 
         let hover = try await provider.hover(
-            HoverQuery(documentURI: "file:///web/app.js", content: Self.caller, line: 1, utf16Column: 21))
+            HoverQuery(documentURI: "file:///web/app.js", content: Self.caller, line: 1, utf16Column: 21)
+        )
 
         #expect(hover?.source == .docIndex)
         #expect(
@@ -48,7 +49,8 @@ struct DocCommentIndexLanguagesTests {
                 Loads the user named by `id`.
 
                 - Parameter id: The user's identifier.
-                """)
+                """
+        )
     }
 
     @Test
@@ -63,7 +65,8 @@ struct DocCommentIndexLanguagesTests {
         let provider = DocIndexHoverProvider(index: index)
 
         let hover = try await provider.hover(
-            HoverQuery(documentURI: "file:///cmd/main.go", content: goCaller, line: 2, utf16Column: 15))
+            HoverQuery(documentURI: "file:///cmd/main.go", content: goCaller, line: 2, utf16Column: 15)
+        )
 
         #expect(
             hover?.markdown == """
@@ -72,7 +75,8 @@ struct DocCommentIndexLanguagesTests {
                 ```
 
                 Load reads a user from disk.
-                """)
+                """
+        )
     }
 
     @Test
@@ -110,7 +114,8 @@ struct DocCommentIndexLanguagesTests {
         #expect(index.indexes(.swift))
         let hover = try await DocIndexHoverProvider(index: index)
             .hover(
-                HoverQuery(documentURI: "file:///tool.py", content: python, line: 2, utf16Column: 1))
+                HoverQuery(documentURI: "file:///tool.py", content: python, line: 2, utf16Column: 1)
+            )
         #expect(hover == nil)
     }
 }

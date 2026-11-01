@@ -29,7 +29,8 @@ public struct LanguageServerHoverProvider: HoverProvider {
     /// An answer carries its documentation page when the server resolves them
     /// (``LanguageServerDescriptor/resolvesDocumentationPages``).
     public init(
-        registry: LanguageServerRegistry, servers: [LanguageServerDescriptor] = LanguageServerDescriptor.all,
+        registry: LanguageServerRegistry,
+        servers: [LanguageServerDescriptor] = LanguageServerDescriptor.all,
         workspaceRoot: URL
     ) {
         sessions = .registry(registry, servers: servers, workspaceRoot: workspaceRoot)
@@ -48,7 +49,9 @@ public struct LanguageServerHoverProvider: HoverProvider {
             case .registry(let registry, let servers, let workspaceRoot):
                 guard let document, document.isFileURL,
                     let server = LanguageServerDescriptor.serving(
-                        Language(fileExtension: document.pathExtension), among: servers),
+                        Language(fileExtension: document.pathExtension),
+                        among: servers
+                    ),
                     let found = await registry.session(forDocumentAt: document, within: workspaceRoot, server: server)
                 else { return nil }
                 session = found
@@ -60,15 +63,22 @@ public struct LanguageServerHoverProvider: HoverProvider {
         guard
             let content =
                 await session.hover(
-                    uri: query.documentURI, languageID: languageID, content: query.content, line: query.line,
+                    uri: query.documentURI,
+                    languageID: languageID,
+                    content: query.content,
+                    line: query.line,
                     utf16Column: query.utf16Column
                 )
                 .content
         else { return nil }
         guard resolvesDocumentationPages else { return content }
         let page = await session.documentationPage(
-            uri: query.documentURI, languageID: languageID, content: query.content, line: query.line,
-            utf16Column: query.utf16Column)
+            uri: query.documentURI,
+            languageID: languageID,
+            content: query.content,
+            line: query.line,
+            utf16Column: query.utf16Column
+        )
         return HoverContent(markdown: content.markdown, source: content.source, documentationPage: page)
     }
 }

@@ -114,7 +114,10 @@ package enum CommitGroupingEligibility: Sendable, Hashable {
     /// - Returns: The range when grouping applies, the range to check when only the history is left to judge, or
     ///   the first reason it does not apply.
     package static func evaluate(
-        placement: ExplorerPlacement, style: FileTreeStyle, left: ComparisonSource?, right: ComparisonSource?,
+        placement: ExplorerPlacement,
+        style: FileTreeStyle,
+        left: ComparisonSource?,
+        right: ComparisonSource?,
         ancestry: CommitGroupingAncestry? = nil
     ) -> CommitGroupingEligibility {
         guard placement == .unifiedSidebar else { return .doesNotApply(.needsMergedSidebar) }

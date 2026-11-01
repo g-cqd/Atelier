@@ -11,7 +11,9 @@ struct ToolDiscoveryTests {
     /// Writes an executable shell script at `url` that prints `version` on its first line.
     private static func makeExecutable(at url: URL, version: String = "0.1.0") throws {
         try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try "#!/bin/sh\necho \(version)\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
@@ -19,7 +21,8 @@ struct ToolDiscoveryTests {
     /// A runner that answers an `xcrun --find` probe and a login-shell `$PATH` probe from fixed scripts, and
     /// records every spec it was given.
     private static func scriptedRunner(
-        xcrunResult: ProcessOutput = .failure(1, error: "not found"), shellPathDirectories: [String] = []
+        xcrunResult: ProcessOutput = .failure(1, error: "not found"),
+        shellPathDirectories: [String] = []
     ) -> FakeProcessRunner {
         FakeProcessRunner { spec in
             if spec.executable.path == "/usr/bin/xcrun" { return xcrunResult }
@@ -37,12 +40,17 @@ struct ToolDiscoveryTests {
         try Self.makeExecutable(at: custom)
 
         let discovery = ToolDiscovery(
-            runner: Self.scriptedRunner(), bundledDirectory: nil,
+            runner: Self.scriptedRunner(),
+            bundledDirectory: nil,
             homeDirectory: URL(filePath: temp.file("home")),
             environment: ["OVR": overridden.path]
         )
         let located = await discovery.locate(
-            executableName: "tool", overrideVariable: "OVR", customPath: custom.path, searchesToolchain: false)
+            executableName: "tool",
+            overrideVariable: "OVR",
+            customPath: custom.path,
+            searchesToolchain: false
+        )
         #expect(located?.url == overridden)
         #expect(located?.origin == .environment)
     }
@@ -55,12 +63,17 @@ struct ToolDiscoveryTests {
         try Self.makeExecutable(at: custom)
 
         let discovery = ToolDiscovery(
-            runner: Self.scriptedRunner(), bundledDirectory: nil,
+            runner: Self.scriptedRunner(),
+            bundledDirectory: nil,
             homeDirectory: URL(filePath: temp.file("home")),
             environment: ["OVR": temp.file("nowhere/tool")]
         )
         let located = await discovery.locate(
-            executableName: "tool", overrideVariable: "OVR", customPath: custom.path, searchesToolchain: false)
+            executableName: "tool",
+            overrideVariable: "OVR",
+            customPath: custom.path,
+            searchesToolchain: false
+        )
         #expect(located?.url == custom)
         #expect(located?.origin == .custom)
     }
@@ -78,9 +91,16 @@ struct ToolDiscoveryTests {
 
         // Bundled beats toolchain when no custom path is given.
         let withoutCustom = ToolDiscovery(
-            runner: runner, bundledDirectory: bundled, homeDirectory: URL(filePath: temp.file("home")))
+            runner: runner,
+            bundledDirectory: bundled,
+            homeDirectory: URL(filePath: temp.file("home"))
+        )
         let bundledWin = await withoutCustom.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         #expect(bundledWin?.url == bundledTool)
         #expect(bundledWin?.origin == .bundled)
         #expect(runner.specs.isEmpty)
@@ -89,9 +109,16 @@ struct ToolDiscoveryTests {
         let custom = URL(filePath: temp.file("custom/tool"))
         try Self.makeExecutable(at: custom)
         let withCustom = ToolDiscovery(
-            runner: runner, bundledDirectory: bundled, homeDirectory: URL(filePath: temp.file("home")))
+            runner: runner,
+            bundledDirectory: bundled,
+            homeDirectory: URL(filePath: temp.file("home"))
+        )
         let customWin = await withCustom.locate(
-            executableName: "tool", overrideVariable: nil, customPath: custom.path, searchesToolchain: true)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: custom.path,
+            searchesToolchain: true
+        )
         #expect(customWin?.url == custom)
         #expect(customWin?.origin == .custom)
     }
@@ -109,7 +136,11 @@ struct ToolDiscoveryTests {
 
         let discovery = ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home)
         let located = await discovery.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         #expect(located?.url == toolchainTool)
         #expect(located?.origin == .toolchain)
 
@@ -117,7 +148,11 @@ struct ToolDiscoveryTests {
         let secondRunner = Self.scriptedRunner(xcrunResult: .failure(1, error: "not found"))
         let secondDiscovery = ToolDiscovery(runner: secondRunner, bundledDirectory: nil, homeDirectory: home)
         let fallback = await secondDiscovery.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         #expect(fallback?.url == wellKnown)
         #expect(fallback?.origin == .wellKnown)
     }
@@ -135,7 +170,11 @@ struct ToolDiscoveryTests {
 
         let discovery = ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home)
         let located = await discovery.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: false)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: false
+        )
         #expect(located?.url == wellKnown)
         #expect(located?.origin == .wellKnown)
         // Found before the shell PATH rung, so the shell was never consulted.
@@ -153,7 +192,11 @@ struct ToolDiscoveryTests {
 
         let discovery = ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home)
         let located = await discovery.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: false)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: false
+        )
         #expect(located?.url == URL(filePath: shellDirectory + "/tool"))
         #expect(located?.origin == .shellPath)
     }
@@ -165,7 +208,11 @@ struct ToolDiscoveryTests {
         let home = URL(filePath: temp.file("home"))
         let discovery = ToolDiscovery(runner: Self.scriptedRunner(), bundledDirectory: nil, homeDirectory: home)
         let located = await discovery.locate(
-            executableName: "ghost-tool", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "ghost-tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         #expect(located == nil)
     }
 
@@ -180,9 +227,17 @@ struct ToolDiscoveryTests {
 
         let discovery = ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home)
         _ = await discovery.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: false)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: false
+        )
         _ = await discovery.locate(
-            executableName: "tool", overrideVariable: nil, customPath: nil, searchesToolchain: false)
+            executableName: "tool",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: false
+        )
         #expect(runner.specs.count == 1)
     }
 
@@ -195,9 +250,17 @@ struct ToolDiscoveryTests {
 
         let discovery = ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home)
         let first = await discovery.locate(
-            executableName: "ghost", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "ghost",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         let second = await discovery.locate(
-            executableName: "ghost", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "ghost",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         #expect(first == nil)
         #expect(second == nil)
         #expect(runner.specs.filter { $0.executable.path == "/usr/bin/xcrun" }.count == 1)
@@ -224,7 +287,9 @@ struct ToolDiscoveryTests {
 
         // Touching the file's modification date invalidates the cached version.
         try FileManager.default.setAttributes(
-            [.modificationDate: Date().addingTimeInterval(60)], ofItemAtPath: custom.path)
+            [.modificationDate: Date().addingTimeInterval(60)],
+            ofItemAtPath: custom.path
+        )
         _ = await discovery.status(.swiftlint, location: location)
         #expect(runner.specs.filter { $0.executable == custom }.count == 2)
     }
@@ -251,7 +316,9 @@ struct ToolDiscoveryTests {
         try Self.makeExecutable(at: custom)
         let discovery = ToolDiscovery(runner: Self.scriptedRunner(), bundledDirectory: nil, homeDirectory: home)
         let located = await discovery.locate(
-            .swiftlint, location: ToolLocation(isEnabled: false, customPath: custom.path))
+            .swiftlint,
+            location: ToolLocation(isEnabled: false, customPath: custom.path)
+        )
         #expect(located == nil)
     }
 
@@ -268,13 +335,21 @@ struct ToolDiscoveryTests {
         let location = ToolLocation(customPath: custom.path)
         _ = await discovery.status(.swiftlint, location: location)
         _ = await discovery.locate(
-            executableName: "ghost", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "ghost",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         let callsBefore = runner.specs.count
 
         await discovery.invalidate()
         _ = await discovery.status(.swiftlint, location: location)
         _ = await discovery.locate(
-            executableName: "ghost", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "ghost",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
         #expect(runner.specs.count > callsBefore)
     }
 
@@ -295,18 +370,30 @@ struct ToolDiscoveryTests {
             return .success(toolchainTool.path + "\n")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "/bin/zsh"],
+            wellKnownDirectories: []
+        )
         let cancelled = Task {
             await discovery.locate(
-                executableName: "atelier-probe", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+                executableName: "atelier-probe",
+                overrideVariable: nil,
+                customPath: nil,
+                searchesToolchain: true
+            )
         }
         try await firstProbe.wait()
         cancelled.cancel()
         _ = await cancelled.value
 
         let retried = await discovery.locate(
-            executableName: "atelier-probe", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+            executableName: "atelier-probe",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: true
+        )
 
         #expect(retried?.origin == .toolchain)
     }
@@ -328,8 +415,12 @@ struct ToolDiscoveryTests {
             return .success("0.65.1\n")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: [:], wellKnownDirectories: [])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: [:],
+            wellKnownDirectories: []
+        )
         let location = ToolLocation(customPath: tool.path)
         let cancelled = Task { await discovery.status(.swiftlint, location: location) }
         try await firstProbe.wait()
@@ -353,14 +444,26 @@ struct ToolDiscoveryTests {
         let shellTool = URL(filePath: temp.file("shell/gopls"))
         try Self.makeExecutable(at: shellTool)
         let discovery = ToolDiscovery(
-            runner: Self.scriptedRunner(shellPathDirectories: [temp.file("shell")]), bundledDirectory: nil,
-            homeDirectory: home, environment: [:], wellKnownDirectories: [])
+            runner: Self.scriptedRunner(shellPathDirectories: [temp.file("shell")]),
+            bundledDirectory: nil,
+            homeDirectory: home,
+            environment: [:],
+            wellKnownDirectories: []
+        )
 
         let located = await discovery.locate(
-            executableName: "gopls", overrideVariable: nil, customPath: nil, searchesToolchain: false,
-            homeRelativeDirectories: ["go/bin"])
+            executableName: "gopls",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: false,
+            homeRelativeDirectories: ["go/bin"]
+        )
         let withoutDirectory = await discovery.locate(
-            executableName: "gopls", overrideVariable: nil, customPath: nil, searchesToolchain: false)
+            executableName: "gopls",
+            overrideVariable: nil,
+            customPath: nil,
+            searchesToolchain: false
+        )
 
         #expect(located?.url == goTool)
         #expect(located?.origin == .wellKnown)
@@ -375,8 +478,12 @@ struct ToolDiscoveryTests {
         let fallback = home.appending(path: ".local/bin/pyright")
         try Self.makeExecutable(at: fallback)
         let discovery = ToolDiscovery(
-            runner: Self.scriptedRunner(), bundledDirectory: nil, homeDirectory: home, environment: [:],
-            wellKnownDirectories: [])
+            runner: Self.scriptedRunner(),
+            bundledDirectory: nil,
+            homeDirectory: home,
+            environment: [:],
+            wellKnownDirectories: []
+        )
         let query = ExecutableQuery(names: ["basedpyright", "pyright"], homeRelativeDirectories: [".local/bin"])
 
         #expect(await discovery.locateExecutable(query) == fallback)

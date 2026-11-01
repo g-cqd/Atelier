@@ -10,6 +10,25 @@ import TerminalKitIO
 public import TerminalKitRender
 import TerminalKitText
 
+/// How the editor draws whitespace: which kinds the configuration shows, in the scheme's styles.
+@MainActor
+private func editorWhitespaceConfig(
+    state: EditorState,
+    colorScheme: EditorState.ColorScheme
+) -> WhitespaceRenderer.Config {
+    WhitespaceRenderer.Config(
+        showIndentation: state.config.whitespace.showIndentation,
+        showSpaces: state.config.whitespace.showSpaces,
+        showLineBreaks: state.config.whitespace.showLineBreaks,
+        showUnexpected: state.config.whitespace.showUnexpected,
+        selectionVisibility: selectionVisibility(from: state.config.whitespace.selectionWhitespace),
+        indentationStyle: colorScheme.whitespaceIndentation,
+        spaceStyle: colorScheme.whitespaceSpace,
+        lineBreakStyle: colorScheme.whitespaceLineBreak,
+        unexpectedStyle: colorScheme.whitespaceUnexpected
+    )
+}
+
 @MainActor
 public func renderEditorPanel(
     pipeline: RenderPipeline,
@@ -36,17 +55,7 @@ public func renderEditorPanel(
     let lineStyleOverlays = activeLineStyleOverlays(state: state, colorScheme: colorScheme)
     let highlights = activeHighlights(state: state, colorScheme: colorScheme)
 
-    let wsConfig = WhitespaceRenderer.Config(
-        showIndentation: state.config.whitespace.showIndentation,
-        showSpaces: state.config.whitespace.showSpaces,
-        showLineBreaks: state.config.whitespace.showLineBreaks,
-        showUnexpected: state.config.whitespace.showUnexpected,
-        selectionVisibility: selectionVisibility(from: state.config.whitespace.selectionWhitespace),
-        indentationStyle: colorScheme.whitespaceIndentation,
-        spaceStyle: colorScheme.whitespaceSpace,
-        lineBreakStyle: colorScheme.whitespaceLineBreak,
-        unexpectedStyle: colorScheme.whitespaceUnexpected
-    )
+    let wsConfig = editorWhitespaceConfig(state: state, colorScheme: colorScheme)
     let wrapLayoutCache = state.config.editor.wrapLines ? state.wrapLayoutCacheSnapshot() : nil
 
     var editor = TextEditor(
@@ -83,7 +92,8 @@ public func renderEditorPanel(
     if let chrome = pipeline.chrome {
         // Backgrounds and bars are pixels under the cells; the cells keep foregrounds only.
         pipeline.chromeElements.append(
-            contentsOf: pixelEditorElements(editor: editor, rect: rect, state: state, cell: chrome.cell))
+            contentsOf: pixelEditorElements(editor: editor, rect: rect, state: state, cell: chrome.cell)
+        )
         editor.currentLineStyle = Style(fg: editor.currentLineStyle.fg)
         editor.gutterDecorations = editor.gutterDecorations.mapValues {
             TextEditor.GutterDecoration(symbol: " ", style: $0.style)
@@ -96,7 +106,11 @@ public func renderEditorPanel(
             }
         }
         editor.verticalScrollIndicatorStyle = VerticalScrollIndicatorStyle(
-            trackStyle: .default, thumbStyle: .default, trackCharacter: " ", thumbCharacter: " ")
+            trackStyle: .default,
+            thumbStyle: .default,
+            trackCharacter: " ",
+            thumbCharacter: " "
+        )
     }
     editor.render(to: &pipeline.buffer, in: rect)
     guard let cursor = TextEditorLayout.cursorPosition(for: editor, in: rect) else {
@@ -169,7 +183,10 @@ private func activeHighlights(
                 let firstLineLength = state.fileLine(at: start.row).count
                 highlights[start.row] = [
                     TextHighlight(
-                        range: min(start.col, firstLineLength) ... firstLineLength, role: .userSelection, style: style)
+                        range: min(start.col, firstLineLength) ... firstLineLength,
+                        role: .userSelection,
+                        style: style
+                    )
                 ]
             }
             for row in ((start.row + 1) ..< end.row).clamped(to: visible) {
@@ -205,7 +222,9 @@ private func activeHighlights(
                     TextHighlight(
                         range: match.colStart ... (match.colEnd - 1),
                         role: isActive ? .activeSearchMatch : .searchMatch,
-                        style: isActive ? colorScheme.activeSearchMatch : colorScheme.searchMatch))
+                        style: isActive ? colorScheme.activeSearchMatch : colorScheme.searchMatch
+                    )
+                )
         }
     }
 
@@ -230,7 +249,10 @@ private func selectionVisibility(
 /// - Complexity: O(visible rows + visible search hits)
 @MainActor
 private func pixelEditorElements(
-    editor: TextEditor, rect: Rect, state: EditorState, cell: TerminalCapabilities.CellPixelSize
+    editor: TextEditor,
+    rect: Rect,
+    state: EditorState,
+    cell: TerminalCapabilities.CellPixelSize
 ) -> [ChromeElement] {
     var elements: [ChromeElement] = []
     let gutterWidth = TextEditorLayout.gutterWidth(for: editor)
@@ -249,7 +271,8 @@ private func pixelEditorElements(
         let upper = min(contentWidth, end)
         guard upper > lower, contentWidth > 0 else { return }
         elements.append(
-            .fill(row: screenRow(line), column: contentX + lower, columns: upper - lower, rows: 1, color: color))
+            .fill(row: screenRow(line), column: contentX + lower, columns: upper - lower, rows: 1, color: color)
+        )
     }
 
     // Line geometry is one row per line here; wrapped lines keep their cell backgrounds.
@@ -279,8 +302,11 @@ private func pixelEditorElements(
                 guard let color = ColorRGB(style.bg) else { continue }
                 let text = state.fileLine(at: match.row)
                 band(
-                    line: match.row, from: column(text, at: match.colStart), to: column(text, at: match.colEnd),
-                    color: color)
+                    line: match.row,
+                    from: column(text, at: match.colStart),
+                    to: column(text, at: match.colEnd),
+                    color: color
+                )
             }
         }
         if editor.showsGutterDecorations, gutterWidth > 0 {
@@ -291,9 +317,15 @@ private func pixelEditorElements(
                 }
                 elements.append(
                     .bar(
-                        row: screenRow(line), column: rect.x, widthPixels: width, heightPixels: cell.height,
+                        row: screenRow(line),
+                        column: rect.x,
+                        widthPixels: width,
+                        heightPixels: cell.height,
                         color: color,
-                        xOffset: max(0, (cell.width - width) / 2), yOffset: 0))
+                        xOffset: max(0, (cell.width - width) / 2),
+                        yOffset: 0
+                    )
+                )
             }
         }
     }
@@ -333,9 +365,15 @@ private func pixelScrollBar(editor: TextEditor, rect: Rect, cell: TerminalCapabi
         if let track = ColorRGB(editor.verticalScrollIndicatorStyle.trackStyle.fg) {
             elements.append(
                 .bar(
-                    row: indicatorRect.y, column: indicatorRect.x, widthPixels: 1, heightPixels: trackPixels,
+                    row: indicatorRect.y,
+                    column: indicatorRect.x,
+                    widthPixels: 1,
+                    heightPixels: trackPixels,
                     color: track,
-                    xOffset: cell.width / 2, yOffset: 0))
+                    xOffset: cell.width / 2,
+                    yOffset: 0
+                )
+            )
         }
         if metrics.isScrollable, metrics.contentLength > 0,
             let thumb = ColorRGB(editor.verticalScrollIndicatorStyle.thumbStyle.fg)
@@ -346,9 +384,15 @@ private func pixelScrollBar(editor: TextEditor, rect: Rect, cell: TerminalCapabi
             let width = max(2, cell.width / 2)
             elements.append(
                 .bar(
-                    row: indicatorRect.y + origin / cell.height, column: indicatorRect.x, widthPixels: width,
-                    heightPixels: thumbPixels, color: thumb, xOffset: max(0, (cell.width - width) / 2),
-                    yOffset: origin % cell.height))
+                    row: indicatorRect.y + origin / cell.height,
+                    column: indicatorRect.x,
+                    widthPixels: width,
+                    heightPixels: thumbPixels,
+                    color: thumb,
+                    xOffset: max(0, (cell.width - width) / 2),
+                    yOffset: origin % cell.height
+                )
+            )
         }
     }
     return elements

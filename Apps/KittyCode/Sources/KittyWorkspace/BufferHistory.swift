@@ -108,7 +108,8 @@ public final class BufferEditHistory {
         }
 
         undoStack.append(
-            Transition(before: recordedBefore, after: recordedAfter, recordedAt: recordedAt))
+            Transition(before: recordedBefore, after: recordedAfter, recordedAt: recordedAt)
+        )
         redoStack.removeAll(keepingCapacity: true)
 
         enforceUndoRetentionCaps()

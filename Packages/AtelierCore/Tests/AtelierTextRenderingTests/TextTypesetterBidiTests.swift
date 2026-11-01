@@ -58,7 +58,9 @@ struct TextTypesetterBidiTests {
         let carets = try Self.carets(of: "a\u{202E}bc", bidi: .forceLeftToRight)
         let placeholder = try Self.carets(of: "a\u{25C2}bc", bidi: .forceLeftToRight)
         #expect(
-            carets == placeholder, "the control is not its placeholder: carets \(carets), placeholder \(placeholder)")
+            carets == placeholder,
+            "the control is not its placeholder: carets \(carets), placeholder \(placeholder)"
+        )
     }
 
     /// Characterization: the default policy leaves the algorithm alone
@@ -72,7 +74,9 @@ struct TextTypesetterBidiTests {
         let tail = carets[sample.tailIndex]
         let runStart = try #require(leadingRun.min())
         #expect(
-            tail < runStart, "the tail at x = \(tail) is not left of the \(sample.name) run at \(runStart): \(carets)")
+            tail < runStart,
+            "the tail at x = \(tail) is not left of the \(sample.name) run at \(runStart): \(carets)"
+        )
     }
 
     /// Characterization: the default policy still lets an override reorder its text
@@ -113,15 +117,23 @@ struct TextTypesetterBidiTests {
     @Test
     func `rendering lays a control row out as layout does`() throws {
         let text = StyledText.plain(
-            rows: ["a\u{202E}bc"], font: FontSpec(postScriptName: Self.fontName, pointSize: 20),
-            plainStyle: Self.plainStyle)
+            rows: ["a\u{202E}bc"],
+            font: FontSpec(postScriptName: Self.fontName, pointSize: 20),
+            plainStyle: Self.plainStyle
+        )
         let configuration = LayoutConfiguration(wrap: .none, lineHeight: 28, bidi: .forceLeftToRight)
         let range = RowIndex(0) ..< RowIndex(1)
         let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         let laid = try TextTypesetter.layoutSynchronously(range, of: text, configuration: configuration)
         let tile = try TextTypesetter.renderSynchronously(
-            range, of: text, decorations: [], configuration: configuration, appearance: .light,
-            colorSpace: colorSpace, scale: 1)
+            range,
+            of: text,
+            decorations: [],
+            configuration: configuration,
+            appearance: .light,
+            colorSpace: colorSpace,
+            scale: 1
+        )
         #expect(tile.geometry.map { $0.lines.map(\.carets) } == laid.map { $0.lines.map(\.carets) })
     }
 
@@ -129,10 +141,16 @@ struct TextTypesetterBidiTests {
     func `a wrapped right-to-left row is cut into lines that tile it in order`() throws {
         let row = "שלום עולם = x + y"
         let text = StyledText.plain(
-            rows: [row], font: FontSpec(postScriptName: Self.fontName, pointSize: 20), plainStyle: Self.plainStyle)
+            rows: [row],
+            font: FontSpec(postScriptName: Self.fontName, pointSize: 20),
+            plainStyle: Self.plainStyle
+        )
         let configuration = LayoutConfiguration(wrap: .columns(4), lineHeight: 28, bidi: .forceLeftToRight)
         let geometry = try TextTypesetter.layoutSynchronously(
-            RowIndex(0) ..< RowIndex(1), of: text, configuration: configuration)
+            RowIndex(0) ..< RowIndex(1),
+            of: text,
+            configuration: configuration
+        )
         let lines = try #require(geometry.first?.lines)
         try #require(lines.count > 1, "the row should wrap onto several lines")
         var expectedStart = 0
@@ -155,10 +173,16 @@ struct TextTypesetterBidiTests {
     /// The carets of the only visual line of `text` laid out unwrapped with `bidi`.
     private static func carets(of text: String, bidi: BidiPolicy) throws -> [Float] {
         let styled = StyledText.plain(
-            rows: [text], font: FontSpec(postScriptName: fontName, pointSize: 20), plainStyle: plainStyle)
+            rows: [text],
+            font: FontSpec(postScriptName: fontName, pointSize: 20),
+            plainStyle: plainStyle
+        )
         let configuration = LayoutConfiguration(wrap: .none, lineHeight: 28, bidi: bidi)
         let rows = try TextTypesetter.layoutSynchronously(
-            RowIndex(0) ..< RowIndex(1), of: styled, configuration: configuration)
+            RowIndex(0) ..< RowIndex(1),
+            of: styled,
+            configuration: configuration
+        )
         let line = try #require(rows.first?.lines.first)
         return line.carets
     }

@@ -120,7 +120,8 @@ public actor ProcessSession {
             }
             guard written > 0 else {
                 throw ProcessSessionError.writeFailed(
-                    "write accepted 0 of \(remaining.count) remaining byte(s); the child is likely gone")
+                    "write accepted 0 of \(remaining.count) remaining byte(s); the child is likely gone"
+                )
             }
             remaining = remaining.dropFirst(written)
         }

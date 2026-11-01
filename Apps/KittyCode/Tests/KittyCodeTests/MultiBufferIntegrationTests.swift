@@ -25,7 +25,11 @@ struct MultiBufferIntegrationTests {
 
         // Simulate opening first file via bufferManager
         state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello world",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         state.cursorRow = 0
         state.cursorCol = 5
@@ -33,7 +37,11 @@ struct MultiBufferIntegrationTests {
         // Simulate opening second file
         state.saveStateToActiveBuffer()
         state.bufferManager.open(
-            filePath: "/b.txt", fileName: "b.txt", content: "line1\nline2\nline3", language: nil)
+            filePath: "/b.txt",
+            fileName: "b.txt",
+            content: "line1\nline2\nline3",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         state.cursorRow = 2
         state.cursorCol = 3
@@ -99,7 +107,11 @@ struct MultiBufferIntegrationTests {
         let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello",
+            language: nil
+        )
         state.restoreStateFromActiveBuffer()
         #expect(state.bufferManager.activeBuffer?.isDirty == false)
 
@@ -112,7 +124,9 @@ struct MultiBufferIntegrationTests {
     func `opening and restoring a file preserves exact document snapshots`() async throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: rootURL) }
 
@@ -130,7 +144,11 @@ struct MultiBufferIntegrationTests {
         config.syntax.enabled = false
         let taskProvider = TaskProviderSpy()
         let state = EditorState(
-            rootPath: rootURL.path, config: config, taskProvider: taskProvider, searchPool: EditorTestPool.shared)
+            rootPath: rootURL.path,
+            config: config,
+            taskProvider: taskProvider,
+            searchPool: EditorTestPool.shared
+        )
 
         state.openFilePath(firstFileURL.path, name: "first.txt")
         try await taskProvider.waitForAllTasks(timeout: .seconds(30))

@@ -21,7 +21,9 @@ struct ToolStatusBoardTests {
     @Test
     func `Refresh finds a tool the login shell's PATH gained since the last probe`() async throws {
         let temp = FileManager.default.temporaryDirectory.appending(
-            path: "GitDiffViewerTests.board.\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "GitDiffViewerTests.board.\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         defer { try? FileManager.default.removeItem(at: temp) }
         let installed = temp.appending(path: "bin", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: installed, withIntermediateDirectories: true)
@@ -39,8 +41,12 @@ struct ToolStatusBoardTests {
             return .success(isFirst ? "/nonexistent\n" : installed.path + "\n")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: temp.appending(path: "home"),
-            environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: temp.appending(path: "home"),
+            environment: ["SHELL": "/bin/zsh"],
+            wellKnownDirectories: []
+        )
         let settings = ViewerSettings(defaults: scratchDefaults.defaults)
         let sut = ToolStatusBoard(discovery: discovery)
         await sut.refreshAll(for: settings, rediscovering: false)
@@ -54,11 +60,15 @@ struct ToolStatusBoardTests {
     @Test
     func `a refresh superseded by another writes no status of its own`() async throws {
         let temp = FileManager.default.temporaryDirectory.appending(
-            path: "GitDiffViewerTests.board.\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "GitDiffViewerTests.board.\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         defer { try? FileManager.default.removeItem(at: temp) }
         let pinned = temp.appending(path: "pinned/swiftformat")
         try FileManager.default.createDirectory(
-            at: pinned.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: pinned.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try "#!/bin/sh\n".write(to: pinned, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: pinned.path)
         // The first xcrun probe, the older refresh's, holds until that refresh is cancelled.
@@ -78,8 +88,12 @@ struct ToolStatusBoardTests {
             return .failure(1, error: "")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: temp.appending(path: "home"),
-            environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: temp.appending(path: "home"),
+            environment: ["SHELL": "/bin/zsh"],
+            wellKnownDirectories: []
+        )
         let older = ViewerSettings(defaults: scratchDefaults.defaults)
         older.toolLocations[.swiftformat] = ToolLocation(customPath: pinned.path)
         let newer = ViewerSettings(defaults: otherScratchDefaults.defaults)
@@ -100,7 +114,9 @@ struct ToolStatusBoardTests {
         async throws
     {
         let temp = FileManager.default.temporaryDirectory.appending(
-            path: "GitDiffViewerTests.board.\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "GitDiffViewerTests.board.\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         defer { try? FileManager.default.removeItem(at: temp) }
         let home = temp.appending(path: "home", directoryHint: .isDirectory)
         let installed = [
@@ -110,7 +126,9 @@ struct ToolStatusBoardTests {
         ]
         for executable in installed.values {
             try FileManager.default.createDirectory(
-                at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: executable.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try "#!/bin/sh\n".write(to: executable, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         }
@@ -122,8 +140,12 @@ struct ToolStatusBoardTests {
             return .success(clangd.path + "\n")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: home, environment: ["SHELL": "/bin/zsh"],
-            wellKnownDirectories: [])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: home,
+            environment: ["SHELL": "/bin/zsh"],
+            wellKnownDirectories: []
+        )
         let sut = ToolStatusBoard(discovery: discovery)
 
         await sut.refreshAll(for: ViewerSettings(defaults: scratchDefaults.defaults), rediscovering: false)
@@ -142,9 +164,11 @@ struct ToolStatusBoardTests {
         #expect(clangd.contains("C++") && clangd.contains("Objective-C") && !clangd.contains("objective-c"))
         #expect(
             ToolStatusBoard.footnote(for: .rustAnalyzer)
-                == "Hover documentation runs it for Rust, whether or not diagnostics are on.")
+                == "Hover documentation runs it for Rust, whether or not diagnostics are on."
+        )
         #expect(
             ToolStatusBoard.footnote(for: .basedPyright)
-                == "Hover documentation runs it for Python, whether or not diagnostics are on.")
+                == "Hover documentation runs it for Python, whether or not diagnostics are on."
+        )
     }
 }

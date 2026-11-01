@@ -154,7 +154,10 @@ struct CommandDispatcherPhase2Tests {
         sut.state.cursorCol = 0
 
         let result = dispatchCommand(
-            .editorWordForward, state: sut.state, pipeline: sut.pipeline)
+            .editorWordForward,
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
 
         #expect(result)
         #expect(sut.state.cursorCol > 0)
@@ -167,7 +170,10 @@ struct CommandDispatcherPhase2Tests {
         sut.state.cursorCol = 8
 
         let result = dispatchCommand(
-            .editorWordBackward, state: sut.state, pipeline: sut.pipeline)
+            .editorWordBackward,
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
 
         #expect(result)
         #expect(sut.state.cursorCol < 8)

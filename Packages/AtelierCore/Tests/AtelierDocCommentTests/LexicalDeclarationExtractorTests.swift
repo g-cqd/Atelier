@@ -92,7 +92,8 @@ struct LexicalDeclarationExtractorTests {
                 Read("size", .function, "get size(): number"),
                 Read("take", .function, "static take<T>(queue: Queue): T"),
                 Read("get", .function, "get(key: string)")
-            ])
+            ]
+        )
     }
 
     @Test
@@ -115,7 +116,8 @@ struct LexicalDeclarationExtractorTests {
                 Read("Off", .enumCase, "Off = 0"),
                 Read("timeout", .variable, "timeout?: number"),
                 Read("onError", .function, "onError?(error: Error): void")
-            ])
+            ]
+        )
     }
 
     @Test
@@ -253,7 +255,8 @@ struct LexicalDeclarationExtractorTests {
                 Read("Width", .variable, "var Width, Height = 80, 24"),
                 Read("Height", .variable, "var Width, Height = 80, 24"),
                 Read("Point", .type, "type Point struct")
-            ])
+            ]
+        )
     }
 
     @Test

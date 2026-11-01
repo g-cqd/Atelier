@@ -5,7 +5,10 @@ public struct SearchFileResult: Sendable {
     public var contextSnippets: [String]
 
     public init(
-        filePath: String, fileName: String, matches: [SearchMatch], contextSnippets: [String]
+        filePath: String,
+        fileName: String,
+        matches: [SearchMatch],
+        contextSnippets: [String]
     ) {
         self.filePath = filePath
         self.fileName = fileName

@@ -13,14 +13,20 @@ struct GapBandTests {
     /// Forty lines changed at lines 12 and 30: a leading gap, a gap between the changes, and a trailing gap, each
     /// with a band.
     private func text(
-        sides: DiffRenderer.Options = DiffRenderer.Options(), context: Int = 2, multiple: Double = 0
+        sides: DiffRenderer.Options = DiffRenderer.Options(),
+        context: Int = 2,
+        multiple: Double = 0
     ) -> RenderedDiff {
         let old = (1 ... 40).map { "let value\($0) = \($0)" }
         var new = old
         for line in [11, 29] { new[line] = "let value\(line + 1) = changed" }
         return DiffRenderer.render(
-            oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-            language: .plain, lineHeightMultiple: multiple, layout: .changes(context: context, expansions: [:]))
+            oldText: old.joined(separator: "\n") + "\n",
+            newText: new.joined(separator: "\n") + "\n",
+            language: .plain,
+            lineHeightMultiple: multiple,
+            layout: .changes(context: context, expansions: [:])
+        )
     }
 
     @Test(arguments: [0.0, 1.3])
@@ -71,8 +77,12 @@ struct GapBandTests {
         new[29] = "let value30 = changed"
         let card = CardLayouts(
             rendered: DiffRenderer.render(
-                oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain, layout: .changes(context: 0, expansions: [:])))
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain,
+                layout: .changes(context: 0, expansions: [:])
+            )
+        )
         let left = try #require(card.old)
         let right = try #require(card.new)
         try #require(left.rendered.bandSpacing(afterRow: 0) > 0)
@@ -186,7 +196,12 @@ struct GapBandTests {
         sut.wrapsLines = false
         sut.scrollsPastEnd = true
         DiffTextViewCoordinator.configureWrapping(
-            false, column: 0, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+            false,
+            column: 0,
+            font: rendered.palette.font,
+            textView: textView,
+            scrollView: scrollView
+        )
         sut.apply(rendered)
         sut.updateOverscroll(in: scrollView.contentView)
 

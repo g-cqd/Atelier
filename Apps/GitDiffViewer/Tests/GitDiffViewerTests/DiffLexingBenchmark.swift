@@ -25,7 +25,9 @@ struct DiffLexingBenchmark {
     func `lexes and places the tokens of a fifty thousand line pair`() throws {
         let (old, new) = try Self.pair()
         let prepared = PreparedDiff(
-            FileDiffInput(title: "pair.swift", oldText: old, newText: new, language: .swift), granularity: .word)
+            FileDiffInput(title: "pair.swift", oldText: old, newText: new, language: .swift),
+            granularity: .word
+        )
         let options = DiffRenderer.Options(granularity: .word, sides: [.old, .new])
         let oldLines = prepared.model.oldLines
         let newLines = prepared.model.newLines
@@ -41,10 +43,18 @@ struct DiffLexingBenchmark {
             let lexing = Self.milliseconds {
                 lexed.append(
                     DecorationFixtures.byLine(
-                        engine.highlight(utf8: oldBytes, language: .swift), text: old, lines: oldLines))
+                        engine.highlight(utf8: oldBytes, language: .swift),
+                        text: old,
+                        lines: oldLines
+                    )
+                )
                 lexed.append(
                     DecorationFixtures.byLine(
-                        engine.highlight(utf8: newBytes, language: .swift), text: new, lines: newLines))
+                        engine.highlight(utf8: newBytes, language: .swift),
+                        text: new,
+                        lines: newLines
+                    )
+                )
             }
             var scanned: [[HighlightToken]] = []
             let utf16Scan = Self.milliseconds {
@@ -67,7 +77,11 @@ struct DiffLexingBenchmark {
             var rendered: RenderedDiff?
             let placement = Self.milliseconds {
                 rendered = DiffRenderer.render(
-                    prepared: [prepared], options: options, layout: .full, withHeaders: false)
+                    prepared: [prepared],
+                    options: options,
+                    layout: .full,
+                    withHeaders: false
+                )
             }
             let oldSide = try #require(rendered?.old)
             let newSide = try #require(rendered?.new)
@@ -86,7 +100,8 @@ struct DiffLexingBenchmark {
         }
         print(
             "BENCH gdv-pair old-lines \(oldLines.count) new-lines \(newLines.count) "
-                + "bytes \(old.utf8.count + new.utf8.count) tokens \(tokenCount) checksum \(checksum)")
+                + "bytes \(old.utf8.count + new.utf8.count) tokens \(tokenCount) checksum \(checksum)"
+        )
         for name in ["lexing", "scan-utf16", "scan-utf8", "plain", "placement"] {
             let sorted = samples[name, default: []].sorted()
             let rounded = sorted.map { ($0 * 1_000).rounded() / 1_000 }
@@ -99,7 +114,9 @@ struct DiffLexingBenchmark {
         // One rewritten line in 97 leaves hunks of seven rows around gaps of ninety, so a drag has a gap to open.
         let (old, new) = try Self.pair(rewritingOneLineIn: 97)
         let prepared = PreparedDiff(
-            FileDiffInput(title: "pair.swift", oldText: old, newText: new, language: .swift), granularity: .word)
+            FileDiffInput(title: "pair.swift", oldText: old, newText: new, language: .swift),
+            granularity: .word
+        )
         let inline = DiffRenderer.Options(granularity: .word, sides: [.unified])
         let split = DiffRenderer.Options(granularity: .word, sides: [.old, .new])
         let dragged = GapKey(fileIndex: 0, gapIndex: prepared.model.unifiedChangeStarts.count / 2)
@@ -112,7 +129,8 @@ struct DiffLexingBenchmark {
             let toggle = Self.milliseconds {
                 for options in [inline, split] {
                     toggled.append(
-                        DiffRenderer.render(prepared: [prepared], options: options, layout: .full, withHeaders: false))
+                        DiffRenderer.render(prepared: [prepared], options: options, layout: .full, withHeaders: false)
+                    )
                 }
             }
             var drag: [RenderedDiff] = []
@@ -120,8 +138,12 @@ struct DiffLexingBenchmark {
                 for expansion in steps {
                     drag.append(
                         DiffRenderer.render(
-                            prepared: [prepared], options: split,
-                            layout: .changes(context: 3, expansions: [dragged: expansion]), withHeaders: false))
+                            prepared: [prepared],
+                            options: split,
+                            layout: .changes(context: 3, expansions: [dragged: expansion]),
+                            withHeaders: false
+                        )
+                    )
                 }
             }
             if iteration == 0 {
@@ -138,7 +160,8 @@ struct DiffLexingBenchmark {
         }
         print(
             "BENCH gdv-rerender unified-rows \(prepared.model.unifiedRows.count) drag-steps \(steps.count) "
-                + "drag-rows \(dragRows) checksum \(checksum)")
+                + "drag-rows \(dragRows) checksum \(checksum)"
+        )
         for name in ["toggle", "gap-drag"] {
             let sorted = samples[name, default: []].sorted()
             let rounded = sorted.map { ($0 * 1_000).rounded() / 1_000 }

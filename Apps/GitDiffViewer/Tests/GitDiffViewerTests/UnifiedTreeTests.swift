@@ -56,7 +56,10 @@ struct UnifiedTreeTests {
 
     private func makeSUT() -> DiffViewerModel {
         DiffViewerModel(
-            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: reader, taskProvider: taskProvider)
+            settings: ViewerSettings(defaults: scratchDefaults.defaults),
+            reader: reader,
+            taskProvider: taskProvider
+        )
     }
 
     private func entry(_ path: String, _ blob: String) -> SourceEntry {

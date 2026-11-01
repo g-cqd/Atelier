@@ -107,7 +107,12 @@ struct LexAutomatonBuilder {
             for range in group.characters.ranges {
                 transitions.append(
                     LexTransition(
-                        lower: range.lowerBound, upper: range.upperBound, target: target, skips: group.isSeparator))
+                        lower: range.lowerBound,
+                        upper: range.upperBound,
+                        target: target,
+                        skips: group.isSeparator
+                    )
+                )
             }
         }
         transitions.sort { $0.lower < $1.lower }
@@ -198,7 +203,12 @@ struct LexAutomatonBuilder {
 
     private func group(of readers: [Int], over characters: ScalarRanges) -> TransitionGroup {
         var group = TransitionGroup(
-            characters: characters, targets: [], isSeparator: true, precedence: Int.min, owners: [])
+            characters: characters,
+            targets: [],
+            isSeparator: true,
+            precedence: Int.min,
+            owners: []
+        )
         var targets = Set<Int>()
         for reader in readers {
             guard case .advance(_, let next, let precedence, let isSeparator) = nfa.states[reader] else { continue }

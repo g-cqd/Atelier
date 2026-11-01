@@ -46,7 +46,8 @@ import Testing
         #expect(
             Self.boolDiscussion.map(Self.kind) == [
                 "paragraph", "code", "paragraph", "paragraph", "code", "paragraph", "code", "heading 1", "paragraph"
-            ])
+            ]
+        )
     }
 
     @Test
@@ -80,7 +81,8 @@ import Testing
                     i -= 1
                 }
                 """
-            ])
+            ]
+        )
     }
 
     @Test
@@ -92,7 +94,8 @@ import Testing
         #expect(
             texts.first == "Bool represents Boolean values in Swift. Create instances of Bool by using one of the "
                 + "Boolean literals true or false, or by assigning the result of a Boolean method or operation to a "
-                + "variable or constant.")
+                + "variable or constant."
+        )
         #expect(texts.last?.hasPrefix("The C bool and Boolean types") == true)
     }
 
@@ -102,19 +105,22 @@ import Testing
             Self.syntheticDiscussion.map(Self.kind) == [
                 "paragraph", "heading 1", "heading 2", "heading 3", "code swift", "code", "code objc",
                 "bullet list, 2 items", "numbered list from 3, 2 items", "quote", "rule", "paragraph"
-            ])
+            ]
+        )
         #expect(
             Self.code(in: Self.syntheticDiscussion) == [
                 "let config = try load(from: url)\n\nif config.isValid {\n    print(config)\n}",
                 "let indented = true\n    nested()",
                 "[object message];"
-            ])
+            ]
+        )
     }
 
     @Test
     func `a list item keeps its own code block`() throws {
         let list = try #require(
-            Self.syntheticDiscussion.first { if case .list(false, _, _) = $0 { true } else { false } })
+            Self.syntheticDiscussion.first { if case .list(false, _, _) = $0 { true } else { false } }
+        )
         guard case .list(_, _, let items) = list else { return }
         #expect(items.map { $0.map(Self.kind) } == [["paragraph"], ["paragraph", "code swift"]])
         #expect(Self.code(in: items[1]) == ["let x = 1"])
@@ -123,7 +129,8 @@ import Testing
     @Test
     func `a paragraph keeps inline code, emphasis, strong and links`() throws {
         let blocks = HoverMarkdownBlock.parse(
-            "Loads *quickly* and **safely**, with `inline code` and [a link](https://example.com/load).")
+            "Loads *quickly* and **safely**, with `inline code` and [a link](https://example.com/load)."
+        )
         guard case .paragraph(let text)? = blocks.first, blocks.count == 1 else {
             Issue.record("expected one paragraph, got \(blocks.map(Self.kind))")
             return

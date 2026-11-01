@@ -42,8 +42,11 @@ struct FileAppearanceTimingTests {
     /// A window never ordered in, its content laid out once.
     private static func offscreenWindow(showing view: some View) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: view)
         window.contentView?.layoutSubtreeIfNeeded()

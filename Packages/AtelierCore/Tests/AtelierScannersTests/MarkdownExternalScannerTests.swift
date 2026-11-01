@@ -62,7 +62,10 @@ private let markdownCases: [MarkdownCase] = [
 
 struct MarkdownExternalScannerTests {
     private func scan(
-        _ input: String, at offset: Int = 0, allowing names: [String], scanner: inout MarkdownExternalScanner
+        _ input: String,
+        at offset: Int = 0,
+        allowing names: [String],
+        scanner: inout MarkdownExternalScanner
     ) -> (name: String?, lexer: StringScannerLexer) {
         var lexer = StringScannerLexer(input, at: offset)
         let valid = MarkdownExternalScanner.externalNames.map { names.contains($0) }
@@ -89,7 +92,8 @@ struct MarkdownExternalScannerTests {
                 "_html_block_6_start", "_html_block_7_start", "_close_block", "_no_indented_chunk", "_error",
                 "_trigger_error", "_eof", "minus_metadata", "plus_metadata", "_pipe_table_start",
                 "_pipe_table_line_ending"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["markdown"] != nil)
     }
 
@@ -134,11 +138,13 @@ struct MarkdownExternalScannerTests {
         var scanner = MarkdownExternalScanner()
         #expect(
             scan("````\n", allowing: ["_fenced_code_block_start_backtick"], scanner: &scanner).name
-                == "_fenced_code_block_start_backtick")
+                == "_fenced_code_block_start_backtick"
+        )
         #expect(scan("```\n", allowing: ["_fenced_code_block_end_backtick"], scanner: &scanner).name == nil)
         #expect(
             scan("````\n", allowing: ["_fenced_code_block_end_backtick"], scanner: &scanner).name
-                == "_fenced_code_block_end_backtick")
+                == "_fenced_code_block_end_backtick"
+        )
     }
 
     @Test
@@ -184,7 +190,8 @@ struct MarkdownExternalScannerTests {
         var scanner = MarkdownExternalScanner()
         #expect(
             scan("<étiquette café=\"oui\">\n", allowing: ["_html_block_7_start"], scanner: &scanner).name
-                == "_html_block_7_start")
+                == "_html_block_7_start"
+        )
         scanner = MarkdownExternalScanner()
         #expect(scan("<☃>\n", allowing: ["_html_block_7_start"], scanner: &scanner).name == nil)
     }
@@ -194,7 +201,8 @@ struct MarkdownExternalScannerTests {
         var scanner = MarkdownExternalScanner()
         #expect(
             scan("<![Cx>\n", allowing: ["_html_block_5_start", "_html_block_7_start"], scanner: &scanner).name
-                == "_html_block_7_start")
+                == "_html_block_7_start"
+        )
     }
 
     @Test
@@ -208,7 +216,8 @@ struct MarkdownExternalScannerTests {
         var scanner = MarkdownExternalScanner()
         #expect(
             scan("    code\n", allowing: ["_indented_chunk_start", "_no_indented_chunk"], scanner: &scanner).name
-                == nil)
+                == nil
+        )
     }
 
     @Test
@@ -275,21 +284,27 @@ struct MarkdownExternalScannerTests {
         var scanner = MarkdownExternalScanner()
         #expect(
             scan(
-                String(repeating: "`", count: 256) + "\n", allowing: ["_fenced_code_block_start_backtick"],
+                String(repeating: "`", count: 256) + "\n",
+                allowing: ["_fenced_code_block_start_backtick"],
                 scanner: &scanner
             )
-            .name == nil)
+            .name == nil
+        )
         #expect(
             scan(
-                String(repeating: " ", count: 256) + "code\n", allowing: ["_indented_chunk_start"],
+                String(repeating: " ", count: 256) + "code\n",
+                allowing: ["_indented_chunk_start"],
                 scanner: &scanner
             )
-            .name == nil)
+            .name == nil
+        )
         #expect(
             scan(
-                "-" + String(repeating: " ", count: 256) + "item\n", allowing: ["_list_marker_minus"],
+                "-" + String(repeating: " ", count: 256) + "item\n",
+                allowing: ["_list_marker_minus"],
                 scanner: &scanner
             )
-            .name == nil)
+            .name == nil
+        )
     }
 }

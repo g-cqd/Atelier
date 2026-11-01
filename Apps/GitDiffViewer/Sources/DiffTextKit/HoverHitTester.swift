@@ -26,16 +26,30 @@ package enum HoverHitTester {
         let string = rendered.attributed.string as NSString
         guard
             let identifierRange = identifierRange(
-                in: string, at: location.offset, rowStart: location.rowStart, rowEnd: location.rowEnd)
+                in: string,
+                at: location.offset,
+                rowStart: location.rowStart,
+                rowEnd: location.rowEnd
+            )
         else { return nil }
 
         let anchorRect = Self.rect(
-            forIdentifierRange: identifierRange, fragmentOrigin: location.fragmentOrigin,
-            fragmentStart: location.fragmentStart, line: location.line, inset: textView.textContainerInset)
+            forIdentifierRange: identifierRange,
+            fragmentOrigin: location.fragmentOrigin,
+            fragmentStart: location.fragmentStart,
+            line: location.line,
+            inset: textView.textContainerInset
+        )
 
         return HoverHit(
-            fileIndex: meta.fileIndex, side: side, line: number - 1, utf16Column: location.offset - location.rowStart,
-            row: location.row, anchorRect: anchorRect, identifierRange: identifierRange)
+            fileIndex: meta.fileIndex,
+            side: side,
+            line: number - 1,
+            utf16Column: location.offset - location.rowStart,
+            row: location.row,
+            anchorRect: anchorRect,
+            identifierRange: identifierRange
+        )
     }
 
     /// The content row under `point`, in text-view coordinates, and the UTF-16 column of the character under it in
@@ -72,11 +86,14 @@ package enum HoverHitTester {
         // Text-view coordinates include the container inset; layout fragments are reported without it.
         let containerPoint = NSPoint(x: point.x - inset.width, y: point.y - inset.height)
         layoutManager.ensureLayout(
-            for: NSRect(x: containerPoint.x - 1, y: containerPoint.y - 1, width: 2, height: 2))
+            for: NSRect(x: containerPoint.x - 1, y: containerPoint.y - 1, width: 2, height: 2)
+        )
         guard let fragment = layoutManager.textLayoutFragment(for: containerPoint) else { return nil }
         let fragmentOrigin = fragment.layoutFragmentFrame.origin
         let fragmentLocalPoint = NSPoint(
-            x: containerPoint.x - fragmentOrigin.x, y: containerPoint.y - fragmentOrigin.y)
+            x: containerPoint.x - fragmentOrigin.x,
+            y: containerPoint.y - fragmentOrigin.y
+        )
         guard
             let line = fragment.textLineFragments.first(where: {
                 fragmentLocalPoint.y >= $0.typographicBounds.minY && fragmentLocalPoint.y < $0.typographicBounds.maxY
@@ -84,7 +101,9 @@ package enum HoverHitTester {
         else { return nil }
         let localIndex = line.characterIndex(for: fragmentLocalPoint)
         let fragmentStart = contentManager.offset(
-            from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+            from: layoutManager.documentRange.location,
+            to: fragment.rangeInElement.location
+        )
         let offset = fragmentStart + localIndex
 
         let rowIndex = rendered.rowIndex(containing: offset)
@@ -95,8 +114,14 @@ package enum HoverHitTester {
             ? rendered.lineStarts[rowIndex + 1] - 1 : rendered.attributed.length
         guard offset < rowEnd else { return nil }
         return Location(
-            offset: offset, row: rowIndex, rowStart: rowStart, rowEnd: rowEnd, fragmentOrigin: fragmentOrigin,
-            fragmentStart: fragmentStart, line: line)
+            offset: offset,
+            row: rowIndex,
+            rowStart: rowStart,
+            rowEnd: rowEnd,
+            fragmentOrigin: fragmentOrigin,
+            fragmentStart: fragmentStart,
+            line: line
+        )
     }
 
     /// The current bounds of `identifierRange`, laid out and measured the way ``hit(at:textView:rendered:)``
@@ -106,7 +131,9 @@ package enum HoverHitTester {
         guard let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager,
             let start = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: identifierRange.location),
+                layoutManager.documentRange.location,
+                offsetBy: identifierRange.location
+            ),
             let end = contentManager.location(start, offsetBy: identifierRange.length),
             let range = NSTextRange(location: start, end: end)
         else { return nil }
@@ -114,7 +141,9 @@ package enum HoverHitTester {
         guard let fragment = layoutManager.textLayoutFragment(for: start) else { return nil }
         let fragmentOrigin = fragment.layoutFragmentFrame.origin
         let fragmentStart = contentManager.offset(
-            from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+            from: layoutManager.documentRange.location,
+            to: fragment.rangeInElement.location
+        )
         guard
             let line = fragment.textLineFragments.first(where: { lineFragment in
                 let lineStart = fragmentStart + lineFragment.characterRange.location
@@ -123,14 +152,21 @@ package enum HoverHitTester {
             })
         else { return nil }
         return Self.rect(
-            forIdentifierRange: identifierRange, fragmentOrigin: fragmentOrigin, fragmentStart: fragmentStart,
-            line: line, inset: textView.textContainerInset)
+            forIdentifierRange: identifierRange,
+            fragmentOrigin: fragmentOrigin,
+            fragmentStart: fragmentStart,
+            line: line,
+            inset: textView.textContainerInset
+        )
     }
 
     /// `identifierRange`'s bounds within `line`, in text-view coordinates.
     private static func rect(
-        forIdentifierRange identifierRange: NSRange, fragmentOrigin: NSPoint, fragmentStart: Int,
-        line: NSTextLineFragment, inset: NSSize
+        forIdentifierRange identifierRange: NSRange,
+        fragmentOrigin: NSPoint,
+        fragmentStart: Int,
+        line: NSTextLineFragment,
+        inset: NSSize
     ) -> NSRect {
         let startLocal = identifierRange.location - fragmentStart
         let endLocal = identifierRange.location + identifierRange.length - fragmentStart
@@ -139,8 +175,11 @@ package enum HoverHitTester {
         let minX = min(startPoint.x, endPoint.x)
         let maxX = max(startPoint.x, endPoint.x)
         return NSRect(
-            x: fragmentOrigin.x + minX + inset.width, y: fragmentOrigin.y + line.typographicBounds.minY + inset.height,
-            width: maxX - minX, height: line.typographicBounds.height)
+            x: fragmentOrigin.x + minX + inset.width,
+            y: fragmentOrigin.y + line.typographicBounds.minY + inset.height,
+            width: maxX - minX,
+            height: line.typographicBounds.height
+        )
     }
 
     /// Content rows carry source text; headers and filler rows never do.

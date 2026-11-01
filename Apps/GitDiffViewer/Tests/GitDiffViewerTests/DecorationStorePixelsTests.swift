@@ -18,7 +18,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct DecorationStorePixelsTests {
     static let text = "let set = [1]\nlet other = 2\n"
 
@@ -29,7 +30,10 @@ struct DecorationStorePixelsTests {
     /// The lexer's colour of both sides of ``text``.
     static func lexed() -> DiffDecorations {
         let layers = DecorationFixtures.layers(
-            LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift), text: text, layer: .lexical)
+            LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift),
+            text: text,
+            layer: .lexical
+        )
         return DecorationFixtures.colors(old: layers, new: layers, version: 1)
     }
 
@@ -48,7 +52,9 @@ struct DecorationStorePixelsTests {
         let layoutManager = try #require(pane.textView.textLayoutManager)
         var attributed = 0
         layoutManager.enumerateRenderingAttributes(from: layoutManager.documentRange.location, reverse: false) {
-            _, _, _ in
+            _,
+            _,
+            _ in
             attributed += 1
             return true
         }
@@ -88,7 +94,10 @@ struct DecorationStorePixelsTests {
     @Test
     func `colour, emphasis and a moved row land with no fragment laid out again`() throws {
         let diff = DiffRenderer.render(
-            oldText: "let a = 1\nlet b = 2\n", newText: "let a = 1\nlet b = 3\n", language: .swift)
+            oldText: "let a = 1\nlet b = 2\n",
+            newText: "let a = 1\nlet b = 3\n",
+            language: .swift
+        )
         let rendered = try #require(diff.new)
         let pane = try HostedDecoratedPane(rendered: rendered, decorations: nil)
         let layoutManager = try #require(pane.textView.textLayoutManager)
@@ -139,11 +148,16 @@ struct DecorationStorePixelsTests {
     /// The lexer's colour of both sides of ``longText``, then swift-syntax's over it when `refined`.
     static func longDecorations(refined: Bool) throws -> DiffDecorations {
         let lexical = DecorationFixtures.layers(
-            LexicalHighlightEngine().highlight(utf8: Array(longText.utf8), language: .swift), text: longText,
-            layer: .lexical)
+            LexicalHighlightEngine().highlight(utf8: Array(longText.utf8), language: .swift),
+            text: longText,
+            layer: .lexical
+        )
         guard refined else { return DecorationFixtures.colors(old: lexical, new: lexical, version: 1) }
         let layers = DecorationFixtures.layers(
-            try SwiftSyntaxHighlights.tokens(in: longText), text: longText, over: lexical)
+            try SwiftSyntaxHighlights.tokens(in: longText),
+            text: longText,
+            over: lexical
+        )
         return DecorationFixtures.colors(old: layers, new: layers, version: 2)
     }
 
@@ -152,7 +166,8 @@ struct DecorationStorePixelsTests {
     @Test(arguments: [false, true])
     func `rows laid out before the colours landed take them when scrolled to`(refined: Bool) throws {
         let rendered = try #require(
-            DiffRenderer.render(oldText: Self.longText, newText: Self.longText, language: .swift).new)
+            DiffRenderer.render(oldText: Self.longText, newText: Self.longText, language: .swift).new
+        )
         let pane = try HostedDecoratedPane(rendered: rendered, decorations: nil)
         pane.update(decorations: try Self.longDecorations(refined: false))
         if refined { pane.update(decorations: try Self.longDecorations(refined: true)) }
@@ -197,8 +212,11 @@ final class HostedDecoratedPane {
         self.rendered = rendered
         host = NSHostingView(rootView: DiffTextView(rendered: rendered, gutter: .new).decorated(with: decorations))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
         try #require(host.layer != nil)
@@ -229,7 +247,9 @@ final class HostedDecoratedPane {
         let location = try #require(contentManager.location(layoutManager.documentRange.location, offsetBy: offset))
         var color: NSColor?
         layoutManager.enumerateRenderingAttributes(from: layoutManager.documentRange.location, reverse: false) {
-            _, attributes, range in
+            _,
+            attributes,
+            range in
             if range.contains(location) { color = attributes[.foregroundColor] as? NSColor }
             return color == nil
         }
@@ -242,7 +262,8 @@ final class HostedDecoratedPane {
         let layoutManager = try #require(textView.textLayoutManager)
         let contentManager = try #require(layoutManager.textContentManager)
         let location = try #require(
-            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+        )
         let fragment = try #require(layoutManager.textLayoutFragment(for: location))
         var frame = fragment.layoutFragmentFrame
         frame.origin.y += textView.textContainerOrigin.y
@@ -268,8 +289,11 @@ final class HostedDecoratedCard {
         layouts = CardLayouts(rendered: diff)
         host = NSHostingView(rootView: Self.pane(layouts, decorations: decorations))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         settle()
         try #require(host.layer != nil)

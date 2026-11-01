@@ -41,7 +41,10 @@ struct GLRParserDepthTests {
             """
         let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(json.utf8)))
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let source = String(repeating: "x", count: repetitions) + "end"
 
         let error = await onThread { Self.parseError(parser, source) }
@@ -91,10 +94,14 @@ struct GLRParserDepthTests {
                 ),
                 ("b", .symbol("a"))
             ],
-            externals: [.symbol("Y")])
+            externals: [.symbol("Y")]
+        )
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         let source = String(repeating: "x", count: 16_000) + "z"
 
         let rootType = await onThread {
@@ -134,7 +141,10 @@ struct GLRParserDepthTests {
             """
         let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(json.utf8)))
         return GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
     }
 
     private static func parseError(_ parser: GLRParser, _ source: String) -> ParseError? {

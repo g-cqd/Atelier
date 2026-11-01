@@ -64,16 +64,22 @@ final class PaneDiagnostics {
                 let side: HoverQuerySide = hit.side == .new ? .new : .old
                 guard
                     let content = await docs.hover(
-                        fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
+                        fileIndex: hit.fileIndex,
+                        side: side,
+                        line: hit.line,
+                        utf16Column: hit.utf16Column
+                    )
                 else { return nil }
                 return HoverDocument.build(from: content, palette: palette)
-            })
+            }
+        )
     }
 
     /// Resolves a hover hit into its documentation joined by the findings underlined under the pointer (book HOVER-14),
     /// or those findings alone when there is no documentation; nil when there is neither.
     nonisolated static func hoverResolver(
-        overlay: DiagnosticOverlay, documentation: @escaping @Sendable (HoverHit) async -> HoverDocument?
+        overlay: DiagnosticOverlay,
+        documentation: @escaping @Sendable (HoverHit) async -> HoverDocument?
     ) -> @Sendable (HoverHit) async -> HoverDocument? {
         { hit in
             let underPointer = overlay.row(hit.row)?.findings(underColumn: hit.utf16Column) ?? []
@@ -98,8 +104,10 @@ enum DiagnosticFindingsPopover {
 extension HoverDocument.DiagnosticEntry {
     nonisolated init(_ finding: Finding) {
         self.init(
-            severity: .init(finding.severity), message: "\(finding.ruleID): \(finding.message)",
-            tool: finding.tool.displayName)
+            severity: .init(finding.severity),
+            message: "\(finding.ruleID): \(finding.message)",
+            tool: finding.tool.displayName
+        )
     }
 }
 

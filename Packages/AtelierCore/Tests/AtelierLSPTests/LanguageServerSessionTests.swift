@@ -50,11 +50,18 @@ struct LanguageServerSessionTests {
     func `hover performs the initialize handshake once and returns markdown`() async throws {
         let factory = ScriptedConnectionFactory()
         let configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         async let hover = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "let x = 1",
+            line: 0,
+            utf16Column: 4
+        )
 
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
@@ -84,37 +91,63 @@ struct LanguageServerSessionTests {
     func `didOpen fires once per uri, and changed content is sent as didChange with a bumped version`() async throws {
         let factory = ScriptedConnectionFactory()
         let configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         // First hover: initialize, initialized, didOpen v1, hover.
         async let first = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "let x = 1",
+            line: 0,
+            utf16Column: 4
+        )
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
         await transport.sink.waitForCount(1)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 0).id),
+            result: .object([:])
+        )
         await transport.sink.waitForCount(4)
         let firstOpen = try await decodeSent(transport, at: 2)
         #expect(firstOpen.method == "textDocument/didOpen")
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 3).id),
+            result: hoverResult(markdown: "a")
+        )
         _ = try #require(await first.content)
 
         // Second hover, same content: no new open/close, straight to hover.
         async let second = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "let x = 1",
+            line: 0,
+            utf16Column: 4
+        )
         await transport.sink.waitForCount(5)
         let secondHover = try await decodeSent(transport, at: 4)
         #expect(secondHover.method == "textDocument/hover")
         try respond(
-            transport, id: try #require(secondHover.id), result: hoverResult(markdown: "a"))
+            transport,
+            id: try #require(secondHover.id),
+            result: hoverResult(markdown: "a")
+        )
         _ = try #require(await second.content)
 
         // Third hover, changed content: didChange with the whole text and a bumped version, then hover.
         async let third = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "let x = 2", line: 0, utf16Column: 4)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "let x = 2",
+            line: 0,
+            utf16Column: 4
+        )
         await transport.sink.waitForCount(7)
         let change = try await decodeSent(transport, at: 5)
         #expect(change.method == "textDocument/didChange")
@@ -133,26 +166,44 @@ struct LanguageServerSessionTests {
     func `the least recently used document is closed past the open limit`() async throws {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         configuration.openDocumentLimit = 1
         let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         async let first = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
         await transport.sink.waitForCount(1)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 0).id),
+            result: .object([:])
+        )
         await transport.sink.waitForCount(4)
         #expect(try await decodeSent(transport, at: 2).method == "textDocument/didOpen")
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 3).id),
+            result: hoverResult(markdown: "a")
+        )
         _ = try #require(await first.content)
 
         // Second document evicts the first: didClose(a), didOpen(b), hover(b).
         async let second = service.hover(
-            uri: "file:///b.swift", languageID: "swift", content: "b", line: 0, utf16Column: 0)
+            uri: "file:///b.swift",
+            languageID: "swift",
+            content: "b",
+            line: 0,
+            utf16Column: 0
+        )
         await transport.sink.waitForCount(7)
         let evictClose = try await decodeSent(transport, at: 4)
         #expect(evictClose.method == "textDocument/didClose")
@@ -162,7 +213,10 @@ struct LanguageServerSessionTests {
         #expect(evictClosePayload.textDocument.uri == "file:///a.swift")
         #expect(try await decodeSent(transport, at: 5).method == "textDocument/didOpen")
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 6).id), result: hoverResult(markdown: "b"))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 6).id),
+            result: hoverResult(markdown: "b")
+        )
         _ = try #require(await second.content)
     }
 
@@ -170,17 +224,27 @@ struct LanguageServerSessionTests {
     func `a request that never answers times out as unavailable and sends cancelRequest`() async throws {
         let factory = ScriptedConnectionFactory()
         let configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         let clock = TestClock()
         let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
         await transport.sink.waitForCount(1)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 0).id),
+            result: .object([:])
+        )
         await transport.sink.waitForCount(4)
         let hoverEnvelope = try await decodeSent(transport, at: 3)
         #expect(hoverEnvelope.method == "textDocument/hover")
@@ -201,13 +265,20 @@ struct LanguageServerSessionTests {
             "initialize": .object([:]), "textDocument/hover": .null, "shutdown": .null
         ])
         let configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         let service = LanguageServerSession(configuration: configuration, clock: TestClock()) { _ in
             await factory.make()
         }
 
         let outcome = await service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
 
         #expect(outcome == .answered(nil))
         await service.shutdown()
@@ -217,7 +288,9 @@ struct LanguageServerSessionTests {
     func `a server that never answers initialize exhausts the restart budget`() async throws {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         configuration.initializeTimeout = .milliseconds(10)
         configuration.maximumRestarts = 2
         // Zero, so idle-shutdown sleeps resolve at once and are never mistaken for the timeouts below.
@@ -229,7 +302,12 @@ struct LanguageServerSessionTests {
         // the last, backs off for one second on the injected clock before the next hover can reconnect.
         for attempt in 0 ..< 3 {
             async let hover = service.hover(
-                uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+                uri: "file:///a.swift",
+                languageID: "swift",
+                content: "a",
+                line: 0,
+                utf16Column: 0
+            )
             // This attempt's own timeout sleeper, whatever sleepers are already parked.
             try await clock.waitForAdditionalSleepers(1)
             clock.advance(by: .milliseconds(10))
@@ -244,7 +322,12 @@ struct LanguageServerSessionTests {
 
         // Past the budget: hover is unavailable at once, without asking the factory again.
         let outcome = await service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         #expect(outcome == .unavailable)
         #expect(await factory.generationCount == 3)
     }
@@ -253,13 +336,25 @@ struct LanguageServerSessionTests {
     func `two concurrent first hovers share one connection instead of racing two initializes`() async throws {
         let factory = ScriptedConnectionFactory()
         let configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         async let first = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         async let second = service.hover(
-            uri: "file:///b.swift", languageID: "swift", content: "b", line: 0, utf16Column: 0)
+            uri: "file:///b.swift",
+            languageID: "swift",
+            content: "b",
+            line: 0,
+            utf16Column: 0
+        )
 
         // Only one connection should ever be requested from the factory, no matter how the two hovers
         // interleave their awaits.
@@ -290,7 +385,9 @@ struct LanguageServerSessionTests {
     func `a connection that fails to initialize is stopped rather than leaked`() async throws {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         configuration.initializeTimeout = .milliseconds(10)
         configuration.maximumRestarts = 0
         configuration.idleShutdown = .zero
@@ -298,7 +395,12 @@ struct LanguageServerSessionTests {
         let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         try await clock.waitForAdditionalSleepers(1)
         clock.advance(by: .milliseconds(10))
         #expect(await hover == .unavailable)
@@ -313,7 +415,9 @@ struct LanguageServerSessionTests {
     func `the handshake waits out the initialize timeout, not the request timeout`() async throws {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         configuration.initializeTimeout = .seconds(30)
         configuration.requestTimeout = .seconds(1)
         configuration.maximumRestarts = 0
@@ -321,7 +425,12 @@ struct LanguageServerSessionTests {
         let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
-            uri: "file:///a.go", languageID: "go", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.go",
+            languageID: "go",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
         await transport.sink.waitForCount(1)
@@ -332,7 +441,10 @@ struct LanguageServerSessionTests {
 
         await transport.sink.waitForCount(4)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 3).id),
+            result: hoverResult(markdown: "a")
+        )
         #expect(await hover.content?.markdown == "a")
         #expect(await transport.closeCount.count == 0)
         transport.answer("shutdown", with: .null)
@@ -343,21 +455,34 @@ struct LanguageServerSessionTests {
     func `an idle session shuts down gracefully and reconnects on the next hover`() async throws {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+            workspaceRoot: URL(fileURLWithPath: "/tmp")
+        )
         configuration.idleShutdown = .milliseconds(10)
         let clock = TestClock()
         let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         await factory.waitForGeneration(1)
         let transport = await factory.transport(at: 0)
         await transport.sink.waitForCount(1)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 0).id),
+            result: .object([:])
+        )
         await transport.sink.waitForCount(4)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 3).id),
+            result: hoverResult(markdown: "a")
+        )
         _ = try #require(await hover.content)
 
         // The request timeouts were unparked when hover() returned, so the parked sleeper is the idle shutdown.
@@ -376,17 +501,27 @@ struct LanguageServerSessionTests {
 
         // The next hover reconnects from scratch, on a new transport.
         async let second = service.hover(
-            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+            uri: "file:///a.swift",
+            languageID: "swift",
+            content: "a",
+            line: 0,
+            utf16Column: 0
+        )
         await factory.waitForGeneration(2)
         let secondTransport = await factory.transport(at: 1)
         await secondTransport.sink.waitForCount(1)
         #expect(try await decodeSent(secondTransport, at: 0).method == "initialize")
         try respond(
-            secondTransport, id: try #require(try await decodeSent(secondTransport, at: 0).id), result: .object([:]))
+            secondTransport,
+            id: try #require(try await decodeSent(secondTransport, at: 0).id),
+            result: .object([:])
+        )
         await secondTransport.sink.waitForCount(4)
         try respond(
-            secondTransport, id: try #require(try await decodeSent(secondTransport, at: 3).id),
-            result: hoverResult(markdown: "a"))
+            secondTransport,
+            id: try #require(try await decodeSent(secondTransport, at: 3).id),
+            result: hoverResult(markdown: "a")
+        )
         _ = try #require(await second.content)
         #expect(await factory.generationCount == 2)
     }

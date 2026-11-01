@@ -25,9 +25,18 @@ struct OffscreenHighlightRenderTests {
             #expect(session.isGrammarBacked)
             let image = try #require(
                 NSBitmapImageRep(
-                    bitmapDataPlanes: nil, pixelsWide: 760, pixelsHigh: max(lines.count, 1) * 24 + 32,
-                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                    isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+                    bitmapDataPlanes: nil,
+                    pixelsWide: 760,
+                    pixelsHigh: max(lines.count, 1) * 24 + 32,
+                    bitsPerSample: 8,
+                    samplesPerPixel: 4,
+                    hasAlpha: true,
+                    isPlanar: false,
+                    colorSpaceName: .deviceRGB,
+                    bytesPerRow: 0,
+                    bitsPerPixel: 0
+                )
+            )
             let context = try #require(NSGraphicsContext(bitmapImageRep: image))
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = context
@@ -40,8 +49,11 @@ struct OffscreenHighlightRenderTests {
                         switch span.style.fg {
                             case .rgb(r: let red, g: let green, b: let blue):
                                 NSColor(
-                                    calibratedRed: CGFloat(red) / 255, green: CGFloat(green) / 255,
-                                    blue: CGFloat(blue) / 255, alpha: 1)
+                                    calibratedRed: CGFloat(red) / 255,
+                                    green: CGFloat(green) / 255,
+                                    blue: CGFloat(blue) / 255,
+                                    alpha: 1
+                                )
                             case .default, .indexed(_): .white
                         }
                     text.append(
@@ -49,9 +61,13 @@ struct OffscreenHighlightRenderTests {
                             string: span.text,
                             attributes: [
                                 .font: NSFont.monospacedSystemFont(
-                                    ofSize: 15, weight: span.style.bold ? .semibold : .regular),
+                                    ofSize: 15,
+                                    weight: span.style.bold ? .semibold : .regular
+                                ),
                                 .foregroundColor: color
-                            ]))
+                            ]
+                        )
+                    )
                 }
                 text.draw(at: NSPoint(x: 16, y: image.pixelsHigh - (index + 1) * 24 - 8))
             }

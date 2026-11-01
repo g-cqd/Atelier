@@ -23,7 +23,10 @@ struct RegexReplaceExpansionTests {
         (#"(y)\B"#, "<$1>", "ya y", "<y>a y")
     ])
     func `a lookahead or a word boundary at a match edge still expands`(
-        pattern: String, template: String, line: String, expected: String
+        pattern: String,
+        template: String,
+        line: String,
+        expected: String
     ) throws {
         #expect(try Self.replacingAll(pattern, with: template, in: line) == expected)
     }

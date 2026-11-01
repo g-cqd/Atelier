@@ -108,7 +108,8 @@ struct PatternParser {
         guard cursor < scalars.count, scalars[cursor] == "}" else { return nil }
         guard low <= Self.maxRepetitionCount, (high ?? low) <= Self.maxRepetitionCount else {
             throw .resourceLimitExceeded(
-                "Pattern `\(pattern)` repeats more than \(Self.maxRepetitionCount) times")
+                "Pattern `\(pattern)` repeats more than \(Self.maxRepetitionCount) times"
+            )
         }
         guard low <= high ?? low else { throw failure("a count's minimum exceeds its maximum") }
         index = cursor + 1

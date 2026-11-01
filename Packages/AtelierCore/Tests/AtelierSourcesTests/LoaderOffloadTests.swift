@@ -12,12 +12,16 @@ struct LoaderOffloadTests {
     /// A folder outside every repository, holding `files` by relative path.
     static func folder(_ files: [String: String]) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-offload-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-offload-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         for (path, text) in files {
             let url = root.appending(path: path)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try text.write(to: url, atomically: true, encoding: .utf8)
         }
         return root

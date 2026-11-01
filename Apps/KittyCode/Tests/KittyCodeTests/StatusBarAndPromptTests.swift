@@ -19,11 +19,15 @@ struct StatusBarAndPromptTests {
     @Test
     func `beginSavePrompt defaults to last selected directory`() {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
 
         state.noteSelectedPath(
-            rootURL.appendingPathComponent("Sources/App/main.swift").path, isDirectory: false)
+            rootURL.appendingPathComponent("Sources/App/main.swift").path,
+            isDirectory: false
+        )
         state.beginNewFile()
         state.beginSavePrompt()
 
@@ -85,7 +89,9 @@ struct StatusBarAndPromptTests {
     @Test
     func `writeBufferToDisk preserves configured line endings`() throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            UUID().uuidString, isDirectory: true)
+            UUID().uuidString,
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 

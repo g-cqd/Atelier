@@ -72,8 +72,13 @@ struct WatcherHarness {
 
     func makeSUT(isEnabled: Bool = true, factory: WatcherFactory = WatcherFactory()) -> RepositoryFreshness {
         RepositoryFreshness(
-            taskProvider: taskProvider, isEnabled: isEnabled, clock: clock, treeDebounce: Self.treeDebounce,
-            refDebounce: Self.refDebounce, makeWatcher: factory.makeWatcher)
+            taskProvider: taskProvider,
+            isEnabled: isEnabled,
+            clock: clock,
+            treeDebounce: Self.treeDebounce,
+            refDebounce: Self.refDebounce,
+            makeWatcher: factory.makeWatcher
+        )
     }
 
     static func url(_ path: String) -> URL {
@@ -82,7 +87,9 @@ struct WatcherHarness {
 
     /// Sends `event`, waits for its debounce to sleep on `clock`, advances past `duration`, then waits for `probe`.
     func fire(
-        _ event: FileWatcher.FileWatchEvent, on source: FakeWatchEventSource, after duration: Duration,
+        _ event: FileWatcher.FileWatchEvent,
+        on source: FakeWatchEventSource,
+        after duration: Duration,
         probe: AsyncProbe<Void>
     ) async throws {
         let mark = clock.registrationMark()
@@ -94,7 +101,10 @@ struct WatcherHarness {
 
     /// Delivers a write at `path` through the stream's coverage, then advances past its debounce and waits for `probe`.
     func write(
-        _ path: String, on source: FakeWatchEventSource, after duration: Duration, probe: AsyncProbe<Void>
+        _ path: String,
+        on source: FakeWatchEventSource,
+        after duration: Duration,
+        probe: AsyncProbe<Void>
     ) async throws {
         let mark = clock.registrationMark()
         try #require(source.write(path), "\(path) lies outside every watched directory")
@@ -140,7 +150,9 @@ struct LinkedWorktree {
 
     init() throws {
         base = FileManager.default.temporaryDirectory.appending(
-            path: "freshness-worktree-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "freshness-worktree-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         rootURL = base.appending(path: "worktree", directoryHint: .isDirectory)
         let common = base.appending(path: "main/.git", directoryHint: .isDirectory)
         let privateDir = common.appending(path: "worktrees/feature", directoryHint: .isDirectory)
@@ -338,7 +350,8 @@ struct ScriptedFailure: Error, LocalizedError {
 /// ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed without it.
 @MainActor
 func awaitObserved(
-    sourceLocation: SourceLocation = #_sourceLocation, _ condition: @escaping @MainActor () -> Bool
+    sourceLocation: SourceLocation = #_sourceLocation,
+    _ condition: @escaping @MainActor () -> Bool
 ) async throws {
     try await withFailureBound(awaiting: "The observed condition", sourceLocation: sourceLocation) { @MainActor in
         while !condition() {

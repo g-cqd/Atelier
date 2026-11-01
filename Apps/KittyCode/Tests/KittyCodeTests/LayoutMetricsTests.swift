@@ -125,7 +125,8 @@ struct PixelChromeLayoutTests {
                 ChromeLine(axis: .vertical, row: 1, column: 20, length: 8, color: separator!),
                 ChromeLine(axis: .horizontal, row: 1, column: 20, length: 40, color: separator!),
                 ChromeLine(axis: .horizontal, row: 9, column: 0, length: 60, color: separator!)
-            ])
+            ]
+        )
         #expect(sut.pipeline.buffer[1, 20].character != "\u{2502}")
         #expect(sut.state.usesPixelChrome)
     }
@@ -136,7 +137,11 @@ struct PixelChromeLayoutTests {
         lines[5] = "\tselected words here"
         let sut = EditorTestHarness.make(fileContent: lines, columns: 80, rows: 12, sidebarCollapsed: true)
         sut.state.bufferManager.open(
-            filePath: "/big.txt", fileName: "big.txt", content: lines.joined(separator: "\n"), language: nil)
+            filePath: "/big.txt",
+            fileName: "big.txt",
+            content: lines.joined(separator: "\n"),
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.config.editor.highlightCurrentLine = true
         sut.state.colorScheme = EditorState.makeColorScheme(config: sut.state.config)

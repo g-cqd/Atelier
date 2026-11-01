@@ -17,7 +17,8 @@ public struct DocIndexHoverProvider: HoverProvider {
     ///   - locator: Finds the identifier under the pointer; ``DocumentIdentifierLocator`` reads Swift with
     ///     swift-syntax and other languages with the lexical scanner.
     public init(
-        index: DocCommentIndex, side: DocIndexSides = .both,
+        index: DocCommentIndex,
+        side: DocIndexSides = .both,
         locator: any IdentifierLocating = DocumentIdentifierLocator()
     ) {
         self.index = index
@@ -35,7 +36,11 @@ public struct DocIndexHoverProvider: HoverProvider {
         let language = DocCommentIndex.language(ofURI: query.documentURI)
         guard index.indexes(language) else { return nil }
         let located = await locator.identifier(
-            in: query.content, language: language, line: query.line, utf16Column: query.utf16Column)
+            in: query.content,
+            language: language,
+            line: query.line,
+            utf16Column: query.utf16Column
+        )
         guard let name = located else { return nil }
         let family = Self.family(of: language)
         let entries = await index.documentation(forIdentifier: name, preferringURI: query.documentURI, side: side)

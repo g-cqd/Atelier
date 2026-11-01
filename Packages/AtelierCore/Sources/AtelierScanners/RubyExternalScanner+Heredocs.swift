@@ -95,7 +95,8 @@ extension RubyExternalScanner {
                 } else if lexer.lookahead == c("\r") || lexer.lookahead == c("\n") {
                     hasContent = true
                     lookForHeredocEnd = Self.scanHeredocNewline(
-                        &lexer, indentationAllowed: heredoc.endWordIndentationAllowed
+                        &lexer,
+                        indentationAllowed: heredoc.endWordIndentationAllowed
                     )
                 } else {
                     hasContent = true
@@ -107,7 +108,8 @@ extension RubyExternalScanner {
     }
 
     private static func scanHeredocInterpolation(
-        _ lexer: inout some ScannerLexer, hasContent: Bool
+        _ lexer: inout some ScannerLexer,
+        hasContent: Bool
     ) -> Bool? {
         lexer.markEnd()
         lexer.advance(skip: false)
@@ -122,7 +124,8 @@ extension RubyExternalScanner {
     }
 
     private static func scanHeredocNewline(
-        _ lexer: inout some ScannerLexer, indentationAllowed: Bool
+        _ lexer: inout some ScannerLexer,
+        indentationAllowed: Bool
     ) -> Bool {
         if lexer.lookahead == c("\r") {
             lexer.advance(skip: false)

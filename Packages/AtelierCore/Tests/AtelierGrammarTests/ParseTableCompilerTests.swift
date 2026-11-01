@@ -140,7 +140,8 @@ struct ParseTableCompilerTests {
         let sourceRule = try #require(
             result.productions.first {
                 $0.name == "source" && $0.symbols == ["lhs", "\"=\"", "rhs"]
-            })
+            }
+        )
 
         #expect(sourceRule.fields == [ProductionField(step: 0, name: "left"), ProductionField(step: 2, name: "right")])
     }

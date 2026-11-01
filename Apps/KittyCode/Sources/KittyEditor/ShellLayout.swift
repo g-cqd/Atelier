@@ -34,15 +34,21 @@ public func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (
     let sidebarRect: Rect? =
         layout.sidebarWidth > 0
         ? Rect(
-            x: layout.activityBarWidth, y: layout.contentStartRow, width: layout.sidebarWidth,
-            height: layout.contentRows)
+            x: layout.activityBarWidth,
+            y: layout.contentStartRow,
+            width: layout.sidebarWidth,
+            height: layout.contentRows
+        )
         : nil
 
     let separatorRect: Rect? =
         layout.sidebarWidth > 0 && !state.usesPixelChrome
         ? Rect(
-            x: layout.activityBarWidth + layout.sidebarWidth, y: layout.contentStartRow, width: 1,
-            height: layout.contentRows)
+            x: layout.activityBarWidth + layout.sidebarWidth,
+            y: layout.contentStartRow,
+            width: 1,
+            height: layout.contentRows
+        )
         : nil
 
     let editorRect = Rect(
@@ -83,7 +89,9 @@ public func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (
 
 @MainActor
 public func renderShellLayout(
-    pipeline: RenderPipeline, state: EditorState, skipChromeSections: Bool = false
+    pipeline: RenderPipeline,
+    state: EditorState,
+    skipChromeSections: Bool = false
 ) {
     let cols = pipeline.columns
     let rows = pipeline.rows
@@ -180,8 +188,11 @@ public func renderShellLayout(
     if renderChrome, let sepRect = shellRects.separator {
         for row in sepRect.y ..< sepRect.maxY {
             pipeline.buffer.write(
-                "\u{2502}", row: row, col: sepRect.x,
-                style: colorScheme.separator)
+                "\u{2502}",
+                row: row,
+                col: sepRect.x,
+                style: colorScheme.separator
+            )
         }
     }
 
@@ -244,19 +255,35 @@ func pixelChromeLines(rects: ShellLayoutRects, sidebarShown: Bool, colorScheme: 
     if sidebarShown, rects.editor.width > 0, rects.editor.height > 0 {
         lines.append(
             ChromeLine(
-                axis: .vertical, row: rects.editor.y, column: rects.editor.x, length: rects.editor.height,
-                color: color))
+                axis: .vertical,
+                row: rects.editor.y,
+                column: rects.editor.x,
+                length: rects.editor.height,
+                color: color
+            )
+        )
     }
     if let ribbon = rects.tabRibbon, rects.editor.height > 0 {
         lines.append(
             ChromeLine(
-                axis: .horizontal, row: ribbon.maxY, column: rects.editor.x, length: rects.editor.width,
-                color: color))
+                axis: .horizontal,
+                row: ribbon.maxY,
+                column: rects.editor.x,
+                length: rects.editor.width,
+                color: color
+            )
+        )
     }
     if rects.statusBar.width > 0 {
         lines.append(
             ChromeLine(
-                axis: .horizontal, row: rects.statusBar.y, column: 0, length: rects.statusBar.width, color: color))
+                axis: .horizontal,
+                row: rects.statusBar.y,
+                column: 0,
+                length: rects.statusBar.width,
+                color: color
+            )
+        )
     }
     return lines
 }

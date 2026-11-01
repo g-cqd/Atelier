@@ -48,7 +48,10 @@ struct AutoSaveManagerTests {
         #expect(!sut.notes.isDirty)
 
         let current = BufferEditSnapshot(
-            textBuffer: sut.notes.textBuffer, textCursor: sut.notes.textCursor, lineEnding: sut.notes.lineEnding)
+            textBuffer: sut.notes.textBuffer,
+            textCursor: sut.notes.textCursor,
+            lineEnding: sut.notes.lineEnding
+        )
         guard case .applied(let original) = sut.notes.editHistory.undo(current: current) else {
             Issue.record("the edit should be undoable")
             return
@@ -65,7 +68,8 @@ struct AutoSaveManagerTests {
         let messages = CountProbe<String>()
         let autoSave = sut.autoSave(
             offloadDiskWrite: { _ in throw CocoaError(.fileWriteNoPermission) },
-            reportFailure: { messages.record($0) })
+            reportFailure: { messages.record($0) }
+        )
         autoSave.saveAllDirtyBuffers()
         try await messages.wait(forAtLeast: 1, timeout: .seconds(15))
 

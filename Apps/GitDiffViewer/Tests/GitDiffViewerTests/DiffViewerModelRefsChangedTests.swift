@@ -46,7 +46,8 @@ struct DiffViewerModelRefsChangedTests {
         DiffViewerModel(
             settings: ViewerSettings(defaults: scratchDefaults.defaults),
             reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
-            taskProvider: taskProvider)
+            taskProvider: taskProvider
+        )
     }
 
     @Test

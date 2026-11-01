@@ -192,8 +192,11 @@ struct FileOutlineView: NSViewRepresentable {
             } else {
                 roots = sections.map { section in
                     let node = PathNode(
-                        id: Self.sectionPrefix + section.id, name: section.title, isDirectory: true,
-                        children: section.nodes)
+                        id: Self.sectionPrefix + section.id,
+                        name: section.title,
+                        isDirectory: true,
+                        children: section.nodes
+                    )
                     let item = itemsByKey[node.id] ?? OutlineItem(key: node.id, node: node)
                     item.node = node
                     item.parent = nil
@@ -400,7 +403,9 @@ extension FileOutlineView.Coordinator {
 
     /// The inert lines under a section's files, reused by key like every other row.
     private func noteItems(
-        of section: ExplorerSection, under parent: OutlineItem, keyedBy sectionKey: String,
+        of section: ExplorerSection,
+        under parent: OutlineItem,
+        keyedBy sectionKey: String,
         into reused: inout [String: OutlineItem]
     ) -> [OutlineItem] {
         section.noteLines.enumerated()
@@ -434,7 +439,8 @@ extension FileOutlineView.Coordinator {
                             NSPasteboard.general.setString(text, forType: .string)
                         case nil: break
                     }
-                })
+                }
+            )
         }
         return menu
     }
@@ -458,8 +464,10 @@ extension FileOutlineView.Coordinator {
                 outlineView.makeView(withIdentifier: CommitSectionCellView.identifier, owner: nil)
                 as? CommitSectionCellView ?? CommitSectionCellView()
             header.configure(
-                title: section.title, count: group.rows.count,
-                tooltip: section.headerTooltip(includesMergedBranches: includesMergedBranches))
+                title: section.title,
+                count: group.rows.count,
+                tooltip: section.headerTooltip(includesMergedBranches: includesMergedBranches)
+            )
             return header
         }
         if item.isSection {
@@ -504,8 +512,12 @@ extension FileOutlineView.Coordinator {
 
     private func configure(_ cell: FileCellView, for item: OutlineItem) {
         cell.configure(
-            node: item.node, glyph: status(item.path).flatMap(ChangeGlyph.init), scheme: badgeScheme,
-            state: badgeStates.state(of: item.path), detail: item.detail)
+            node: item.node,
+            glyph: status(item.path).flatMap(ChangeGlyph.init),
+            scheme: badgeScheme,
+            state: badgeStates.state(of: item.path),
+            detail: item.detail
+        )
     }
 }
 

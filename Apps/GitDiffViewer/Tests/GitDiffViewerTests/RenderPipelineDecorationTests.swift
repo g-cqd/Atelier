@@ -40,8 +40,12 @@ final class TierSpy: Sendable {
         }
         let lines = 0 ..< request.lineRanges.count
         return TierUpdate(
-            layer: .syntactic, coverage: .complete, revision: request.revision, lines: lines,
-            tokens: LineTokens(emptyLines: lines.count))
+            layer: .syntactic,
+            coverage: .complete,
+            revision: request.revision,
+            lines: lines,
+            tokens: LineTokens(emptyLines: lines.count)
+        )
     }
 
     struct Tier: AtelierHighlighting.HighlightTier {
@@ -100,8 +104,11 @@ struct RenderPipelineDecorationTests {
     init() {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         sut = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(tiers: [LexicalTier(), spy.tier], clock: TestClock()))
+            preparer: preparer,
+            taskProvider: taskProvider,
+            options: DiffRenderer.Options(sides: [.old, .new]),
+            decorator: DiffDecorator(tiers: [LexicalTier(), spy.tier], clock: TestClock())
+        )
         sut.configure(options: DiffRenderer.Options(sides: [.old, .new]), context: 2, isolatesChanges: false)
         let events = events
         sut.onEvent = { event in events.all.append(event) }
@@ -116,8 +123,10 @@ struct RenderPipelineDecorationTests {
 
     private func pair(_ path: String, old: String = "old", new: String = "new") -> FilePair {
         FilePair(
-            path: path, old: SourceEntry(relativePath: path, blobID: old, size: 1),
-            new: SourceEntry(relativePath: path, blobID: new, size: 1))
+            path: path,
+            old: SourceEntry(relativePath: path, blobID: old, size: 1),
+            new: SourceEntry(relativePath: path, blobID: new, size: 1)
+        )
     }
 
     /// What `text`'s panes draw over it; nil for no text, or none landed.
@@ -128,8 +137,13 @@ struct RenderPipelineDecorationTests {
     /// Renders `pair` as the file shown, taking what showed off screen at once.
     private func render(_ pair: FilePair) {
         sut.render(
-            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+            .file(pair),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
     }
 
     /// Renders `pair` as the file shown and waits until it is published.
@@ -154,7 +168,9 @@ struct RenderPipelineDecorationTests {
         let new = try #require(file.new)
         var colors: [NSColor] = []
         new.attributed.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: new.attributed.length)) {
-            value, _, _ in
+            value,
+            _,
+            _ in
             if let color = value as? NSColor { colors.append(color) }
         }
         #expect(colors == [new.palette.textColor])
@@ -197,8 +213,13 @@ struct RenderPipelineDecorationTests {
                 return pair("f\(index).swift", old: "o\(index)", new: "n\(index)")
             }
         sut.render(
-            .cards(pairs), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+            .cards(pairs),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         let cards = sut.cards.map(\.rendered)
         try #require(cards.count == count)
@@ -302,13 +323,19 @@ struct RenderPipelineDecorationTests {
     func `a tier that fails leaves the others' colour, and plain text where it failed`() async throws {
         let taskProvider = TaskProviderSpy.tolerant()
         let sut = RenderPipeline(
-            preparer: DiffPreparer(reader: reader, taskProvider: taskProvider), taskProvider: taskProvider,
+            preparer: DiffPreparer(reader: reader, taskProvider: taskProvider),
+            taskProvider: taskProvider,
             options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(tiers: [LexicalTier(), FailingTier()], clock: TestClock()))
+            decorator: DiffDecorator(tiers: [LexicalTier(), FailingTier()], clock: TestClock())
+        )
         sut.render(
-            .file(pair("a.swift")), left: .directory(ModelTestHarness.leftURL),
-            right: .directory(ModelTestHarness.rightURL), granularity: .word, heuristics: DiffHeuristics(),
-            keepingPublished: false)
+            .file(pair("a.swift")),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         let file = try #require(sut.file)
 
@@ -388,8 +415,11 @@ struct RenderPipelineTierJobTests {
     init() {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         sut = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(clock: TestClock()))
+            preparer: preparer,
+            taskProvider: taskProvider,
+            options: DiffRenderer.Options(sides: [.old, .new]),
+            decorator: DiffDecorator(clock: TestClock())
+        )
         reader.blobContents["old"] = Self.text
         reader.blobContents["new"] = Self.text + "let tail = 2\n"
     }
@@ -397,11 +427,18 @@ struct RenderPipelineTierJobTests {
     @Test
     func `each line takes the tokens a direct parse gives it`() async throws {
         let pair = FilePair(
-            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
-            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1))
+            path: "a.swift",
+            old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1)
+        )
         sut.render(
-            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+            .file(pair),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         let file = try #require(sut.file)
 
@@ -412,7 +449,10 @@ struct RenderPipelineTierJobTests {
         let sides = try #require(sut.decorations(forText: new.id))
         let text = Self.text + "let tail = 2\n"
         let direct = DecorationFixtures.byLine(
-            try await SwiftSyntaxHighlights.tokens(in: text), text: text, lines: DiffModel.lines(of: text))
+            try await SwiftSyntaxHighlights.tokens(in: text),
+            text: text,
+            lines: DiffModel.lines(of: text)
+        )
         for (row, meta) in new.rows.enumerated() {
             guard let number = meta.newNumber else { continue }
             #expect(sides.tokens(of: meta, on: .new) == Array(direct[number - 1]), "row \(row)")

@@ -52,7 +52,8 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
         let first = offsets[range.lowerBound]
         return LineTokens(
             tokens: Array(tokens[Int(first) ..< Int(offsets[range.upperBound])]),
-            offsets: offsets[range.lowerBound ... range.upperBound].map { $0 - first })
+            offsets: offsets[range.lowerBound ... range.upperBound].map { $0 - first }
+        )
     }
 
     /// Adds `other`'s lines after these.
@@ -149,8 +150,11 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
                     while offsets.count <= current { offsets.append(UInt32(flat.count)) }
                     flat.append(
                         LineToken(
-                            range: (start - lineStart) ..< (end - lineStart), role: token.role,
-                            modifiers: token.modifiers))
+                            range: (start - lineStart) ..< (end - lineStart),
+                            role: token.role,
+                            modifiers: token.modifiers
+                        )
+                    )
                 }
                 current += 1
             }

@@ -134,7 +134,9 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
             return cachedSerializedByteCount
         }
         let count = TextDocument.computeSerializedByteCount(
-            in: textBuffer, lineEnding: currentLineEnding)
+            in: textBuffer,
+            lineEnding: currentLineEnding
+        )
         cachedSerializedByteCount = count
         return count
     }
@@ -157,7 +159,9 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
     }
 
     public func replaceDocumentText(
-        with content: String, tabSize: Int, lineEnding: TextDocument.LineEnding
+        with content: String,
+        tabSize: Int,
+        lineEnding: TextDocument.LineEnding
     ) {
         let lines = TextBuffer.splitLines(from: content)
         textBuffer = TextBuffer(lines: lines)
@@ -165,7 +169,9 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
         cachedDocumentText = content
         cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: lines, tabSize: tabSize)
         cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
-            for: lines, lineEnding: lineEnding)
+            for: lines,
+            lineEnding: lineEnding
+        )
         highlightSession = nil
     }
 

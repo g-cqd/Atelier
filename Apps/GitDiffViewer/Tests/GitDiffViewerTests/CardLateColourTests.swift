@@ -14,7 +14,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct CardLateColourTests {
     private static let count = 400
     private static let text = (1 ... count).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"
@@ -27,7 +28,8 @@ struct CardLateColourTests {
         let rendered = DiffRenderer.render(oldText: Self.text, newText: Self.text, language: .swift)
         let decorations = DecorationFixtures.colors(
             old: await DecorationFixtures.lexed(Self.text, language: .swift),
-            new: await DecorationFixtures.lexed(Self.text, language: .swift))
+            new: await DecorationFixtures.lexed(Self.text, language: .swift)
+        )
         let layouts = CardLayouts(rendered: rendered)
         let card = RemountingCard(layouts: layouts, decorations: decorations)
         try #require(card.uncolouredLaidOutRows().isEmpty, "the first mount should colour every row")
@@ -50,7 +52,9 @@ struct CardLateColourTests {
         card.update(
             decorations: DecorationFixtures.colors(
                 old: await DecorationFixtures.lexed(Self.text, language: .swift),
-                new: await DecorationFixtures.lexed(Self.text, language: .swift)))
+                new: await DecorationFixtures.lexed(Self.text, language: .swift)
+            )
+        )
 
         let after = try card.pixels()
         #expect(after.differing(from: before, in: card.bounds) > 0, "no row changed once colour landed")
@@ -74,15 +78,22 @@ private final class LateColourCard {
         body.sizingOptions = []
         body.safeAreaRegions = []
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = body.view
         place()
     }
 
     private static func pane(_ layouts: CardLayouts, decorations: DiffDecorations?) -> EmbeddedDiffTextView {
         EmbeddedDiffTextView(
-            layouts: layouts, side: .unified, gutter: .dual, width: width, wrapMode: .viewport
+            layouts: layouts,
+            side: .unified,
+            gutter: .dual,
+            width: width,
+            wrapMode: .viewport
         )
         .decorated(with: decorations)
     }
@@ -127,7 +138,8 @@ private final class LateColourCard {
         layoutManager.enumerateTextLayoutFragments(from: start) { fragment in
             guard fragment.state == .layoutAvailable else { return true }
             let row = rendered.rowIndex(
-                containing: content.offset(from: start, to: fragment.rangeInElement.location))
+                containing: content.offset(from: start, to: fragment.rangeInElement.location)
+            )
             let lineStart = rendered.lineStarts[row]
             let end = row + 1 < rendered.lineStarts.count ? rendered.lineStarts[row + 1] : Int.max
             if !coloured.contains(where: { $0.overlaps(lineStart ..< end) }) { plain.append(row) }
@@ -166,7 +178,11 @@ private struct MountedCard: View {
     var body: some View {
         if let layouts {
             EmbeddedDiffTextView(
-                layouts: layouts, side: .unified, gutter: .dual, width: Self.width, wrapMode: .viewport
+                layouts: layouts,
+                side: .unified,
+                gutter: .dual,
+                width: Self.width,
+                wrapMode: .viewport
             )
             .decorated(with: decorations)
         }
@@ -189,8 +205,11 @@ private final class RemountingCard {
         body.sizingOptions = []
         body.safeAreaRegions = []
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: MountedCard.width, height: 400), styleMask: [.borderless],
-            backing: .buffered, defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: MountedCard.width, height: 400),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = body.view
         place()
     }
@@ -226,7 +245,8 @@ private final class RemountingCard {
         layoutManager.enumerateTextLayoutFragments(from: start) { fragment in
             guard fragment.state == .layoutAvailable else { return true }
             let row = rendered.rowIndex(
-                containing: content.offset(from: start, to: fragment.rangeInElement.location))
+                containing: content.offset(from: start, to: fragment.rangeInElement.location)
+            )
             let lineStart = rendered.lineStarts[row]
             let end = row + 1 < rendered.lineStarts.count ? rendered.lineStarts[row + 1] : Int.max
             if !coloured.contains(where: { $0.overlaps(lineStart ..< end) }) { plain.append(row) }

@@ -46,8 +46,13 @@ extension GLRParser {
             while var stack = active.popLast() {
                 let token: ParseToken
                 switch try readToken(
-                    for: &stack, utf8: utf8, scanner: scanner, externalScanner: &scannerValue,
-                    readCount: &readCount, isCancelled: isCancelled)
+                    for: &stack,
+                    utf8: utf8,
+                    scanner: scanner,
+                    externalScanner: &scannerValue,
+                    readCount: &readCount,
+                    isCancelled: isCancelled
+                )
                 {
                     case .end:
                         finished.append(stack)
@@ -88,7 +93,10 @@ extension GLRParser {
         let errorByteCount = best.errorByteCount
         let root = try buildRootNode(from: consume best, byteCount: utf8.count, endPoint: end)
         return SyntaxTree(
-            root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
+            root: attachingExtras(extras, to: consume root),
+            source: source,
+            errorByteCount: errorByteCount
+        )
     }
 
     /// What ``readToken(for:utf8:scanner:externalScanner:readCount:isCancelled:)`` read for a stack.
@@ -144,8 +152,12 @@ extension GLRParser {
     /// win there: in Swift, the text of a string literal, which runs to the next quote, where an identifier ends a
     /// statement. Tree-sitter's lex modes hold no such token, as its states hold no such context.
     private func viableToken(
-        _ scanned: TokenScanner.Scanned, readIn mode: Int, by scanner: TokenScanner, for stack: ParseStack,
-        utf8: UnsafeBufferPointer<UInt8>, suppressEmptyAt: Int?
+        _ scanned: TokenScanner.Scanned,
+        readIn mode: Int,
+        by scanner: TokenScanner,
+        for stack: ParseStack,
+        utf8: UnsafeBufferPointer<UInt8>,
+        suppressEmptyAt: Int?
     ) -> TokenScanner.Scanned {
         guard !lexTable.tokens[scanned.token].isExtra, let terminal = tokenTerminals[scanned.token],
             !canShift(terminal, on: stack), lexTable.modeValidTokens.indices.contains(mode)
@@ -161,7 +173,11 @@ extension GLRParser {
             // A mode that cannot be built leaves the token as read: the parse takes it as an error.
             guard var viableMode = modes[viable] ?? (try? lexTable.lazyMode(reading: viable)) else { return nil }
             let outcome = scanner.scan(
-                utf8, from: stack.cursor, lazyMode: &viableMode, suppressEmptyAt: suppressEmptyAt)
+                utf8,
+                from: stack.cursor,
+                lazyMode: &viableMode,
+                suppressEmptyAt: suppressEmptyAt
+            )
             if modes[viable] == nil, modes.count >= Self.maxViableModes { modes.removeAll() }
             modes[viable] = viableMode
             return outcome
@@ -206,11 +222,13 @@ extension GLRParser {
         stack.cursor = lexer.tokenEnd
         let start = lexer.tokenStart.offset > lexer.tokenEnd.offset ? lexer.tokenEnd : lexer.tokenStart
         return ParseToken(
-            terminal: terminal, type: name,
+            terminal: terminal,
+            type: name,
             byteRange: start.offset ..< lexer.tokenEnd.offset,
             pointRange: start.point ..< lexer.tokenEnd.point,
             isNamed: !name.hasPrefix("_") && !name.hasPrefix("\""),
-            isExtra: parseTable.externalIsExtra[lexer.resultSymbol])
+            isExtra: parseTable.externalIsExtra[lexer.resultSymbol]
+        )
     }
 
     /// Reads an external token first when one is valid, then the current state's internal lexical mode.
@@ -224,8 +242,12 @@ extension GLRParser {
         let valid = stack.isRecovering ? everyExternal : viableExternals(for: stack)
         if valid.contains(true),
             let token = try externalToken(
-                for: &stack, utf8: utf8, externalScanner: &externalScanner, validSymbols: valid,
-                inErrorMode: stack.isRecovering)
+                for: &stack,
+                utf8: utf8,
+                externalScanner: &externalScanner,
+                validSymbols: valid,
+                inErrorMode: stack.isRecovering
+            )
         {
             return token
         }
@@ -238,15 +260,26 @@ extension GLRParser {
         if case .token(let scanned) = outcome, let mode {
             outcome = .token(
                 viableToken(
-                    scanned, readIn: mode, by: scanner, for: stack, utf8: utf8, suppressEmptyAt: suppressEmptyAt))
+                    scanned,
+                    readIn: mode,
+                    by: scanner,
+                    for: stack,
+                    utf8: utf8,
+                    suppressEmptyAt: suppressEmptyAt
+                )
+            )
         } else if case .none = outcome {
             // What tree-sitter does when a state's mode reads nothing: it lexes in the error state's mode, whose
             // scanner call has every external valid. Swift's scanner reads `#if` only where a raw string may start,
             // so a directive between two class members is read this way, and the state takes it.
             if !stack.isRecovering, valid != everyExternal, !everyExternal.isEmpty,
                 let token = try externalToken(
-                    for: &stack, utf8: utf8, externalScanner: &externalScanner, validSymbols: everyExternal,
-                    inErrorMode: true)
+                    for: &stack,
+                    utf8: utf8,
+                    externalScanner: &externalScanner,
+                    validSymbols: everyExternal,
+                    inErrorMode: true
+                )
             {
                 return token
             }
@@ -258,11 +291,13 @@ extension GLRParser {
             case .token(let scanned):
                 stack.cursor = scanned.end
                 return ParseToken(
-                    terminal: tokenTerminals[scanned.token], type: lexTable.tokens[scanned.token].name,
+                    terminal: tokenTerminals[scanned.token],
+                    type: lexTable.tokens[scanned.token].name,
                     byteRange: scanned.start.offset ..< scanned.end.offset,
                     pointRange: scanned.start.point ..< scanned.end.point,
                     isNamed: lexTable.tokens[scanned.token].isNamed,
-                    isExtra: lexTable.tokens[scanned.token].isExtra)
+                    isExtra: lexTable.tokens[scanned.token].isExtra
+                )
             case .end(let cursor):
                 stack.cursor = cursor
                 return nil
@@ -280,8 +315,11 @@ extension GLRParser {
                     : Point(row: start.point.row, column: start.point.column + length)
                 stack.cursor = end
                 return ParseToken(
-                    terminal: nil, type: Unicode.Scalar(scalar).map { String(Character($0)) } ?? "\u{FFFD}",
-                    byteRange: start.offset ..< end.offset, pointRange: start.point ..< end.point)
+                    terminal: nil,
+                    type: Unicode.Scalar(scalar).map { String(Character($0)) } ?? "\u{FFFD}",
+                    byteRange: start.offset ..< end.offset,
+                    pointRange: start.point ..< end.point
+                )
         }
     }
 }

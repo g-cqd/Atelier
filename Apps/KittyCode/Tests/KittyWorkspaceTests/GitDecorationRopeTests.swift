@@ -27,7 +27,11 @@ private final class RopeDecorationSpy: RopeGitLineDecorationProvider, Sendable {
         let workspace = WorkspaceSession(rootPath: "/project")
         let content = String(repeating: "a long line over the old gate\n", count: 31_000)
         workspace.bufferManager.open(
-            filePath: "/project/large.txt", fileName: "large.txt", content: content, language: nil)
+            filePath: "/project/large.txt",
+            fileName: "large.txt",
+            content: content,
+            language: nil
+        )
         workspace.restoreStateFromActiveBuffer()
         #expect(workspace.textBuffer._testSnapshotCachesAreEmpty)
         let provider = RopeDecorationSpy()
@@ -35,9 +39,15 @@ private final class RopeDecorationSpy: RopeGitLineDecorationProvider, Sendable {
         let manager = GitDecorationManager(
             workspace: workspace,
             gitConfig: GitDecorationConfig(
-                showGitStatus: true, showLineChanges: true, lineChangeDebounceMilliseconds: 0,
-                maxLineDiffBytes: 8_000_000),
-            gitLineDecorationProvider: provider, invalidateRender: {}, taskProvider: tasks)
+                showGitStatus: true,
+                showLineChanges: true,
+                lineChangeDebounceMilliseconds: 0,
+                maxLineDiffBytes: 8_000_000
+            ),
+            gitLineDecorationProvider: provider,
+            invalidateRender: {},
+            taskProvider: tasks
+        )
         manager.scheduleRefreshForActiveBuffer(debounced: false)
         try await tasks.waitForAllTasks()
         manager.stop()

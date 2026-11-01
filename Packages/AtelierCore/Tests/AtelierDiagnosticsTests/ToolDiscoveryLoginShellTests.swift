@@ -54,8 +54,11 @@ struct ToolDiscoveryLoginShellTests {
         let home = URL(filePath: temp.file("home"))
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: home,
-            environment: ["SHELL": "/opt/homebrew/bin/fish"])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: home,
+            environment: ["SHELL": "/opt/homebrew/bin/fish"]
+        )
 
         _ = await Self.locate("atelier-probe", with: discovery)
 
@@ -71,8 +74,11 @@ struct ToolDiscoveryLoginShellTests {
         defer { temp.cleanup() }
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: ["SHELL": "fish"])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "fish"]
+        )
 
         _ = await Self.locate("atelier-probe", with: discovery)
 
@@ -89,8 +95,11 @@ struct ToolDiscoveryLoginShellTests {
         let output =
             "Welcome to fish, the friendly interactive shell\nnvm: using node v22\n\(shellDirectory):/usr/bin\n"
         let discovery = ToolDiscovery(
-            runner: FakeProcessRunner(always: .success(output)), bundledDirectory: nil,
-            homeDirectory: URL(filePath: temp.file("home")), environment: ["SHELL": "/opt/homebrew/bin/fish"])
+            runner: FakeProcessRunner(always: .success(output)),
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "/opt/homebrew/bin/fish"]
+        )
 
         let located = await Self.locate("atelier-probe", with: discovery)
 
@@ -108,8 +117,11 @@ struct ToolDiscoveryLoginShellTests {
         // The relative entry does reach the tool from where the tests run.
         #expect(FileManager.default.isExecutableFile(atPath: relative + "/atelier-probe"))
         let discovery = ToolDiscovery(
-            runner: FakeProcessRunner(always: .success(".::node_modules/.bin:\(relative)\n")), bundledDirectory: nil,
-            homeDirectory: URL(filePath: temp.file("home")), environment: ["SHELL": "/bin/zsh"])
+            runner: FakeProcessRunner(always: .success(".::node_modules/.bin:\(relative)\n")),
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "/bin/zsh"]
+        )
 
         #expect(await Self.locate("atelier-probe", with: discovery) == nil)
     }
@@ -123,11 +135,18 @@ struct ToolDiscoveryLoginShellTests {
         let relative = Self.relativeSpelling(of: tool)
         #expect(FileManager.default.isExecutableFile(atPath: relative))
         let discovery = ToolDiscovery(
-            runner: FakeProcessRunner(always: .success("")), bundledDirectory: nil,
-            homeDirectory: URL(filePath: temp.file("home")), environment: ["OVR": relative, "SHELL": "/bin/zsh"])
+            runner: FakeProcessRunner(always: .success("")),
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["OVR": relative, "SHELL": "/bin/zsh"]
+        )
 
         let located = await discovery.locate(
-            executableName: "atelier-probe", overrideVariable: "OVR", customPath: relative, searchesToolchain: false)
+            executableName: "atelier-probe",
+            overrideVariable: "OVR",
+            customPath: relative,
+            searchesToolchain: false
+        )
 
         #expect(located == nil)
     }
@@ -150,8 +169,12 @@ struct ToolDiscoveryLoginShellTests {
         }
         let fileManager = CheckRecordingFileManager(recordingUnder: home.appending(path: ".local/bin").path)
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: home, environment: ["SHELL": "/bin/zsh"],
-            fileManager: fileManager)
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: home,
+            environment: ["SHELL": "/bin/zsh"],
+            fileManager: fileManager
+        )
 
         async let first = Self.locate("atelier-probe-a", with: discovery)
         async let second = Self.locate("atelier-probe-b", with: discovery)
@@ -182,8 +205,11 @@ struct ToolDiscoveryLoginShellTests {
             return .success(shellDirectory + "\n")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: ["SHELL": "/bin/zsh"])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "/bin/zsh"]
+        )
 
         let cancelled = Task { await Self.locate("atelier-probe", with: discovery) }
         try await started.wait()
@@ -216,8 +242,12 @@ struct ToolDiscoveryLoginShellTests {
         }
         let fileManager = CheckRecordingFileManager(recordingUnder: home.appending(path: ".local/bin").path)
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: home, environment: ["SHELL": "/bin/zsh"],
-            fileManager: fileManager)
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: home,
+            environment: ["SHELL": "/bin/zsh"],
+            fileManager: fileManager
+        )
 
         let cancelled = Task { await Self.locate("atelier-probe", with: discovery) }
         try await firstProbe.wait()
@@ -245,8 +275,11 @@ struct ToolDiscoveryLoginShellTests {
             return .success(shellDirectory + "\n")
         }
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: ["SHELL": "/bin/zsh"])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "/bin/zsh"]
+        )
 
         async let beforeInvalidate = Self.locate("atelier-probe", with: discovery)
         try await started.wait()

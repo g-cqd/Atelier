@@ -150,8 +150,11 @@ package final class DiffGutterView: NSView {
         super.updateTrackingAreas()
         guard hoverTracking == nil else { return }
         let area = NSTrackingArea(
-            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-            owner: self, userInfo: nil)
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
         addTrackingArea(area)
         hoverTracking = area
     }
@@ -198,7 +201,9 @@ package final class DiffGutterView: NSView {
         forEachGap(in: unobscuredRect(of: visibleRect)) { gap, band in
             for half in handle(of: gap.marker, in: band).halves {
                 addCursorRect(
-                    half.hitArea, cursor: .rowResize(directions: half.handle == .extendsChangeAbove ? .down : .up))
+                    half.hitArea,
+                    cursor: .rowResize(directions: half.handle == .extendsChangeAbove ? .down : .up)
+                )
             }
         }
         addChangeMarkerCursorRects()
@@ -236,7 +241,9 @@ package final class DiffGutterView: NSView {
                 return
             }
             handleDrag = HandleDrag(
-                id: HandleID(key: hit.marker.key, handle: hit.handle), startY: event.locationInWindow.y)
+                id: HandleID(key: hit.marker.key, handle: hit.handle),
+                startY: event.locationInWindow.y
+            )
             needsDisplay = true
             let lineHeight = rendered?.lineHeight ?? palette.defaultLineHeight
             onGapDrag?(.began(hit.marker, hit.handle, lineHeight: max(lineHeight, 1)))
@@ -261,8 +268,10 @@ package final class DiffGutterView: NSView {
     package override func mouseDragged(with event: NSEvent) {
         guard var drag = handleDrag else { return }
         let overshoot = GapHandleLayout.edgeOvershoot(
-            pointerY: convert(event.locationInWindow, from: nil).y, visible: unobscuredRect(of: visibleRect),
-            direction: drag.id.handle.revealDirection)
+            pointerY: convert(event.locationInWindow, from: nil).y,
+            visible: unobscuredRect(of: visibleRect),
+            direction: drag.id.handle.revealDirection
+        )
         drag.isHeldAtEdge = overshoot > 0
         handleDrag = drag
         // Window coordinates grow upwards, and scrolling what shows the gutter never moves them.
@@ -465,13 +474,20 @@ extension DiffGutterView {
         guard list !== listClipView else { return }
         if let listClipView {
             NotificationCenter.default.removeObserver(
-                self, name: NSView.boundsDidChangeNotification, object: listClipView)
+                self,
+                name: NSView.boundsDidChangeNotification,
+                object: listClipView
+            )
         }
         listClipView = list
         guard let list else { return }
         list.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
-            self, selector: #selector(listDidScroll(_:)), name: NSView.boundsDidChangeNotification, object: list)
+            self,
+            selector: #selector(listDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: list
+        )
     }
 }
 

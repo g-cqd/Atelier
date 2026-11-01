@@ -117,7 +117,8 @@ extension RenderPipeline {
         guard updated != foldedScopes else { return }
         let changed = Set(
             Set(updated.keys).symmetricDifference(foldedScopes.keys).map(\.fileIndex)
-                + updated.filter { foldedScopes[$0.key] != $0.value }.map(\.key.fileIndex))
+                + updated.filter { foldedScopes[$0.key] != $0.value }.map(\.key.fileIndex)
+        )
         foldedScopes = updated
         guard let target else { return }
         if changed.count == 1, let index = changed.first, prepared.indices.contains(index) {

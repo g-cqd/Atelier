@@ -48,11 +48,14 @@ struct FileListSwitchBenchmark {
 
     // Serialized: the placements would otherwise share the main thread and time each other.
     @Test(
-        .serialized, .timeLimit(.minutes(10)),
+        .serialized,
+        .timeLimit(.minutes(10)),
         .enabled(
             if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
-                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil),
-        arguments: [ExplorerPlacement.top, .sidebar])
+                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil
+        ),
+        arguments: [ExplorerPlacement.top, .sidebar]
+    )
     func `opening a file from the list and closing its tab`(placement: ExplorerPlacement) async throws {
         let environment = ProcessInfo.processInfo.environment
         let repo = URL(filePath: environment["GDV_BENCH_REPO"] ?? ".", directoryHint: .isDirectory)
@@ -60,7 +63,12 @@ struct FileListSwitchBenchmark {
         let rightRef = environment["GDV_BENCH_RIGHT"] ?? "HEAD"
         let runs = environment["GDV_BENCH_RUNS"].flatMap(Int.init) ?? 9
         let bench = try await SwitchBench(
-            repo: repo, leftRef: leftRef, rightRef: rightRef, placement: placement, defaults: scratchDefaults)
+            repo: repo,
+            leftRef: leftRef,
+            rightRef: rightRef,
+            placement: placement,
+            defaults: scratchDefaults
+        )
         defer { bench.close() }
 
         for path in bench.filesToOpen() {
@@ -81,7 +89,8 @@ struct FileListSwitchBenchmark {
                     + "close to first card \(Self.summary(close.firstCard)), "
                     + "to whole list \(Self.summary(close.shown)), main thread \(Self.summary(close.mainThread)); "
                     + "footprint with the file open \(Self.megabytes(open.footprint)), with the list "
-                    + "\(Self.megabytes(close.footprint))")
+                    + "\(Self.megabytes(close.footprint))"
+            )
             #expect(Self.median(open.shown) <= Self.openBudget, "opening \(path)")
             #expect(Self.median(close.shown) <= Self.closeBudget, "closing \(path)")
         }
@@ -89,11 +98,14 @@ struct FileListSwitchBenchmark {
 
     // Serialized for the same reason as the switches above.
     @Test(
-        .serialized, .timeLimit(.minutes(10)),
+        .serialized,
+        .timeLimit(.minutes(10)),
         .enabled(
             if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
-                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil),
-        arguments: [ExplorerPlacement.top, .sidebar])
+                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil
+        ),
+        arguments: [ExplorerPlacement.top, .sidebar]
+    )
     func `going back to the list through its fixed tab after a folder and a file showed`(
         placement: ExplorerPlacement
     ) async throws {
@@ -103,7 +115,12 @@ struct FileListSwitchBenchmark {
         let rightRef = environment["GDV_BENCH_RIGHT"] ?? "HEAD"
         let runs = environment["GDV_BENCH_RUNS"].flatMap(Int.init) ?? 9
         let bench = try await SwitchBench(
-            repo: repo, leftRef: leftRef, rightRef: rightRef, placement: placement, defaults: scratchDefaults)
+            repo: repo,
+            leftRef: leftRef,
+            rightRef: rightRef,
+            placement: placement,
+            defaults: scratchDefaults
+        )
         defer { bench.close() }
         let folder = try #require(bench.folderToOpen(), "no changed file sits in a folder of its own")
         let file = try #require(bench.filesToOpen().first)
@@ -123,7 +140,8 @@ struct FileListSwitchBenchmark {
             "BENCH \(placement.rawValue) back to the list through its tab after \(folder) and \(file), "
                 + "\(bench.cardCount) cards, \(back.cardsOnScreen.max() ?? 0) on screen: "
                 + "to first card \(Self.summary(back.firstCard)), to whole list \(Self.summary(back.shown)), "
-                + "main thread \(Self.summary(back.mainThread)); footprint \(Self.megabytes(back.footprint))")
+                + "main thread \(Self.summary(back.mainThread)); footprint \(Self.megabytes(back.footprint))"
+        )
         #expect(Self.median(back.shown) <= Self.closeBudget, "back to the list after \(folder) and \(file)")
     }
 
@@ -183,7 +201,11 @@ final class SwitchBench {
     private let clock = ContinuousClock()
 
     init(
-        repo: URL, leftRef: String, rightRef: String, placement: ExplorerPlacement, defaults: ScratchDefaults
+        repo: URL,
+        leftRef: String,
+        rightRef: String,
+        placement: ExplorerPlacement,
+        defaults: ScratchDefaults
     ) async throws {
         spy = TaskProviderSpy(label: "switch-bench", defaultTimeout: .seconds(120))
         pool = BlockingOffloadPool(width: 4)
@@ -194,8 +216,10 @@ final class SwitchBench {
         // The style of the app's comparison windows: the content runs beneath the toolbar.
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered,
-            defer: false)
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: ContentView(settings: settings, model: model))
         pump()
@@ -330,8 +354,12 @@ final class SwitchBench {
         let cards = cardsOnScreen()
         try await settle()
         return SwitchTiming(
-            firstCard: firstCard, shown: shown, mainThread: mainThread, footprint: Self.footprint(),
-            cardsOnScreen: cards)
+            firstCard: firstCard,
+            shown: shown,
+            mainThread: mainThread,
+            footprint: Self.footprint(),
+            cardsOnScreen: cards
+        )
     }
 
     /// One turn of the run loop, then a layout and display pass of the whole window, committed.

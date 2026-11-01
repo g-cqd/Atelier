@@ -248,7 +248,8 @@ extension ViewerSettings {
     /// Posted in-process after an instance writes a key, so every other instance sharing its `UserDefaults` picks up
     /// the new value without its window reopening.
     nonisolated static let settingChangedNotification = Notification.Name(
-        "GitDiffViewer.ViewerSettings.settingChanged")
+        "GitDiffViewer.ViewerSettings.settingChanged"
+    )
     /// The `userInfo` key `settingChangedNotification` carries the written key's name under.
     nonisolated static let settingChangedKey = "key"
     /// The `userInfo` key naming the project whose override was written or cleared; absent for a base write.
@@ -285,7 +286,8 @@ extension ViewerSettings {
     /// Posted in-process whenever a project becomes known, or one of its overrides is written or cleared, so the
     /// Settings window's list follows.
     nonisolated static let projectsChangedNotification = Notification.Name(
-        "GitDiffViewer.ViewerSettings.projectsChanged")
+        "GitDiffViewer.ViewerSettings.projectsChanged"
+    )
 
     func postProjectsChanged() {
         NotificationCenter.default.post(name: Self.projectsChangedNotification, object: self)

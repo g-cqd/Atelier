@@ -91,7 +91,8 @@ private final class ParseCounter: Sendable {
     private let parses = ParseCounter()
 
     private func makeSUT(
-        lspRegistry: LanguageServerRegistry? = nil, index: DocCommentIndex = DocCommentIndex()
+        lspRegistry: LanguageServerRegistry? = nil,
+        index: DocCommentIndex = DocCommentIndex()
     ) -> HoverDocumentationModel {
         HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider, index: index)
     }
@@ -104,8 +105,14 @@ private final class ParseCounter: Sendable {
     /// A changed file that only calls `double`, which ``restSource`` declares; "double" sits at columns 12..<18.
     private func caller(blob: String = "new") -> HoverDocumentationModel.FileEntry {
         HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
-            oldText: "let value = double(3)\n", newText: "let value = double(3)\n", oldBlobID: "old", newBlobID: blob)
+            index: 0,
+            leftPath: "Sources/Foo.swift",
+            rightPath: "Sources/Foo.swift",
+            oldText: "let value = double(3)\n",
+            newText: "let value = double(3)\n",
+            oldBlobID: "old",
+            newBlobID: blob
+        )
     }
 
     private func restEntry(blob: String = "rest") -> SourceEntry {
@@ -121,12 +128,20 @@ private final class ParseCounter: Sendable {
 
     /// Feeds `files` with the corpus `entries` of `reader`, then waits for every pass to land.
     private func feed(
-        _ model: HoverDocumentationModel, _ files: [HoverDocumentationModel.FileEntry], root: URL? = nil,
-        reader: CorpusReaderSpy? = nil, corpus entries: [SourceEntry] = []
+        _ model: HoverDocumentationModel,
+        _ files: [HoverDocumentationModel.FileEntry],
+        root: URL? = nil,
+        reader: CorpusReaderSpy? = nil,
+        corpus entries: [SourceEntry] = []
     ) async throws {
         let source: ComparisonSource? = reader == nil ? nil : .directory(Self.rightRoot)
         model.comparisonChanged(
-            root: root, files: files, corpusReader: reader, corpusSource: source, corpusEntries: entries)
+            root: root,
+            files: files,
+            corpusReader: reader,
+            corpusSource: source,
+            corpusEntries: entries
+        )
         try await taskProvider.waitForAllTasks()
     }
 
@@ -153,8 +168,14 @@ private final class ParseCounter: Sendable {
     func `a hover answers from the doc comment index once the comparison is fed`() async throws {
         let model = makeSUT()
         let entry = HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: swiftDocComment,
-            newText: swiftDocComment, oldBlobID: "old", newBlobID: "new")
+            index: 0,
+            leftPath: "Sources/Foo.swift",
+            rightPath: "Sources/Foo.swift",
+            oldText: swiftDocComment,
+            newText: swiftDocComment,
+            oldBlobID: "old",
+            newBlobID: "new"
+        )
 
         try await feed(model, [entry])
 
@@ -169,8 +190,14 @@ private final class ParseCounter: Sendable {
         let sdk = RecordingHoverTier()
         model.sdkProvider = sdk
         let script = HoverDocumentationModel.FileEntry(
-            index: 1, leftPath: "tools/run.py", rightPath: "tools/run.py", oldText: "value = double(3)\n",
-            newText: "value = double(3)\n", oldBlobID: "old-script", newBlobID: "new-script")
+            index: 1,
+            leftPath: "tools/run.py",
+            rightPath: "tools/run.py",
+            oldText: "value = double(3)\n",
+            newText: "value = double(3)\n",
+            oldBlobID: "old-script",
+            newBlobID: "new-script"
+        )
 
         try await feed(model, [caller(), script], reader: makeReader(), corpus: [restEntry()])
 
@@ -198,7 +225,10 @@ private final class ParseCounter: Sendable {
         let model = makeSUT()
         let reader = makeReader()
         let huge = SourceEntry(
-            relativePath: Self.restPath, blobID: "huge", size: HoverDocumentationModel.maxCorpusFileSize + 1)
+            relativePath: Self.restPath,
+            blobID: "huge",
+            size: HoverDocumentationModel.maxCorpusFileSize + 1
+        )
 
         try await feed(model, [caller()], reader: reader, corpus: [huge])
 
@@ -214,13 +244,23 @@ private final class ParseCounter: Sendable {
         reader.hold(until: gate)
 
         model.comparisonChanged(
-            root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
-            corpusEntries: [restEntry()])
+            root: nil,
+            files: [caller()],
+            corpusReader: reader,
+            corpusSource: .directory(Self.rightRoot),
+            corpusEntries: [restEntry()]
+        )
         // The stale pass is inside its corpus read when the newer comparison supersedes it.
         _ = try await reader.batchStarted.expectNext()
         let unrelated = HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: "let x = 1\n",
-            newText: "let x = 1\n", oldBlobID: "old2", newBlobID: "new2")
+            index: 0,
+            leftPath: "Sources/Foo.swift",
+            rightPath: "Sources/Foo.swift",
+            oldText: "let x = 1\n",
+            newText: "let x = 1\n",
+            oldBlobID: "old2",
+            newBlobID: "new2"
+        )
         model.comparisonChanged(root: nil, files: [unrelated])
         // The stale read resolves only now, when landing would clobber the newer comparison's corpus.
         gate.open()
@@ -239,8 +279,12 @@ private final class ParseCounter: Sendable {
             .map { SourceEntry(relativePath: "Sources/F\($0).swift", blobID: "f\($0)", size: 64) }
 
         model.comparisonChanged(
-            root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
-            corpusEntries: corpus)
+            root: nil,
+            files: [caller()],
+            corpusReader: reader,
+            corpusSource: .directory(Self.rightRoot),
+            corpusEntries: corpus
+        )
         let first = try #require(try await reader.batchStarted.expectNext())
         model.comparisonChanged(root: nil, files: [caller(blob: "newer")])
         gate.open()
@@ -293,8 +337,14 @@ private final class ParseCounter: Sendable {
         let model = makeSUT()
         let reader = makeReader()
         let second = HoverDocumentationModel.FileEntry(
-            index: 1, leftPath: "Sources/Bar.swift", rightPath: "Sources/Bar.swift", oldText: "let x = 1\n",
-            newText: "let x = 2\n", oldBlobID: "bar1", newBlobID: "bar2")
+            index: 1,
+            leftPath: "Sources/Bar.swift",
+            rightPath: "Sources/Bar.swift",
+            oldText: "let x = 1\n",
+            newText: "let x = 2\n",
+            oldBlobID: "bar1",
+            newBlobID: "bar2"
+        )
 
         try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
         try await feed(model, [caller(), second], reader: reader, corpus: [restEntry()])
@@ -310,8 +360,14 @@ private final class ParseCounter: Sendable {
         func unhashed(_ doc: String) -> HoverDocumentationModel.FileEntry {
             let text = "/// \(doc)\nfunc run() {}\n"
             return HoverDocumentationModel.FileEntry(
-                index: 0, leftPath: "Sources/Big.swift", rightPath: "Sources/Big.swift", oldText: text,
-                newText: text, oldBlobID: "big", newBlobID: nil)
+                index: 0,
+                leftPath: "Sources/Big.swift",
+                rightPath: "Sources/Big.swift",
+                oldText: text,
+                newText: text,
+                oldBlobID: "big",
+                newBlobID: nil
+            )
         }
 
         try await feed(model, [unhashed("One.")])
@@ -330,9 +386,14 @@ private final class ParseCounter: Sendable {
 
         for comparison in 0 ..< 20 {
             let changed = HoverDocumentationModel.FileEntry(
-                index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
-                oldText: "let value = double(\(comparison))\n", newText: "let value = double(3)\n",
-                oldBlobID: "old\(comparison)", newBlobID: "new\(comparison)")
+                index: 0,
+                leftPath: "Sources/Foo.swift",
+                rightPath: "Sources/Foo.swift",
+                oldText: "let value = double(\(comparison))\n",
+                newText: "let value = double(3)\n",
+                oldBlobID: "old\(comparison)",
+                newBlobID: "new\(comparison)"
+            )
             try await feed(model, [changed], reader: reader, corpus: [restEntry(blob: "rest\(comparison)")])
             sizes.append(await index.fileCount)
         }
@@ -351,11 +412,19 @@ private final class ParseCounter: Sendable {
         defer { try? FileManager.default.removeItem(at: root) }
 
         try await feed(
-            model, [caller()], root: root, reader: reader,
-            corpus: [SourceEntry(relativePath: "Sources/Old.swift", blobID: "d1", size: 64)])
+            model,
+            [caller()],
+            root: root,
+            reader: reader,
+            corpus: [SourceEntry(relativePath: "Sources/Old.swift", blobID: "d1", size: 64)]
+        )
         try await feed(
-            model, [caller()], root: root, reader: reader,
-            corpus: [SourceEntry(relativePath: "Sources/New.swift", blobID: "d2", size: 64)])
+            model,
+            [caller()],
+            root: root,
+            reader: reader,
+            corpus: [SourceEntry(relativePath: "Sources/New.swift", blobID: "d2", size: 64)]
+        )
 
         let markdown = try #require(await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)?.markdown)
         #expect(markdown.contains("as it is."))
@@ -386,8 +455,12 @@ private final class ParseCounter: Sendable {
             .map { SourceEntry(relativePath: "Sources/F\($0).swift", blobID: "f\($0)", size: 64) }
 
         model.comparisonChanged(
-            root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
-            corpusEntries: corpus)
+            root: nil,
+            files: [caller()],
+            corpusReader: reader,
+            corpusSource: .directory(Self.rightRoot),
+            corpusEntries: corpus
+        )
         let first = try #require(try await reader.batchStarted.expectNext())
         model.isEnabled = false
         gate.open()
@@ -399,7 +472,9 @@ private final class ParseCounter: Sendable {
     /// A fresh directory standing in for a repository root, since the registry only admits roots that exist.
     private func makeScratchRoot() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-hover-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "gdv-hover-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
         return root
     }
@@ -413,11 +488,23 @@ extension HoverDocumentationModelTests {
     private func declarationAndUse(leftPath: String, rightPath: String) -> [HoverDocumentationModel.FileEntry] {
         [
             HoverDocumentationModel.FileEntry(
-                index: 0, leftPath: leftPath, rightPath: rightPath, oldText: "/// A foo.\nstruct Foo {}\n",
-                newText: "/// A foo.\nstruct Foo: Sendable {}\n", oldBlobID: "foo1", newBlobID: "foo2"),
+                index: 0,
+                leftPath: leftPath,
+                rightPath: rightPath,
+                oldText: "/// A foo.\nstruct Foo {}\n",
+                newText: "/// A foo.\nstruct Foo: Sendable {}\n",
+                oldBlobID: "foo1",
+                newBlobID: "foo2"
+            ),
             HoverDocumentationModel.FileEntry(
-                index: 1, leftPath: "Sources/Use.swift", rightPath: "Sources/Use.swift",
-                oldText: "let foo = Foo()\n", newText: "let foo = Foo()\n", oldBlobID: "use1", newBlobID: "use2")
+                index: 1,
+                leftPath: "Sources/Use.swift",
+                rightPath: "Sources/Use.swift",
+                oldText: "let foo = Foo()\n",
+                newText: "let foo = Foo()\n",
+                oldBlobID: "use1",
+                newBlobID: "use2"
+            )
         ]
     }
 
@@ -466,11 +553,18 @@ extension HoverDocumentationModelTests {
             makeConfiguration: { _, _ in
                 callCount.withLock { $0 += 1 }
                 return nil
-            })
+            }
+        )
         let model = makeSUT(lspRegistry: registry)
         let entry = HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: swiftDocComment,
-            newText: swiftDocComment, oldBlobID: "old", newBlobID: "new")
+            index: 0,
+            leftPath: "Sources/Foo.swift",
+            rightPath: "Sources/Foo.swift",
+            oldText: swiftDocComment,
+            newText: swiftDocComment,
+            oldBlobID: "old",
+            newBlobID: "new"
+        )
         let root = try makeScratchRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         model.comparisonChanged(root: root, files: [entry])
@@ -486,11 +580,18 @@ extension HoverDocumentationModelTests {
             makeConfiguration: { _, _ in
                 callCount.withLock { $0 += 1 }
                 return nil
-            })
+            }
+        )
         let model = makeSUT(lspRegistry: registry)
         let entry = HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: swiftDocComment,
-            newText: swiftDocComment, oldBlobID: "old", newBlobID: "new")
+            index: 0,
+            leftPath: "Sources/Foo.swift",
+            rightPath: "Sources/Foo.swift",
+            oldText: swiftDocComment,
+            newText: swiftDocComment,
+            oldBlobID: "old",
+            newBlobID: "new"
+        )
         let root = try makeScratchRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         model.comparisonChanged(root: root, files: [entry])
@@ -512,7 +613,8 @@ extension HoverDocumentationModelTests {
                 makeConfiguration: { _, server in
                     self.ids.withLock { $0.append(server.id) }
                     return nil
-                })
+                }
+            )
         }
     }
 
@@ -526,8 +628,14 @@ extension HoverDocumentationModelTests {
         let files = sources.enumerated()
             .map { index, source in
                 HoverDocumentationModel.FileEntry(
-                    index: index, leftPath: source.0, rightPath: source.0, oldText: source.1, newText: source.1,
-                    oldBlobID: "old\(index)", newBlobID: "new\(index)")
+                    index: index,
+                    leftPath: source.0,
+                    rightPath: source.0,
+                    oldText: source.1,
+                    newText: source.1,
+                    oldBlobID: "old\(index)",
+                    newBlobID: "new\(index)"
+                )
             }
         model.comparisonChanged(root: root, files: files)
 
@@ -552,8 +660,14 @@ extension HoverDocumentationModelTests {
             const sum = add(1, 2)
             """
         let entry = HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "src/math.ts", rightPath: "src/math.ts", oldText: source, newText: source,
-            oldBlobID: "old", newBlobID: "new")
+            index: 0,
+            leftPath: "src/math.ts",
+            rightPath: "src/math.ts",
+            oldText: source,
+            newText: source,
+            oldBlobID: "old",
+            newBlobID: "new"
+        )
 
         try await feed(model, [entry], root: root)
 
@@ -573,7 +687,10 @@ extension HoverDocumentationModelTests {
         let servers = ServerLog()
         let store = SyntaxFactsStore()
         let model = HoverDocumentationModel(
-            lspRegistry: servers.registry(), taskProvider: taskProvider, symbolKinds: store)
+            lspRegistry: servers.registry(),
+            taskProvider: taskProvider,
+            symbolKinds: store
+        )
         let root = try makeScratchRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let source = "let value = compute() // note\n"
@@ -583,10 +700,17 @@ extension HoverDocumentationModelTests {
                 HighlightToken(byteRange: 12 ..< 19, role: .function),
                 HighlightToken(byteRange: 22 ..< 29, role: .comment)
             ]),
-            for: SourceRevision(documentID: "Sources/Foo.swift", language: .swift, key: .content("new")))
+            for: SourceRevision(documentID: "Sources/Foo.swift", language: .swift, key: .content("new"))
+        )
         let entry = HoverDocumentationModel.FileEntry(
-            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: source, newText: source,
-            oldBlobID: "old", newBlobID: "new")
+            index: 0,
+            leftPath: "Sources/Foo.swift",
+            rightPath: "Sources/Foo.swift",
+            oldText: source,
+            newText: source,
+            oldBlobID: "old",
+            newBlobID: "new"
+        )
         try await feed(model, [entry], root: root)
 
         _ = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 1)
@@ -608,9 +732,16 @@ extension HoverDocumentationModelTests {
             root: root,
             files: [
                 HoverDocumentationModel.FileEntry(
-                    index: 0, leftPath: "tool.rb", rightPath: "tool.rb", oldText: script, newText: script,
-                    oldBlobID: "old", newBlobID: "new")
-            ])
+                    index: 0,
+                    leftPath: "tool.rb",
+                    rightPath: "tool.rb",
+                    oldText: script,
+                    newText: script,
+                    oldBlobID: "old",
+                    newBlobID: "new"
+                )
+            ]
+        )
 
         #expect(await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 4) == nil)
         #expect(servers.all.isEmpty)

@@ -74,7 +74,8 @@ public struct DiagnosticsSession: Sendable {
     /// `request` should carry a ``DiagnosticsEngine/Request/contentIdentity``, so its results are cached by content
     /// rather than by a folder that is gone once the run ends.
     public func analyze(
-        _ request: DiagnosticsEngine.Request, materializingWith materialize: DiagnosticsMaterializer,
+        _ request: DiagnosticsEngine.Request,
+        materializingWith materialize: DiagnosticsMaterializer,
         onUpdate: sending (Update) async -> Void
     ) async {
         let enabledTools = request.tools.filter(\.value.isEnabled).keys.sorted { $0.rawValue < $1.rawValue }
@@ -94,7 +95,12 @@ public struct DiagnosticsSession: Sendable {
         let engine = engine
         let tools = pending
         async let materialized: String? = Self.run(
-            tools, of: request, materializingWith: materialize, engine: engine, into: continuation)
+            tools,
+            of: request,
+            materializingWith: materialize,
+            engine: engine,
+            into: continuation
+        )
         var reported: Set<DiagnosticTool> = []
         for await result in results {
             reported.insert(result.tool)
@@ -105,7 +111,12 @@ public struct DiagnosticsSession: Sendable {
         for tool in tools where !reported.contains(tool) {
             remaining -= 1
             let result = DiagnosticsEngine.ToolResult(
-                tool: tool, findings: [], status: .failed(failure), duration: .zero, fromCache: false)
+                tool: tool,
+                findings: [],
+                status: .failed(failure),
+                duration: .zero,
+                fromCache: false
+            )
             await onUpdate(Update(result: result, isLast: remaining == 0))
         }
     }
@@ -113,8 +124,10 @@ public struct DiagnosticsSession: Sendable {
     /// Materializes `request`'s files and runs `tools` against them, yielding each result; returns why the files
     /// could not be put on disk, or nil once every tool ran.
     private static func run(
-        _ tools: [DiagnosticTool], of request: DiagnosticsEngine.Request,
-        materializingWith materialize: DiagnosticsMaterializer, engine: any DiagnosticsRunning,
+        _ tools: [DiagnosticTool],
+        of request: DiagnosticsEngine.Request,
+        materializingWith materialize: DiagnosticsMaterializer,
+        engine: any DiagnosticsRunning,
         into continuation: AsyncStream<DiagnosticsEngine.ToolResult>.Continuation
     ) async -> String? {
         defer { continuation.finish() }

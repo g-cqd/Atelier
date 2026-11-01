@@ -5,7 +5,10 @@ import Testing
 
 struct CppExternalScannerTests {
     private func scan(
-        _ input: String, at offset: Int = 0, allowing names: [String], scanner: inout CppExternalScanner
+        _ input: String,
+        at offset: Int = 0,
+        allowing names: [String],
+        scanner: inout CppExternalScanner
     ) -> (String?, StringScannerLexer) {
         var lexer = StringScannerLexer(input, at: offset)
         let valid = CppExternalScanner.externalNames.map { names.contains($0) }

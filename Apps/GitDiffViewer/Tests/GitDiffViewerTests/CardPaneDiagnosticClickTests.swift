@@ -17,8 +17,14 @@ struct CardPaneDiagnosticClickTests {
 
     private static func finding(line: Int) -> Finding {
         Finding(
-            tool: .swiftlint, ruleID: "line_length", message: "Line should be 120 characters or less", file: "a.swift",
-            line: line, column: 5, severity: .warning)
+            tool: .swiftlint,
+            ruleID: "line_length",
+            message: "Line should be 120 characters or less",
+            file: "a.swift",
+            line: line,
+            column: 5,
+            severity: .warning
+        )
     }
 
     private static func diff() -> RenderedDiff {
@@ -67,14 +73,23 @@ private final class ClickableCardPane {
 
     init(diff: RenderedDiff, overlay: DiagnosticOverlay, onClick: @escaping (Int, [Finding]) -> Void) throws {
         let pane = EmbeddedDiffTextView(
-            layouts: CardLayouts(rendered: diff), side: .new, gutter: .new, width: Self.width, wrapMode: .none,
-            diagnosticOverlay: overlay, diagnosticsVersion: 0,
-            onDiagnosticClick: { row, findings, _, _ in onClick(row, findings) })
+            layouts: CardLayouts(rendered: diff),
+            side: .new,
+            gutter: .new,
+            width: Self.width,
+            wrapMode: .none,
+            diagnosticOverlay: overlay,
+            diagnosticsVersion: 0,
+            onDiagnosticClick: { row, findings, _, _ in onClick(row, findings) }
+        )
         let host = NSHostingView(rootView: pane)
         self.host = host
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: Self.width, height: max(host.fittingSize.height, 1)),
-            styleMask: [.borderless], backing: .buffered, defer: false)
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
@@ -91,8 +106,17 @@ private final class ClickableCardPane {
         let point = gutter.convert(try #require(center), to: nil)
         let event = try #require(
             NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                with: .leftMouseDown,
+                location: point,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
+        )
         gutter.mouseDown(with: event)
     }
 

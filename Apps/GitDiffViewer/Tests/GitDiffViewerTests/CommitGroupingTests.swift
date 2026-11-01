@@ -12,15 +12,22 @@ struct CommitGroupingTests {
     }
 
     private static func comparison(
-        left: [SourceEntry], right: [SourceEntry], renames: [String: String] = [:]
+        left: [SourceEntry],
+        right: [SourceEntry],
+        renames: [String: String] = [:]
     ) -> Comparison {
         Comparison(left: left, right: right, leftSource: nil, rightSource: nil, gitRenames: renames)
     }
 
     private static func commit(_ id: String, parent: String? = nil, _ changes: GitFileChange...) -> GitCommitChanges {
         GitCommitChanges(
-            id: id, parentIDs: parent.map { [$0] } ?? ["parent-of-\(id)"], authorName: "Tess",
-            authorDate: Date(timeIntervalSince1970: 0), subject: "Commit \(id)", changes: changes)
+            id: id,
+            parentIDs: parent.map { [$0] } ?? ["parent-of-\(id)"],
+            authorName: "Tess",
+            authorDate: Date(timeIntervalSince1970: 0),
+            subject: "Commit \(id)",
+            changes: changes
+        )
     }
 
     private static func modified(_ path: String) -> GitFileChange { GitFileChange(status: .modified, path: path) }
@@ -39,14 +46,20 @@ struct CommitGroupingTests {
     func `a file two commits changed sits under both, and each section lists its own files`() {
         let comparison = Self.comparison(
             left: [Self.entry("a.swift", "1"), Self.entry("b.swift", "2")],
-            right: [Self.entry("a.swift", "3"), Self.entry("b.swift", "4")])
+            right: [Self.entry("a.swift", "3"), Self.entry("b.swift", "4")]
+        )
         let commits = [
             Self.commit("new", parent: "old", Self.modified("a.swift"), Self.modified("b.swift")),
             Self.commit("old", parent: "base", Self.modified("a.swift"))
         ]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true, baseCommit: "base")
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true,
+            baseCommit: "base"
+        )
 
         #expect(grouping.sections.map(\.id) == ["commit:new", "commit:old"])
         #expect(Self.layout(grouping) == ["commit:new": ["a.swift", "b.swift"], "commit:old": ["a.swift"]])
@@ -57,14 +70,19 @@ struct CommitGroupingTests {
     func `a file changed then changed back has no row, and a section left empty says so`() {
         let comparison = Self.comparison(
             left: [Self.entry("a.swift", "1"), Self.entry("b.swift", "2")],
-            right: [Self.entry("a.swift", "1"), Self.entry("b.swift", "5")])
+            right: [Self.entry("a.swift", "1"), Self.entry("b.swift", "5")]
+        )
         let commits = [
             Self.commit("revert", Self.modified("a.swift"), Self.modified("b.swift")),
             Self.commit("change", Self.modified("a.swift"))
         ]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(Self.layout(grouping) == ["commit:revert": ["b.swift"], "commit:change": []])
         #expect(grouping.sections.map(\.changedBackCount) == [1, 1])
@@ -81,7 +99,11 @@ struct CommitGroupingTests {
         ]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(Self.layout(grouping) == ["commit:delete": [], "commit:add": ["a.swift"]])
         #expect(grouping.sections.map(\.changedBackCount) == [1, 1])
@@ -90,8 +112,10 @@ struct CommitGroupingTests {
     @Test
     func `renames are followed through each commit to the comparison's own row, which keeps the new name`() throws {
         let comparison = Self.comparison(
-            left: [Self.entry("a.swift", "1")], right: [Self.entry("dir/c.swift", "3")],
-            renames: ["a.swift": "dir/c.swift"])
+            left: [Self.entry("a.swift", "1")],
+            right: [Self.entry("dir/c.swift", "3")],
+            renames: ["a.swift": "dir/c.swift"]
+        )
         let commits = [
             Self.commit("edit", Self.modified("dir/c.swift")),
             Self.commit("second", Self.renamed("b.swift", "dir/c.swift")),
@@ -100,7 +124,11 @@ struct CommitGroupingTests {
         ]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         let rows = grouping.sections.map(\.rows)
         #expect(rows.map { $0.map(\.path) } == [["a.swift"], ["a.swift"], ["a.swift"], ["a.swift"]])
@@ -114,7 +142,11 @@ struct CommitGroupingTests {
         let commits = [Self.commit("move", Self.renamed("old.swift", "new.swift"))]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(Self.layout(grouping) == ["commit:move": ["new.swift", "old.swift"]])
     }
@@ -123,14 +155,19 @@ struct CommitGroupingTests {
     func `two files swapping names in one commit each keep their own identity`() {
         let comparison = Self.comparison(
             left: [Self.entry("a.swift", "1"), Self.entry("b.swift", "2")],
-            right: [Self.entry("a.swift", "2"), Self.entry("b.swift", "1"), Self.entry("c.swift", "3")])
+            right: [Self.entry("a.swift", "2"), Self.entry("b.swift", "1"), Self.entry("c.swift", "3")]
+        )
         let commits = [
             Self.commit("later", Self.added("c.swift")),
             Self.commit("swap", Self.renamed("a.swift", "b.swift"), Self.renamed("b.swift", "a.swift"))
         ]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(Self.layout(grouping) == ["commit:later": ["c.swift"], "commit:swap": ["a.swift", "b.swift"]])
     }
@@ -139,12 +176,16 @@ struct CommitGroupingTests {
     func `uncommitted changes come first when the right side is the working tree`() {
         let comparison = Self.comparison(
             left: [Self.entry("a.swift", "1")],
-            right: [Self.entry("a.swift", "2"), Self.entry("untracked.swift", "3")])
+            right: [Self.entry("a.swift", "2"), Self.entry("untracked.swift", "3")]
+        )
         let commits = [Self.commit("one", Self.modified("a.swift"))]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits,
-            uncommitted: [Self.modified("a.swift"), Self.added("untracked.swift")], isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: [Self.modified("a.swift"), Self.added("untracked.swift")],
+            isComplete: true
+        )
 
         #expect(grouping.sections.map(\.id) == ["uncommitted", "commit:one"])
         #expect(grouping.sections.first?.rows.map(\.path) == ["a.swift", "untracked.swift"])
@@ -156,7 +197,11 @@ struct CommitGroupingTests {
         let commits = [Self.commit("one", Self.modified("a.swift"))]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: [], isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: [],
+            isComplete: true
+        )
 
         #expect(grouping.sections.map(\.id) == ["commit:one"])
     }
@@ -165,11 +210,17 @@ struct CommitGroupingTests {
     func `net files no listed commit touched go into Earlier Changes when the listing stopped short`() {
         let comparison = Self.comparison(
             left: [Self.entry("a.swift", "1"), Self.entry("b.swift", "2"), Self.entry("same.swift", "9")],
-            right: [Self.entry("a.swift", "3"), Self.entry("b.swift", "4"), Self.entry("same.swift", "9")])
+            right: [Self.entry("a.swift", "3"), Self.entry("b.swift", "4"), Self.entry("same.swift", "9")]
+        )
         let commits = [Self.commit("newest", Self.modified("a.swift"))]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: false, unlistedCommitCount: 1_200)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: false,
+            unlistedCommitCount: 1_200
+        )
 
         #expect(grouping.sections.map(\.id) == ["commit:newest", "earlier"])
         #expect(grouping.sections.last?.kind == .earlier(unlistedCommitCount: 1_200))
@@ -181,8 +232,11 @@ struct CommitGroupingTests {
         let comparison = Self.comparison(left: [Self.entry("a.swift", "1")], right: [Self.entry("a.swift", "2")])
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: [Self.commit("one", Self.modified("a.swift"))], uncommitted: nil,
-            isComplete: true)
+            comparison: comparison,
+            commits: [Self.commit("one", Self.modified("a.swift"))],
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(!grouping.sections.contains { $0.id == "earlier" })
     }
@@ -191,15 +245,26 @@ struct CommitGroupingTests {
     func `rows follow the flat list's order`() {
         let paths = ["b/file10.swift", "a.swift", "b/file2.swift", "B.swift"]
         let comparison = Self.comparison(
-            left: paths.map { Self.entry($0, "1") }, right: paths.map { Self.entry($0, "2") })
+            left: paths.map { Self.entry($0, "1") },
+            right: paths.map { Self.entry($0, "2") }
+        )
         let commits = [
             GitCommitChanges(
-                id: "one", parentIDs: [], authorName: "", authorDate: Date(timeIntervalSince1970: 0), subject: "",
-                changes: paths.map(Self.modified))
+                id: "one",
+                parentIDs: [],
+                authorName: "",
+                authorDate: Date(timeIntervalSince1970: 0),
+                subject: "",
+                changes: paths.map(Self.modified)
+            )
         ]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(grouping.sections.first?.rows.map(\.path) == PathNode.flatList(from: paths).map(\.id))
         #expect(grouping.sections.first?.rows.map(\.path).suffix(2) == ["b/file2.swift", "b/file10.swift"])
@@ -211,7 +276,11 @@ struct CommitGroupingTests {
         let commits = [Self.commit("empty"), Self.commit("one", Self.modified("a.swift"))]
 
         let grouping = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(grouping.sections.first?.note == CommitGrouping.Section.noFileChangesNote)
     }
@@ -222,11 +291,26 @@ struct CommitGroupingTests {
         let commits = [Self.commit("merge", parent: "mainline", Self.modified("a.swift"))]
 
         let off = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true, baseCommit: "inside-branch")
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true,
+            baseCommit: "inside-branch"
+        )
         let on = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true, baseCommit: "mainline")
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true,
+            baseCommit: "mainline"
+        )
         let partial = CommitGrouping.build(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: false, baseCommit: "inside-branch")
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: false,
+            baseCommit: "inside-branch"
+        )
 
         #expect(off.leavesFirstParentChain)
         #expect(!on.leavesFirstParentChain)
@@ -240,10 +324,15 @@ struct CommitGroupingTests {
         let commits = [Self.commit("one", Self.modified("a.swift"))]
 
         let offMain = await CommitGrouping.buildOffMain(
-            comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+            comparison: comparison,
+            commits: commits,
+            uncommitted: nil,
+            isComplete: true
+        )
 
         #expect(
             offMain
-                == CommitGrouping.build(comparison: comparison, commits: commits, uncommitted: nil, isComplete: true))
+                == CommitGrouping.build(comparison: comparison, commits: commits, uncommitted: nil, isComplete: true)
+        )
     }
 }

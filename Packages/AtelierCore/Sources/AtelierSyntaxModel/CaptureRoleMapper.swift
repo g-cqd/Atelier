@@ -42,7 +42,9 @@ public enum CaptureRoleMapper: Sendable {
     ///     later reference to the same name.
     /// - Returns: The role `tokenType` maps to, refined by `isDefaultLibrary` and `isDeclaration`.
     public static func mapLSPTokenType(
-        _ tokenType: String, isDefaultLibrary: Bool = false, isDeclaration: Bool = false
+        _ tokenType: String,
+        isDefaultLibrary: Bool = false,
+        isDeclaration: Bool = false
     ) -> HighlightRole {
         let role = lspTokenTypeLookup[tokenType] ?? .variable
         if isDeclaration, let declared = declarationVariant[role] { return declared }

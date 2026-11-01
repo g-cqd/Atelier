@@ -63,7 +63,8 @@ struct LineLexerTests {
 
             #expect(
                 Self.lineScan(text, language: language) == Self.wholeScan(text, language: language),
-                "\(text.debugDescription)")
+                "\(text.debugDescription)"
+            )
         }
     }
 

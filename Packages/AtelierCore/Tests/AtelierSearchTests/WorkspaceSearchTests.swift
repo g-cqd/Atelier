@@ -12,8 +12,13 @@ struct WorkspaceSearchTests {
         let lines = Array(repeating: "id1", count: 12_000)
         let result = await withPool { pool in
             await searchWorkspace(
-                query: SearchQuery(text: "id"), files: [path], openBuffers: [path: lines],
-                pool: pool, maxResults: 50_000, onProgress: { _ in })
+                query: SearchQuery(text: "id"),
+                files: [path],
+                openBuffers: [path: lines],
+                pool: pool,
+                maxResults: 50_000,
+                onProgress: { _ in }
+            )
         }
         #expect(result.totalMatchCount == 12_000)
         #expect(result.results.first?.matches.count == 12_000)
@@ -193,8 +198,12 @@ struct WorkspaceSearchTests {
         let query = SearchQuery(text: "gamma")
         let result = await withPool { pool in
             await searchWorkspace(
-                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
-                onProgress: { _ in })
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
         }
         #expect(result.totalMatchCount == 1)
     }
@@ -209,8 +218,12 @@ struct WorkspaceSearchTests {
         let query = SearchQuery(text: "beta")
         let result = await withPool { pool in
             await searchWorkspace(
-                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
-                onProgress: { _ in })
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
         }
         #expect(result.totalMatchCount == 1)
     }
@@ -226,8 +239,12 @@ struct WorkspaceSearchTests {
         let query = SearchQuery(text: "NEEDLE")
         let result = await withPool { pool in
             await searchWorkspace(
-                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
-                onProgress: { _ in })
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
         }
         #expect(result.totalMatchCount == 1)
     }
@@ -241,8 +258,12 @@ struct WorkspaceSearchTests {
         let query = SearchQuery(text: "beta")
         let result = await withPool { pool in
             await searchWorkspace(
-                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
-                onProgress: { _ in })
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
         }
         #expect(result.totalMatchCount == 1)
     }
@@ -251,7 +272,12 @@ struct WorkspaceSearchTests {
     func `a search over no files finds nothing`() async {
         let result = await withPool { pool in
             await searchWorkspace(
-                query: SearchQuery(text: "needle"), files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+                query: SearchQuery(text: "needle"),
+                files: [],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
         }
 
         #expect(result.totalMatchCount == 0)

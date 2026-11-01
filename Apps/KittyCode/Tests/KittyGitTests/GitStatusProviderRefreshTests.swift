@@ -44,8 +44,10 @@ private struct HeldGitCall: Sendable {
 /// Joins NUL-terminated `status --porcelain=v2 -z` records the way git emits them.
 private func porcelain(_ records: [String]) -> ProcessOutput {
     ProcessOutput(
-        terminationStatus: 0, standardOutput: Data((records.joined(separator: "\u{0}") + "\u{0}").utf8),
-        standardError: Data())
+        terminationStatus: 0,
+        standardOutput: Data((records.joined(separator: "\u{0}") + "\u{0}").utf8),
+        standardError: Data()
+    )
 }
 
 private let modifiedTrackedFile = "1 .M N... 100644 100644 100644 aaaa bbbb tracked.txt"

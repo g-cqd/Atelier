@@ -29,7 +29,10 @@ struct LanguageServerDescriptorTests {
         let root = URL(filePath: "/repo", directoryHint: .isDirectory)
 
         let configuration = LanguageServerSession.Configuration(
-            descriptor: .sourceKitLSP, serverExecutable: executable, workspaceRoot: root)
+            descriptor: .sourceKitLSP,
+            serverExecutable: executable,
+            workspaceRoot: root
+        )
 
         #expect(configuration.serverExecutable == executable)
         #expect(configuration.serverArguments.isEmpty)
@@ -45,8 +48,10 @@ struct LanguageServerDescriptorTests {
     @Test
     func `typescript-language-server runs over stdio with a longer handshake`() {
         let configuration = LanguageServerSession.Configuration(
-            descriptor: .typeScriptLanguageServer, serverExecutable: URL(filePath: "/bin/tsls"),
-            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory))
+            descriptor: .typeScriptLanguageServer,
+            serverExecutable: URL(filePath: "/bin/tsls"),
+            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory)
+        )
 
         #expect(configuration.serverArguments == ["--stdio"])
         #expect(configuration.initializeTimeout == .seconds(10))
@@ -58,14 +63,17 @@ struct LanguageServerDescriptorTests {
     func `clangd comes from the toolchain and skips background indexing`() {
         let server = LanguageServerDescriptor.clangd
         let configuration = LanguageServerSession.Configuration(
-            descriptor: server, serverExecutable: URL(filePath: "/usr/bin/clangd"),
-            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory))
+            descriptor: server,
+            serverExecutable: URL(filePath: "/usr/bin/clangd"),
+            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory)
+        )
 
         #expect(configuration.serverArguments == ["--background-index=false"])
         #expect(server.rootMarkers == ["compile_commands.json", ".clangd"])
         #expect(
             server.executableQuery(customPath: nil, overridePrefix: "GDV_")
-                == ExecutableQuery(names: ["clangd"], overrideVariable: "GDV_CLANGD", searchesToolchain: true))
+                == ExecutableQuery(names: ["clangd"], overrideVariable: "GDV_CLANGD", searchesToolchain: true)
+        )
         #expect(server.runtimeExecutableName == nil)
     }
 
@@ -74,7 +82,8 @@ struct LanguageServerDescriptorTests {
         let server = LanguageServerDescriptor.rustAnalyzer
         let options =
             LanguageServerSession.Configuration(
-                descriptor: server, serverExecutable: URL(filePath: "/home/.cargo/bin/rust-analyzer"),
+                descriptor: server,
+                serverExecutable: URL(filePath: "/home/.cargo/bin/rust-analyzer"),
                 workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory)
             )
             .initializationOptions
@@ -88,15 +97,18 @@ struct LanguageServerDescriptorTests {
                     "cargo": .object(["buildScripts": .object(["enable": .bool(false)])]),
                     "procMacro": .object(["enable": .bool(false)]),
                     "cachePriming": .object(["enable": .bool(false)]), "checkOnSave": .bool(false)
-                ]))
+                ])
+        )
     }
 
     @Test
     func `basedpyright runs over stdio, rooted at pyrightconfig.json before pyproject.toml`() {
         let server = LanguageServerDescriptor.basedPyright
         let configuration = LanguageServerSession.Configuration(
-            descriptor: server, serverExecutable: URL(filePath: "/home/.local/bin/basedpyright-langserver"),
-            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory))
+            descriptor: server,
+            serverExecutable: URL(filePath: "/home/.local/bin/basedpyright-langserver"),
+            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory)
+        )
 
         #expect(configuration.serverArguments == ["--stdio"])
         #expect(server.executableNames == ["basedpyright-langserver"])
@@ -130,22 +142,34 @@ struct LanguageServerDescriptorTests {
         let locator = RecordingLocator(installed: ["gopls": gopls])
 
         let located = await LanguageServerDescriptor.gopls.locate(
-            using: locator, customPath: "/custom/gopls", overridePrefix: "GDV_")
+            using: locator,
+            customPath: "/custom/gopls",
+            overridePrefix: "GDV_"
+        )
 
         #expect(located == gopls)
         #expect(
             await locator.queries == [
                 ExecutableQuery(
-                    names: ["gopls"], overrideVariable: "GDV_GOPLS", customPath: "/custom/gopls",
-                    searchesToolchain: false, homeRelativeDirectories: [".npm-global/bin", ".cargo/bin", "go/bin"])
-            ])
+                    names: ["gopls"],
+                    overrideVariable: "GDV_GOPLS",
+                    customPath: "/custom/gopls",
+                    searchesToolchain: false,
+                    homeRelativeDirectories: [".npm-global/bin", ".cargo/bin", "go/bin"]
+                )
+            ]
+        )
         let sourceKit = LanguageServerDescriptor.sourceKitLSP.executableQuery(customPath: nil, overridePrefix: "GDV_")
         let expected = ExecutableQuery(
-            names: ["sourcekit-lsp"], overrideVariable: "GDV_SOURCEKIT_LSP", searchesToolchain: true)
+            names: ["sourcekit-lsp"],
+            overrideVariable: "GDV_SOURCEKIT_LSP",
+            searchesToolchain: true
+        )
         #expect(sourceKit == expected)
         #expect(
             LanguageServerDescriptor.typeScriptLanguageServer.executableQuery(customPath: nil, overridePrefix: nil)
-                .overrideVariable == nil)
+                .overrideVariable == nil
+        )
     }
 
     @Test(arguments: [
@@ -196,8 +220,10 @@ struct LanguageServerDescriptorTests {
     @Test
     func `a native server runs with the app's own environment`() async {
         let environment = await LanguageServerDescriptor.gopls.sessionEnvironment(
-            serverExecutable: URL(filePath: "/go/bin/gopls"), locator: RecordingLocator(installed: [:]),
-            base: ["PATH": "/usr/bin"])
+            serverExecutable: URL(filePath: "/go/bin/gopls"),
+            locator: RecordingLocator(installed: [:]),
+            base: ["PATH": "/usr/bin"]
+        )
 
         #expect(environment == nil)
     }
@@ -229,7 +255,9 @@ struct LanguageServerDescriptorTests {
 
         let missing = await descriptor.sessionEnvironment(
             serverExecutable: URL(filePath: "/nowhere/typescript-language-server"),
-            locator: RecordingLocator(installed: [:]), base: base)
+            locator: RecordingLocator(installed: [:]),
+            base: base
+        )
         #expect(missing == nil)
     }
 
@@ -247,10 +275,17 @@ struct LanguageServerDescriptorTests {
         let descriptor = LanguageServerDescriptor.typeScriptLanguageServer
         let environment = try #require(
             await descriptor.sessionEnvironment(
-                serverExecutable: server, locator: RecordingLocator(installed: ["node": node]),
-                base: ["PATH": "/usr/bin:/bin"]))
+                serverExecutable: server,
+                locator: RecordingLocator(installed: ["node": node]),
+                base: ["PATH": "/usr/bin:/bin"]
+            )
+        )
         let configuration = LanguageServerSession.Configuration(
-            descriptor: descriptor, serverExecutable: server, workspaceRoot: root, environment: environment)
+            descriptor: descriptor,
+            serverExecutable: server,
+            workspaceRoot: root,
+            environment: environment
+        )
         let process = LanguageServerSession.processSession(for: configuration)
 
         try await process.start()

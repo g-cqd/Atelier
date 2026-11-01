@@ -76,7 +76,10 @@ struct ExecutableResolverTests {
             #expect(FileManager.default.isExecutableFile(atPath: relative))
 
             let resolver = ExecutableResolver(
-                overrideVariable: "TOOL_OVERRIDE", searchesPath: false, fallbackPath: "/opt/x")
+                overrideVariable: "TOOL_OVERRIDE",
+                searchesPath: false,
+                fallbackPath: "/opt/x"
+            )
             #expect(resolver.resolve("tool", environment: ["TOOL_OVERRIDE": relative]).path == "/opt/x/tool")
         }
     }

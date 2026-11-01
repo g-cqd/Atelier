@@ -19,7 +19,8 @@ package enum XcodeThemeLibrary {
         let bundled = await developerDirectory(runner: runner)
             .map {
                 $0.appending(
-                    path: "../SharedFrameworks/DVTUserInterfaceKit.framework/Versions/A/Resources/FontAndColorThemes")
+                    path: "../SharedFrameworks/DVTUserInterfaceKit.framework/Versions/A/Resources/FontAndColorThemes"
+                )
             }
         return ([user] + (bundled.map { [$0] } ?? [])).flatMap(entries(in:))
     }

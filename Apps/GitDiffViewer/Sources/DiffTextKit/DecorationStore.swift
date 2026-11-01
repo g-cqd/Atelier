@@ -208,8 +208,12 @@ package final class DecorationStore {
     /// and most of a row agrees with the lexer. A bidi control's placeholder keeps the colour the renderer gave it.
     /// - Complexity: O(the row's length + its tokens), plus one rendering attribute per stretch that changes colour.
     private func paint(
-        _ tokens: [LineToken], from lineStart: Int, to lineEnd: Int, storage: NSTextStorage?,
-        in layoutManager: NSTextLayoutManager, anchor: (location: any NSTextLocation, offset: Int)
+        _ tokens: [LineToken],
+        from lineStart: Int,
+        to lineEnd: Int,
+        storage: NSTextStorage?,
+        in layoutManager: NSTextLayoutManager,
+        anchor: (location: any NSTextLocation, offset: Int)
     ) {
         guard let rendered, let storage, let contentManager = layoutManager.textContentManager else { return }
         let length = lineEnd - lineStart
@@ -231,7 +235,8 @@ package final class DecorationStore {
         }
         var shown = [UInt8](repeating: 0, count: length)
         storage.enumerateAttributes(
-            in: NSRange(location: lineStart, length: length), options: .longestEffectiveRangeNotRequired
+            in: NSRange(location: lineStart, length: length),
+            options: .longestEffectiveRangeNotRequired
         ) { attributes, run, _ in
             let color =
                 attributes[.diffBidiControl] != nil

@@ -35,30 +35,39 @@ private func hoverResult(markdown: String) -> JSONValue {
 }
 
 private func makeService(
-    factory: ScriptedConnectionFactory, clock: any Clock<Duration> = ContinuousClock()
+    factory: ScriptedConnectionFactory,
+    clock: any Clock<Duration> = ContinuousClock()
 ) -> LanguageServerSession {
     let configuration = LanguageServerSession.Configuration(
-        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+        workspaceRoot: URL(fileURLWithPath: "/tmp")
+    )
     return LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 }
 
 /// The scratch sessions' request timeout, which ``makeService(factory:clock:)`` keeps.
 private let requestTimeout =
     LanguageServerSession.Configuration(
-        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp")
+        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"),
+        workspaceRoot: URL(fileURLWithPath: "/tmp")
     )
     .requestTimeout
 
 /// Drives the handshake + `didOpen` + `hover` sequence for one probe, responding with `markdown`, or with a null
 /// result for nil, and returns the connected transport for further inspection.
 private func driveOneProbe(
-    factory: ScriptedConnectionFactory, generation: Int, markdown: String?
+    factory: ScriptedConnectionFactory,
+    generation: Int,
+    markdown: String?
 ) async throws -> PipeTransport {
     await factory.waitForGeneration(generation)
     let transport = await factory.transport(at: generation - 1)
     await transport.sink.waitForCount(1)
     try respond(
-        transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+        transport,
+        id: try #require(try await decodeSent(transport, at: 0).id),
+        result: .object([:])
+    )
     await transport.sink.waitForCount(4)
     #expect(try await decodeSent(transport, at: 2).method == "textDocument/didOpen")
     let hoverEnvelope = try await decodeSent(transport, at: 3)
@@ -70,7 +79,9 @@ private func driveOneProbe(
 /// Drives a follow-up probe's `didOpen` and `hover` on a connected transport, after its first `startIndex` frames;
 /// the type-position probe reuses the primary probe's connection.
 private func driveFollowUpProbe(
-    _ transport: PipeTransport, afterFrameCount startIndex: Int, markdown: JSONValue
+    _ transport: PipeTransport,
+    afterFrameCount startIndex: Int,
+    markdown: JSONValue
 ) async throws {
     await transport.sink.waitForCount(startIndex + 2)
     #expect(try await decodeSent(transport, at: startIndex).method == "textDocument/didOpen")
@@ -89,7 +100,8 @@ struct SDKDocumentationProviderTests {
         // Position inside "Material".
         let column = content.utf16.distance(
             from: content.utf16.startIndex,
-            to: content.range(of: "Material")!.lowerBound.samePosition(in: content.utf16)!)
+            to: content.range(of: "Material")!.lowerBound.samePosition(in: content.utf16)!
+        )
         let result = SDKDocumentationProvider.extractChain(in: content, line: 0, utf16Column: column + 2)
         #expect(result?.chain == "NSVisualEffectView.Material.hudWindow")
         #expect(result?.startsUppercase == true)
@@ -137,7 +149,10 @@ struct SDKDocumentationProviderTests {
     func `extracts the chain on a line of a CRLF file`() {
         let content = "import UIKit\r\nlet view = UIView\r\n"
         let result = SDKDocumentationProvider.extractChain(
-            in: content, line: 1, utf16Column: "let view = UIV".utf16.count)
+            in: content,
+            line: 1,
+            utf16Column: "let view = UIV".utf16.count
+        )
         #expect(result?.chain == "UIView")
     }
 
@@ -160,7 +175,8 @@ struct SDKDocumentationProviderTests {
         let manyImports = (0 ..< 20).map { "import Module\($0)\n" }.joined()
         let imports = SDKPlatform.macOS.probeImports(
             fileImports: SDKDocumentationProvider.importedModules(in: manyImports),
-            limit: SDKDocumentationProvider.maximumProbeImports)
+            limit: SDKDocumentationProvider.maximumProbeImports
+        )
         #expect(imports.count == 12)
         #expect(Set(["AppKit", "Foundation", "SwiftUI"]).isSubset(of: imports))
     }
@@ -245,7 +261,10 @@ struct SDKDocumentationProviderTests {
 
         async let result = provider.hover(query)
         let transport = try await driveOneProbe(
-            factory: factory, generation: 1, markdown: "The material used for HUD windows.")
+            factory: factory,
+            generation: 1,
+            markdown: "The material used for HUD windows."
+        )
         let content2 = try #require(await result)
         #expect(content2.markdown == "The material used for HUD windows.")
 
@@ -275,12 +294,17 @@ struct SDKDocumentationProviderTests {
 
         async let result = provider.hover(query)
         let transport = try await driveOneProbe(
-            factory: factory, generation: 1, markdown: "```swift\nstruct StateObject<ObjectType>\n```")
+            factory: factory,
+            generation: 1,
+            markdown: "```swift\nstruct StateObject<ObjectType>\n```"
+        )
         // The primary answer is declaration-only (no prose), and the chain starts uppercase, so a second,
         // type-position probe is sent on the same connection.
         try await driveFollowUpProbe(
-            transport, afterFrameCount: 4,
-            markdown: hoverResult(markdown: "```swift\nstruct StateObject<ObjectType>\n```\n\nProse at last."))
+            transport,
+            afterFrameCount: 4,
+            markdown: hoverResult(markdown: "```swift\nstruct StateObject<ObjectType>\n```\n\nProse at last.")
+        )
 
         let content2 = try #require(await result)
         #expect(content2.markdown == "```swift\nstruct StateObject<ObjectType>\n```\n\nProse at last.")
@@ -307,13 +331,20 @@ struct SDKDocumentationProviderTests {
         let provider = SDKDocumentationProvider(service: makeService(factory: factory))
         let content = "import Foundation\nlet x: NSCopying"
         let query = HoverQuery(
-            documentURI: "file:///a.swift", content: content, line: 1, utf16Column: "let x: NSCop".utf16.count)
+            documentURI: "file:///a.swift",
+            content: content,
+            line: 1,
+            utf16Column: "let x: NSCop".utf16.count
+        )
 
         // A protocol is no value, so `let _ = NSCopying` resolves nothing, while its `typealias` target does.
         async let result = provider.hover(query)
         let transport = try await driveOneProbe(factory: factory, generation: 1, markdown: nil)
         try await driveFollowUpProbe(
-            transport, afterFrameCount: 4, markdown: hoverResult(markdown: "```swift\nprotocol NSCopying\n```"))
+            transport,
+            afterFrameCount: 4,
+            markdown: hoverResult(markdown: "```swift\nprotocol NSCopying\n```")
+        )
 
         #expect(try await result?.markdown == "```swift\nprotocol NSCopying\n```")
     }
@@ -330,8 +361,10 @@ struct SDKDocumentationProviderTests {
 
         async let result = provider.hover(query)
         let transport = try await driveOneProbe(
-            factory: factory, generation: 1,
-            markdown: "```swift\nstruct StateObject<ObjectType>\n```\n\nA property wrapper.")
+            factory: factory,
+            generation: 1,
+            markdown: "```swift\nstruct StateObject<ObjectType>\n```\n\nA property wrapper."
+        )
         let content2 = try #require(await result)
         #expect(content2.markdown == "```swift\nstruct StateObject<ObjectType>\n```\n\nA property wrapper.")
 
@@ -382,7 +415,10 @@ struct SDKDocumentationProviderTests {
         let transport = await factory.transport(at: 0)
         await transport.sink.waitForCount(1)
         try respond(
-            transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+            transport,
+            id: try #require(try await decodeSent(transport, at: 0).id),
+            result: .object([:])
+        )
         await transport.sink.waitForCount(4)
         let hoverEnvelope = try await decodeSent(transport, at: 3)
         // Respond with a null result, which the service treats as "nothing to show" -> nil.
@@ -408,8 +444,11 @@ struct SDKDocumentationProviderTests {
         let provider = SDKDocumentationProvider(service: makeService(factory: factory, clock: clock))
         // A dotted lowercase chain: one value-position probe per query, and no type-position one.
         let query = HoverQuery(
-            documentURI: "file:///a.swift", content: "import AppKit\nlet f = view.frame", line: 1,
-            utf16Column: "let f = view.fr".utf16.count)
+            documentURI: "file:///a.swift",
+            content: "import AppKit\nlet f = view.frame",
+            line: 1,
+            utf16Column: "let f = view.fr".utf16.count
+        )
 
         // A cold server: the first probe's hover goes unanswered until its timeout, the one sleeper, elapses.
         async let first = provider.hover(query)
@@ -435,8 +474,11 @@ struct SDKDocumentationProviderTests {
         let clock = TestClock()
         let provider = SDKDocumentationProvider(service: makeService(factory: factory, clock: clock))
         let query = HoverQuery(
-            documentURI: "file:///a.swift", content: "import SwiftUI\nlet x = StateObject", line: 1,
-            utf16Column: "let x = StateObject".utf16.count - 3)
+            documentURI: "file:///a.swift",
+            content: "import SwiftUI\nlet x = StateObject",
+            line: 1,
+            utf16Column: "let x = StateObject".utf16.count - 3
+        )
         let declaration = "```swift\nstruct StateObject<ObjectType>\n```"
 
         // The value-position probe answers with the declaration alone; the type-position one then times out.
@@ -501,9 +543,15 @@ struct TieredHoverProvidersTests {
         let recorder = CallRecorder()
         let first = RecordingProvider(name: "first", result: nil, recorder: recorder)
         let second = RecordingProvider(
-            name: "second", result: HoverContent(markdown: "hit", source: .docIndex), recorder: recorder)
+            name: "second",
+            result: HoverContent(markdown: "hit", source: .docIndex),
+            recorder: recorder
+        )
         let third = RecordingProvider(
-            name: "third", result: HoverContent(markdown: "unused", source: .sdk), recorder: recorder)
+            name: "third",
+            result: HoverContent(markdown: "unused", source: .sdk),
+            recorder: recorder
+        )
 
         let tiered = TieredHoverProviders([first, second, third])
         let result = try await tiered.hover(query())
@@ -550,10 +598,12 @@ struct TieredHoverProvidersTests {
         async throws
     {
         let repoLSP = StubProvider(
-            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer))
+            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer)
+        )
         let docIndex = StubProvider(result: nil)
         let sdk = StubProvider(
-            result: HoverContent(markdown: "A means to display additional content.", source: .sdk))
+            result: HoverContent(markdown: "A means to display additional content.", source: .sdk)
+        )
         let tiered = TieredHoverProviders([repoLSP, docIndex, sdk])
 
         let result = try await tiered.hover(query())
@@ -566,10 +616,13 @@ struct TieredHoverProvidersTests {
     @Test
     func `declaration-only repo LSP, doc index has the doc comment -- merges with provenance docIndex`() async throws {
         let repoLSP = StubProvider(
-            result: HoverContent(markdown: "```swift\nfunc loadConfig() -> Config\n```", source: .languageServer))
+            result: HoverContent(markdown: "```swift\nfunc loadConfig() -> Config\n```", source: .languageServer)
+        )
         let docIndex = StubProvider(
             result: HoverContent(
-                markdown: "```swift\nfunc loadConfig() -> Config\n```\n\nLoads the configuration.", source: .docIndex)
+                markdown: "```swift\nfunc loadConfig() -> Config\n```\n\nLoads the configuration.",
+                source: .docIndex
+            )
         )
         let sdk = StubProvider(result: nil)
         let tiered = TieredHoverProviders([repoLSP, docIndex, sdk])
@@ -585,9 +638,15 @@ struct TieredHoverProvidersTests {
     func `first tier already has prose -- wins immediately, later tiers not consulted`() async throws {
         let recorder = CallRecorder()
         let first = RecordingProvider(
-            name: "first", result: HoverContent(markdown: "Repo prose.", source: .languageServer), recorder: recorder)
+            name: "first",
+            result: HoverContent(markdown: "Repo prose.", source: .languageServer),
+            recorder: recorder
+        )
         let second = RecordingProvider(
-            name: "second", result: HoverContent(markdown: "Doc index prose.", source: .docIndex), recorder: recorder)
+            name: "second",
+            result: HoverContent(markdown: "Doc index prose.", source: .docIndex),
+            recorder: recorder
+        )
         let tiered = TieredHoverProviders([first, second])
 
         let result = try await tiered.hover(query())
@@ -600,7 +659,8 @@ struct TieredHoverProvidersTests {
     @Test
     func `no tier ever supplies prose -- declaration-only base still returned`() async throws {
         let repoLSP = StubProvider(
-            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer))
+            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer)
+        )
         let docIndex = StubProvider(result: nil)
         let sdk = StubProvider(result: nil)
         let tiered = TieredHoverProviders([repoLSP, docIndex, sdk])
@@ -614,10 +674,14 @@ struct TieredHoverProvidersTests {
     @Test
     func `later tier already carries its own declaration and prose -- returned whole, no prepend`() async throws {
         let repoLSP = StubProvider(
-            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer))
+            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer)
+        )
         let sdk = StubProvider(
             result: HoverContent(
-                markdown: "```swift\nclass NSPopover : NSResponder\n```\n\nSDK prose.", source: .sdk))
+                markdown: "```swift\nclass NSPopover : NSResponder\n```\n\nSDK prose.",
+                source: .sdk
+            )
+        )
         let tiered = TieredHoverProviders([repoLSP, sdk])
 
         let result = try await tiered.hover(query())

@@ -17,7 +17,9 @@ struct DiagnosticsEngineAnalyzerTests {
     /// What dolly or deadwood reports on `repository`: two clone pairs, each with its twin as a related location, or
     /// fourteen unused declarations over every file.
     private static func analyzerEntries(
-        for tool: DiagnosticTool, files: [String], in repository: AnalyzerRepository
+        for tool: DiagnosticTool,
+        files: [String],
+        in repository: AnalyzerRepository
     ) -> [AnalyzerSARIF.Entry] {
         let location = { (file: String, line: Int) in
             AnalyzerSARIF.Location(path: repository.reportedPath(file), line: line, column: 5)
@@ -26,22 +28,30 @@ struct DiagnosticsEngineAnalyzerTests {
             return [3, 20]
                 .map { line in
                     AnalyzerSARIF.Entry(
-                        ruleID: "exact-clone", level: "warning", message: "Duplicate block",
-                        location: location(files[0], line), related: [location(files[1], line + 2)],
-                        relatedMessage: "duplicate region")
+                        ruleID: "exact-clone",
+                        level: "warning",
+                        message: "Duplicate block",
+                        location: location(files[0], line),
+                        related: [location(files[1], line + 2)],
+                        relatedMessage: "duplicate region"
+                    )
                 }
         }
         return (0 ..< 14)
             .map { index in
                 AnalyzerSARIF.Entry(
-                    ruleID: "unused-function", level: "warning", message: "Unused function",
-                    location: location(files[index % files.count], 1 + 3 * index))
+                    ruleID: "unused-function",
+                    level: "warning",
+                    message: "Unused function",
+                    location: location(files[index % files.count], 1 + 3 * index)
+                )
             }
     }
 
     @Test(arguments: [(DiagnosticTool.dolly, 2), (.deadwood, 14)])
     func `every dolly or deadwood finding on a symlinked root with a space under TMPDIR is reported as written`(
-        tool: DiagnosticTool, expected: Int
+        tool: DiagnosticTool,
+        expected: Int
     ) async throws {
         let files = ["Sources/Cache.swift", "Sources/Cache Copy.swift", "Sources/Unused.swift"]
         let repository = try AnalyzerRepository(files: files)
@@ -51,17 +61,27 @@ struct DiagnosticsEngineAnalyzerTests {
         let executable = URL(filePath: temp.file("tool/\(tool.executableName)"))
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let sarif = try AnalyzerSARIF.log(
-            tool: tool.rawValue, results: Self.analyzerEntries(for: tool, files: files, in: repository))
+            tool: tool.rawValue,
+            results: Self.analyzerEntries(for: tool, files: files, in: repository)
+        )
         let runner = FakeProcessRunner(always: .success(sarif))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let result = try await engine.run(
             tool,
             request: DiagnosticsEngineTests.request(
-                root: repository.root, files: Self.fileTargets(files, under: repository.root),
-                corpusFingerprint: "fp-1", tool: tool, customPath: executable.path))
+                root: repository.root,
+                files: Self.fileTargets(files, under: repository.root),
+                corpusFingerprint: "fp-1",
+                tool: tool,
+                customPath: executable.path
+            )
+        )
 
         #expect(result.status == .succeeded)
         #expect(result.findings.count == expected)
@@ -82,19 +102,30 @@ struct DiagnosticsEngineAnalyzerTests {
             tool: "arcleak",
             results: [
                 AnalyzerSARIF.Entry(
-                    ruleID: "stored-closure-strong-self", level: "warning", message: "Stored closure captures self",
-                    location: AnalyzerSARIF.Location(path: repository.reportedPath(files[0]), line: 12, column: 9))
-            ])
+                    ruleID: "stored-closure-strong-self",
+                    level: "warning",
+                    message: "Stored closure captures self",
+                    location: AnalyzerSARIF.Location(path: repository.reportedPath(files[0]), line: 12, column: 9)
+                )
+            ]
+        )
         let runner = FakeProcessRunner(always: .success(sarif))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let result = try await engine.run(
             .arcleak,
             request: DiagnosticsEngineTests.request(
-                root: repository.root, files: Self.fileTargets(files, under: repository.root), tool: .arcleak,
-                customPath: executable.path))
+                root: repository.root,
+                files: Self.fileTargets(files, under: repository.root),
+                tool: .arcleak,
+                customPath: executable.path
+            )
+        )
 
         // Rows and cards look findings up by the request's root-relative paths.
         #expect(result.status == .succeeded)
@@ -112,23 +143,32 @@ struct DiagnosticsEngineAnalyzerTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: .success(#"{"version": "2.1.0", "runs": [{"results": []}]}"#))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         _ = try await engine.run(
             .arcleak,
             request: DiagnosticsEngineTests.request(
-                root: root, files: Self.fileTargets(["A.swift", "B.swift"], under: root), tool: .arcleak,
-                customPath: executable.path))
+                root: root,
+                files: Self.fileTargets(["A.swift", "B.swift"], under: root),
+                tool: .arcleak,
+                customPath: executable.path
+            )
+        )
 
         let spec = try #require(runner.specs.first)
         #expect(
             spec.arguments == [
                 "analyze", root.path, "--only-from", "-", "--format", "sarif", "--relative-to", root.path
-            ])
+            ]
+        )
         #expect(
             spec.standardInput
-                == Data("\(root.appending(path: "A.swift").path)\n\(root.appending(path: "B.swift").path)\n".utf8))
+                == Data("\(root.appending(path: "A.swift").path)\n\(root.appending(path: "B.swift").path)\n".utf8)
+        )
         #expect(spec.timeout == .seconds(300))
     }
 
@@ -143,22 +183,37 @@ struct DiagnosticsEngineAnalyzerTests {
             tool: tool.rawValue,
             results: [
                 AnalyzerSARIF.Entry(
-                    ruleID: "\(tool.rawValue)/degraded-file", level: "note", message: "file skipped: over the size cap",
-                    location: AnalyzerSARIF.Location(path: root.appending(path: "A.swift").path, line: 1, column: 1))
-            ])
+                    ruleID: "\(tool.rawValue)/degraded-file",
+                    level: "note",
+                    message: "file skipped: over the size cap",
+                    location: AnalyzerSARIF.Location(path: root.appending(path: "A.swift").path, line: 1, column: 1)
+                )
+            ]
+        )
         let runner = FakeProcessRunner(
             always: ProcessOutput(
-                terminationStatus: 70, standardOutput: Data(sarif.utf8),
-                standardError: Data("\(tool.rawValue): every file in the corpus was skipped".utf8)))
+                terminationStatus: 70,
+                standardOutput: Data(sarif.utf8),
+                standardError: Data("\(tool.rawValue): every file in the corpus was skipped".utf8)
+            )
+        )
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let result = try await engine.run(
             tool,
             request: DiagnosticsEngineTests.request(
-                root: root, files: Self.fileTargets(["A.swift"], under: root), corpusFingerprint: "fp-1", tool: tool,
-                customPath: executable.path))
+                root: root,
+                files: Self.fileTargets(["A.swift"], under: root),
+                corpusFingerprint: "fp-1",
+                tool: tool,
+                customPath: executable.path
+            )
+        )
 
         #expect(result.status == .succeeded)
         #expect(result.findings.map(\.file) == ["A.swift"])
@@ -176,14 +231,22 @@ struct DiagnosticsEngineAnalyzerTests {
         let reason = "\(tool.rawValue): run cancelled before the corpus was complete; no findings reported"
         let runner = FakeProcessRunner(always: .failure(70, error: reason))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let result = try await engine.run(
             tool,
             request: DiagnosticsEngineTests.request(
-                root: root, files: Self.fileTargets(["A.swift"], under: root), corpusFingerprint: "fp-1", tool: tool,
-                customPath: executable.path))
+                root: root,
+                files: Self.fileTargets(["A.swift"], under: root),
+                corpusFingerprint: "fp-1",
+                tool: tool,
+                customPath: executable.path
+            )
+        )
 
         #expect(result.status == .failed(reason))
         #expect(result.findings.isEmpty)

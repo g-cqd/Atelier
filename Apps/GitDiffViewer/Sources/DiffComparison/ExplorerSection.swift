@@ -106,7 +106,8 @@ extension ExplorerSection {
         }
         if group.changedBackCount > 0 {
             lines.append(
-                group.changedBackCount == 1 ? "1 file changed back" : "\(group.changedBackCount) files changed back")
+                group.changedBackCount == 1 ? "1 file changed back" : "\(group.changedBackCount) files changed back"
+            )
         }
         if includesMergedBranches, case .commit = group.kind { lines.append("History includes merged branches") }
         return lines.joined(separator: "\n")

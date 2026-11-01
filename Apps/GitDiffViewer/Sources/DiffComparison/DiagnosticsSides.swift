@@ -72,7 +72,10 @@ struct DiagnosticsPlan: Equatable {
     let tools: [DiagnosticTool: ToolLocation]
 
     init(
-        sides: DiagnosticsSides, mode: AnalyzedSides, tools: [DiagnosticTool: ToolLocation], canExport: Bool,
+        sides: DiagnosticsSides,
+        mode: AnalyzedSides,
+        tools: [DiagnosticTool: ToolLocation],
+        canExport: Bool,
         isTrusted: (URL) -> Bool
     ) {
         self.tools = tools

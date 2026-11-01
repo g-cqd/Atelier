@@ -20,7 +20,12 @@ public func renderOpenFilesPanel(
     guard !buffers.isEmpty else {
         let emptyCell = Cell(character: " ", style: colorScheme.treeBg)
         pipeline.buffer.fill(
-            row: rect.y, col: rect.x, width: rect.width, height: rect.height, cell: emptyCell)
+            row: rect.y,
+            col: rect.x,
+            width: rect.width,
+            height: rect.height,
+            cell: emptyCell
+        )
         return
     }
 

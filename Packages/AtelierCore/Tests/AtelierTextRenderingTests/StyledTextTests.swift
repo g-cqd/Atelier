@@ -16,7 +16,10 @@ struct StyledTextTests {
 
     @Test func `row containing a document offset finds the row a byte falls in`() {
         let text = StyledText.plain(
-            rows: ["ab", "cde", "f"], font: FontSpec(pointSize: 12), plainStyle: Self.plainStyle)
+            rows: ["ab", "cde", "f"],
+            font: FontSpec(pointSize: 12),
+            plainStyle: Self.plainStyle
+        )
         #expect(text.row(containingDocumentOffset: 0) == RowIndex(0))
         #expect(text.row(containingDocumentOffset: 2) == RowIndex(1))
         #expect(text.row(containingDocumentOffset: 4) == RowIndex(1))

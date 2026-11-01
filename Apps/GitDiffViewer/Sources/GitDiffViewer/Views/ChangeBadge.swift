@@ -143,7 +143,12 @@ struct ChangeGlyphBadge: View {
 
     var body: some View {
         let style = BadgeStyleResolver.resolve(
-            scheme: scheme, kind: glyph.badgeKind, state: state, isSelected: isSelected, isFocused: isFocused)
+            scheme: scheme,
+            kind: glyph.badgeKind,
+            state: state,
+            isSelected: isSelected,
+            isFocused: isFocused
+        )
         let scale = size / ChangeGlyph.size
         let shape = RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius * scale)
         Text(glyph.letter)
@@ -229,10 +234,17 @@ final class ChangeBadgeView: NSView {
         let alpha: CGFloat = isDimmed ? 0.35 : 1
         let isEmphasizedSelection = backgroundStyle == .emphasized
         let style = BadgeStyleResolver.resolve(
-            scheme: scheme, kind: glyph.badgeKind, state: state, isSelected: isEmphasizedSelection,
-            isFocused: isEmphasizedSelection)
+            scheme: scheme,
+            kind: glyph.badgeKind,
+            state: state,
+            isSelected: isEmphasizedSelection,
+            isFocused: isEmphasizedSelection
+        )
         let path = NSBezierPath(
-            roundedRect: bounds, xRadius: ChangeGlyph.cornerRadius, yRadius: ChangeGlyph.cornerRadius)
+            roundedRect: bounds,
+            xRadius: ChangeGlyph.cornerRadius,
+            yRadius: ChangeGlyph.cornerRadius
+        )
         switch style.fill {
             case .none: break
             case .token(let token):
@@ -245,8 +257,10 @@ final class ChangeBadgeView: NSView {
         if let stroke = style.stroke {
             // Inset by half the line width so the 1 pt outline stays inside the badge's own bounds.
             let strokePath = NSBezierPath(
-                roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: ChangeGlyph.cornerRadius - 0.5,
-                yRadius: ChangeGlyph.cornerRadius - 0.5)
+                roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                xRadius: ChangeGlyph.cornerRadius - 0.5,
+                yRadius: ChangeGlyph.cornerRadius - 0.5
+            )
             stroke.nsColor.withAlphaComponent(alpha).setStroke()
             strokePath.lineWidth = 1
             strokePath.stroke()

@@ -247,7 +247,8 @@ public struct KittyConfig: Codable, Sendable {
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
             refreshInterval = KittyConfig.boundedInterval(
                 try c.decodeIfPresent(TimeInterval.self, forKey: .refreshInterval) ?? d.refreshInterval,
-                fallback: Self.defaultRefreshInterval)
+                fallback: Self.defaultRefreshInterval
+            )
             decorations =
                 try c.decodeIfPresent(GitDecorationsConfig.self, forKey: .decorations)
                 ?? d.decorations
@@ -313,7 +314,8 @@ public struct KittyConfig: Codable, Sendable {
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
             interval = KittyConfig.boundedInterval(
                 try c.decodeIfPresent(TimeInterval.self, forKey: .interval) ?? d.interval,
-                fallback: Self.defaultInterval)
+                fallback: Self.defaultInterval
+            )
         }
     }
 
@@ -536,65 +538,121 @@ public struct KittyConfig: Codable, Sendable {
             tabActiveBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .tabActiveBackground)
             tabActiveForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .tabActiveForeground)
             tabInactiveBackground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .tabInactiveBackground)
+                ColorRGB.self,
+                forKey: .tabInactiveBackground
+            )
             tabInactiveForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .tabInactiveForeground)
+                ColorRGB.self,
+                forKey: .tabInactiveForeground
+            )
             tabDirtyIndicator = try c.decodeIfPresent(ColorRGB.self, forKey: .tabDirtyIndicator)
             activityBarBackground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .activityBarBackground)
+                ColorRGB.self,
+                forKey: .activityBarBackground
+            )
             activityBarForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .activityBarForeground)
+                ColorRGB.self,
+                forKey: .activityBarForeground
+            )
             activityBarActiveForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .activityBarActiveForeground)
+                ColorRGB.self,
+                forKey: .activityBarActiveForeground
+            )
             openFilesForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .openFilesForeground)
             openFilesSelectedForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .openFilesSelectedForeground)
+                ColorRGB.self,
+                forKey: .openFilesSelectedForeground
+            )
             cursorLineBackground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .cursorLineBackground)
+                ColorRGB.self,
+                forKey: .cursorLineBackground
+            )
             cursorLineForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .cursorLineForeground)
+                ColorRGB.self,
+                forKey: .cursorLineForeground
+            )
             selectionBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .selectionBackground)
             selectionForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .selectionForeground)
             whitespaceIndentationForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .whitespaceIndentationForeground)
+                ColorRGB.self,
+                forKey: .whitespaceIndentationForeground
+            )
             whitespaceSpaceForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .whitespaceSpaceForeground)
+                ColorRGB.self,
+                forKey: .whitespaceSpaceForeground
+            )
             whitespaceLineBreakForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .whitespaceLineBreakForeground)
+                ColorRGB.self,
+                forKey: .whitespaceLineBreakForeground
+            )
             whitespaceUnexpectedForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .whitespaceUnexpectedForeground)
+                ColorRGB.self,
+                forKey: .whitespaceUnexpectedForeground
+            )
             searchMatchForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .searchMatchForeground)
+                ColorRGB.self,
+                forKey: .searchMatchForeground
+            )
             searchMatchBackground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .searchMatchBackground)
+                ColorRGB.self,
+                forKey: .searchMatchBackground
+            )
             activeSearchMatchForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .activeSearchMatchForeground)
+                ColorRGB.self,
+                forKey: .activeSearchMatchForeground
+            )
             activeSearchMatchBackground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .activeSearchMatchBackground)
+                ColorRGB.self,
+                forKey: .activeSearchMatchBackground
+            )
             commandFeedbackForeground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .commandFeedbackForeground)
+                ColorRGB.self,
+                forKey: .commandFeedbackForeground
+            )
             commandFeedbackBackground = try c.decodeIfPresent(
-                ColorRGB.self, forKey: .commandFeedbackBackground)
+                ColorRGB.self,
+                forKey: .commandFeedbackBackground
+            )
             gitModifiedLineBackground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitModifiedLineBackground)
+                ColorOverlayConfig.self,
+                forKey: .gitModifiedLineBackground
+            )
             gitModifiedLineForeground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitModifiedLineForeground)
+                ColorOverlayConfig.self,
+                forKey: .gitModifiedLineForeground
+            )
             gitAddedLineBackground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitAddedLineBackground)
+                ColorOverlayConfig.self,
+                forKey: .gitAddedLineBackground
+            )
             gitAddedLineForeground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitAddedLineForeground)
+                ColorOverlayConfig.self,
+                forKey: .gitAddedLineForeground
+            )
             gitUntrackedLineBackground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitUntrackedLineBackground)
+                ColorOverlayConfig.self,
+                forKey: .gitUntrackedLineBackground
+            )
             gitUntrackedLineForeground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitUntrackedLineForeground)
+                ColorOverlayConfig.self,
+                forKey: .gitUntrackedLineForeground
+            )
             gitDeletedLineBackground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitDeletedLineBackground)
+                ColorOverlayConfig.self,
+                forKey: .gitDeletedLineBackground
+            )
             gitDeletedLineForeground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitDeletedLineForeground)
+                ColorOverlayConfig.self,
+                forKey: .gitDeletedLineForeground
+            )
             gitConflictedLineBackground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitConflictedLineBackground)
+                ColorOverlayConfig.self,
+                forKey: .gitConflictedLineBackground
+            )
             gitConflictedLineForeground = try c.decodeIfPresent(
-                ColorOverlayConfig.self, forKey: .gitConflictedLineForeground)
+                ColorOverlayConfig.self,
+                forKey: .gitConflictedLineForeground
+            )
         }
     }
 

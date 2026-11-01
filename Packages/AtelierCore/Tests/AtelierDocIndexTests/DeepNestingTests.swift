@@ -69,7 +69,11 @@ struct DeepNestingTests {
         try await index.update(files: [DocIndexFile(uri: "file:///deep.swift", content: Self.nested)])
         let provider = DocIndexHoverProvider(index: index)
         let query = HoverQuery(
-            documentURI: "file:///deep.swift", content: Self.nested, line: Self.callLine, utf16Column: 15)
+            documentURI: "file:///deep.swift",
+            content: Self.nested,
+            line: Self.callLine,
+            utf16Column: 15
+        )
 
         let content = try await provider.hover(query)
 
@@ -86,7 +90,8 @@ struct DeepNestingTests {
         let provider = DocIndexHoverProvider(index: DocCommentIndex(), side: .both, sources: sources)
 
         _ = try await provider.hover(
-            HoverQuery(documentURI: "file:///use.swift", content: "let a = load()\n", line: 0, utf16Column: 9))
+            HoverQuery(documentURI: "file:///use.swift", content: "let a = load()\n", line: 0, utf16Column: 9)
+        )
 
         #expect(stacks.all.count == 1)
         #expect(stacks.all.allSatisfy { $0 >= SwiftSyntaxStack.stackSize })

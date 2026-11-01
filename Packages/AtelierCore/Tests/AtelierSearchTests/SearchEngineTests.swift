@@ -16,7 +16,8 @@ struct SearchEngineTests {
                 SearchMatch(row: 0, colStart: 2, colEnd: 3),
                 SearchMatch(row: 0, colStart: 3, colEnd: 4),
                 SearchMatch(row: 1, colStart: 0, colEnd: 1)
-            ])
+            ]
+        )
         #expect(findMatches(in: ["a"], pattern: pattern, maxMatches: 0).isEmpty)
         #expect(!scanMatches(in: ["aaaa", "aaaa"], pattern: pattern, maxMatches: 5).isComplete)
     }
@@ -25,7 +26,11 @@ struct SearchEngineTests {
     func `an expired regex budget marks a result incomplete below its match cap`() throws {
         let pattern = try #require(compilePattern(SearchQuery(text: "id[0-9]+", isRegex: true)))
         let result = scanMatches(
-            in: ["id1", "id2"], pattern: pattern, maxMatches: 5_000, deadline: ContinuousClock.now)
+            in: ["id1", "id2"],
+            pattern: pattern,
+            maxMatches: 5_000,
+            deadline: ContinuousClock.now
+        )
         #expect(result.matches.isEmpty)
         #expect(!result.isComplete)
     }
@@ -128,7 +133,8 @@ struct SearchEngineTests {
     func regexCaseInsensitive() {
         let lines = ["Hello WORLD"]
         let pattern = compilePattern(
-            SearchQuery(text: "hello", isCaseSensitive: false, isRegex: true))!
+            SearchQuery(text: "hello", isCaseSensitive: false, isRegex: true)
+        )!
         let matches = findMatches(in: lines, pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 1)
     }

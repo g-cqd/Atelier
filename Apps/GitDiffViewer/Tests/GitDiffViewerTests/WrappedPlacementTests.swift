@@ -19,8 +19,12 @@ struct WrappedPlacementTests {
     {
         try await withMainThreadBound("Opening a side-by-side wrapped file") {
             let sut = HostedPanes(
-                showing: .longLines(60, changedAt: 30), layout: .sideBySide, wrapsLines: true, size: Self.size,
-                underBars: bars)
+                showing: .longLines(60, changedAt: 30),
+                layout: .sideBySide,
+                wrapsLines: true,
+                size: Self.size,
+                underBars: bars
+            )
             try await sut.alignSides()
 
             let row = try #require(sut.requestedRow)

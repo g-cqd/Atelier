@@ -23,9 +23,13 @@ extension HighlightToken {
                     result[current]
                         .append(
                             HighlightToken(
-                                byteRange: (start - base) ..< (end - base), role: token.role,
+                                byteRange: (start - base) ..< (end - base),
+                                role: token.role,
                                 modifiers: token.modifiers,
-                                layer: token.layer, priority: token.priority))
+                                layer: token.layer,
+                                priority: token.priority
+                            )
+                        )
                 }
                 current += 1
             }

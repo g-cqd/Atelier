@@ -44,7 +44,8 @@ struct SwiftSyntaxFactsTests {
         let whole = provider.tokenRangesByLine(text: Self.text, language: .swift)
 
         #expect(
-            stored == SwiftSyntaxTokenRanges().tokenRangesByLine(text: Self.text, language: .swift, lineIndices: lines))
+            stored == SwiftSyntaxTokenRanges().tokenRangesByLine(text: Self.text, language: .swift, lineIndices: lines)
+        )
         #expect(whole == SwiftSyntaxTokenRanges().tokenRangesByLine(text: Self.text, language: .swift))
         #expect(store.extractions == 1)
     }
@@ -80,7 +81,9 @@ struct SwiftSyntaxFactsTests {
         #expect(store.extractions == 1)
         #expect(updates.map(\.lines) == [0 ..< 3, 3 ..< ranges.count])
         let expected = request.lineTokens(
-            try await SwiftSyntaxHighlights.tokens(in: Self.text), lines: 0 ..< ranges.count)
+            try await SwiftSyntaxHighlights.tokens(in: Self.text),
+            lines: 0 ..< ranges.count
+        )
         #expect(updates.flatMap { Array($0.tokens) }.map { Array($0) } == expected.map { Array($0) })
     }
 

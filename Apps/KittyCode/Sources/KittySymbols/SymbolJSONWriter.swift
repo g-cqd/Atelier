@@ -18,8 +18,12 @@ public enum SymbolJSONWriter {
     private static func catalogEncoder() -> AemiJSON.JSONEncoder {
         var encoder = AemiJSON.JSONEncoder()
         encoder.options = JSONEncodingOptions(
-            keyOrder: .sorted, escapeSlashes: false, prettyPrinted: true, prettyKeySeparator: .foundation,
-            indent: .spaces(2))
+            keyOrder: .sorted,
+            escapeSlashes: false,
+            prettyPrinted: true,
+            prettyKeySeparator: .foundation,
+            indent: .spaces(2)
+        )
         return encoder
     }
 }

@@ -64,7 +64,8 @@ struct SplitAlignmentBenchmark {
                 let sample = samples[write.description] ?? ([], [])
                 print(
                     "BENCH split alignment, \(rows) rows, \(write): writes \(TextBackendBenchmark.summary(sample.write)); "
-                        + "whole pass \(TextBackendBenchmark.summary(sample.pass))")
+                        + "whole pass \(TextBackendBenchmark.summary(sample.pass))"
+                )
             }
         }
     }
@@ -111,7 +112,9 @@ struct SplitAlignmentBenchmark {
                 index.isMultiple(of: 3) ? line + String(repeating: " + adjustment(\(index))", count: 8) : line
             }
         return DiffRenderer.render(
-            oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-            language: .plain)
+            oldText: old.joined(separator: "\n") + "\n",
+            newText: new.joined(separator: "\n") + "\n",
+            language: .plain
+        )
     }
 }

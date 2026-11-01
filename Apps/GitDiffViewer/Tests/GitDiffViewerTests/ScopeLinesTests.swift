@@ -11,7 +11,10 @@ struct ScopeLinesTests {
     static func scopes() throws -> ScopeLines {
         let facts = try #require(SwiftSyntaxFacts.extract(text))
         return ScopeLines(
-            facts.scopes, text: text, lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text)))
+            facts.scopes,
+            text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text))
+        )
     }
 
     @Test

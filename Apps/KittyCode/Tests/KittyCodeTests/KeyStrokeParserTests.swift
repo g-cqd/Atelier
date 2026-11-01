@@ -81,10 +81,13 @@ struct KeyStrokeParserTests {
     func arrowKeys() {
         #expect(KeyStrokeParser.parse("up") == KeyStroke(keyCode: Key.up.rawValue, modifiers: []))
         #expect(
-            KeyStrokeParser.parse("down") == KeyStroke(keyCode: Key.down.rawValue, modifiers: []))
+            KeyStrokeParser.parse("down") == KeyStroke(keyCode: Key.down.rawValue, modifiers: [])
+        )
         #expect(
-            KeyStrokeParser.parse("left") == KeyStroke(keyCode: Key.left.rawValue, modifiers: []))
+            KeyStrokeParser.parse("left") == KeyStroke(keyCode: Key.left.rawValue, modifiers: [])
+        )
         #expect(
-            KeyStrokeParser.parse("right") == KeyStroke(keyCode: Key.right.rawValue, modifiers: []))
+            KeyStrokeParser.parse("right") == KeyStroke(keyCode: Key.right.rawValue, modifiers: [])
+        )
     }
 }

@@ -26,11 +26,19 @@ struct CardPaneRowPlacementTests {
         for line in stride(from: 20, to: 600, by: 40) { new[line] = "let value\(line + 1) = changed" }
         let prepared = PreparedDiff(
             FileDiffInput(
-                title: "", oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
-                language: .plain), granularity: .word)
+                title: "",
+                oldText: old.joined(separator: "\n") + "\n",
+                newText: new.joined(separator: "\n") + "\n",
+                language: .plain
+            ),
+            granularity: .word
+        )
         return DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified]),
-            layout: .changes(context: 3, expansions: expansions), withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified]),
+            layout: .changes(context: 3, expansions: expansions),
+            withHeaders: false
+        )
     }
 
     private static func file(lines count: Int) -> RenderedDiff {
@@ -51,7 +59,8 @@ struct CardPaneRowPlacementTests {
             text.gaps.first { gap in
                 let top = measuredBefore.top(ofRow: gap.boundary) + sut.inset
                 return gap.hasSeparator && top > visible.minY + 60 && top < visible.maxY - 60
-            })
+            }
+        )
 
         let after = Self.changes(revealing: [gap.marker.key: GapExpansion(below: 3, above: 2)])
         sut.show(after)
@@ -220,14 +229,23 @@ private final class CardInList {
         list.documentView = document
         document.addSubview(body.view)
         window = NSWindow(
-            contentRect: list.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            contentRect: list.frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.contentView = list
         place()
     }
 
     private static func pane(_ rendered: RenderedDiff, wrapMode: WrapMode) -> EmbeddedDiffTextView {
         EmbeddedDiffTextView(
-            layouts: CardLayouts(rendered: rendered), side: .unified, gutter: .dual, width: width, wrapMode: wrapMode)
+            layouts: CardLayouts(rendered: rendered),
+            side: .unified,
+            gutter: .dual,
+            width: width,
+            wrapMode: wrapMode
+        )
     }
 
     var textView: NSTextView? { Self.first(NSTextView.self, in: body.view) }

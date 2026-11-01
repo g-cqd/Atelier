@@ -17,8 +17,11 @@ extension DiffViewerModel {
             )
         } else {
             DiffTotals(
-                files: changedPathCount, added: rendered?.addedLines ?? 0, removed: rendered?.removedLines ?? 0,
-                coversEveryFile: false)
+                files: changedPathCount,
+                added: rendered?.addedLines ?? 0,
+                removed: rendered?.removedLines ?? 0,
+                coversEveryFile: false
+            )
         }
     }
 

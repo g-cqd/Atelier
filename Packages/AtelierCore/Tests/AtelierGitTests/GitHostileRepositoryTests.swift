@@ -252,8 +252,12 @@ private struct Lab {
     /// A client over this repository with a verdict cache of its own, so no test sees another's.
     func client(isolation: GitIsolation = .strict) -> GitClient {
         GitClient(
-            repository: root, runner: HardenedProcessRunner(pool: pool), timeout: .seconds(30), isolation: isolation,
-            gate: GitConfigGate())
+            repository: root,
+            runner: HardenedProcessRunner(pool: pool),
+            timeout: .seconds(30),
+            isolation: isolation,
+            gate: GitConfigGate()
+        )
     }
 
     /// Runs git outside the client under test, with an identity, no signing and the file protocol open, so the lab
@@ -312,7 +316,9 @@ private struct Lab {
     /// archive looks like and what makes git re-read the file through its filters.
     func age(_ path: String) throws {
         try FileManager.default.setAttributes(
-            [.modificationDate: Date(timeIntervalSince1970: 0)], ofItemAtPath: path)
+            [.modificationDate: Date(timeIntervalSince1970: 0)],
+            ofItemAtPath: path
+        )
     }
 
     func ageWorkingTree() throws {

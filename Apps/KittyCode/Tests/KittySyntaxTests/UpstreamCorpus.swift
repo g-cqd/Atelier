@@ -40,7 +40,8 @@ struct UpstreamCorpusCase {
             if inputBytes.last == UInt8(ascii: "\n") { inputBytes = inputBytes.dropLast() }
             if inputBytes.last == UInt8(ascii: "\r") { inputBytes = inputBytes.dropLast() }
             let expected = CorpusTreeNode.parse(
-                expectedOutput: String(decoding: utf8[divider.end ..< bodyEnd], as: UTF8.self))
+                expectedOutput: String(decoding: utf8[divider.end ..< bodyEnd], as: UTF8.self)
+            )
             let markers = Set(header.markers.map { String($0.prefix { $0 != "(" }) })
             let languages = header.markers.compactMap { marker -> String? in
                 guard marker.hasPrefix(":language(") else { return nil }
@@ -48,11 +49,15 @@ struct UpstreamCorpusCase {
             }
             cases.append(
                 UpstreamCorpusCase(
-                    file: file, name: header.name, input: String(decoding: inputBytes, as: UTF8.self),
+                    file: file,
+                    name: header.name,
+                    input: String(decoding: inputBytes, as: UTF8.self),
                     expected: expected,
                     isSkipped: markers.contains(":skip") || markers.contains(":cst")
                         || !(languages.isEmpty || languages.contains(language)),
-                    expectsError: markers.contains(":error") || (expected?.containsRecovery ?? false)))
+                    expectsError: markers.contains(":error") || (expected?.containsRecovery ?? false)
+                )
+            )
         }
         return cases
     }
@@ -88,8 +93,13 @@ private struct CorpusHeader {
             let markerStart = body.firstIndex { $0.hasPrefix(":") } ?? body.count
             headers.append(
                 CorpusHeader(
-                    name: body[..<markerStart].joined(separator: "\n"), markers: Array(body[markerStart...]),
-                    suffix: opening, start: lines[index].start, end: lines[closing].end))
+                    name: body[..<markerStart].joined(separator: "\n"),
+                    markers: Array(body[markerStart...]),
+                    suffix: opening,
+                    start: lines[index].start,
+                    end: lines[closing].end
+                )
+            )
             index = closing + 1
         }
         return headers
@@ -144,8 +154,10 @@ struct CorpusTreeNode: Equatable {
     /// The tree without the nodes whose types are in `types`, and without their descendants.
     func removing(_ types: Set<String>) -> CorpusTreeNode {
         CorpusTreeNode(
-            type: type, children: children.filter { !types.contains($0.type) }.map { $0.removing(types) },
-            byteRange: byteRange)
+            type: type,
+            children: children.filter { !types.contains($0.type) }.map { $0.removing(types) },
+            byteRange: byteRange
+        )
     }
 
     /// The tree in a corpus file's S-expression form, cut after about `limit` characters.

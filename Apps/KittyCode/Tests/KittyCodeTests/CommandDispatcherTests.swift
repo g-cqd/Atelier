@@ -45,9 +45,17 @@ struct CommandDispatcherTests {
     func nextTabAndPreviousTabCycleActiveIndex() {
         let sut = makeSUT()
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "a", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "a",
+            language: nil
+        )
         sut.state.bufferManager.open(
-            filePath: "/b.txt", fileName: "b.txt", content: "b", language: nil)
+            filePath: "/b.txt",
+            fileName: "b.txt",
+            content: "b",
+            language: nil
+        )
 
         #expect(sut.state.bufferManager.activeIndex == 1)
 
@@ -91,7 +99,11 @@ struct CommandDispatcherTests {
     func undoRedoDispatch() {
         let sut = makeSUT()
         sut.state.bufferManager.open(
-            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "hello",
+            language: nil
+        )
         sut.state.restoreStateFromActiveBuffer()
         sut.state.textCursor.col = 5
 

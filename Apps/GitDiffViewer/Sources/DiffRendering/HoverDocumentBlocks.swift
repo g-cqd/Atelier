@@ -50,8 +50,10 @@ extension HoverDocument {
                 return .code(CodeAttributedBuilder.attributedString(for: text, languageTag: language, palette: palette))
             case .list(let ordered, let start, let items):
                 return .list(
-                    ordered: ordered, start: start,
-                    items: items.map { item in item.map { styled($0, palette: palette) } })
+                    ordered: ordered,
+                    start: start,
+                    items: items.map { item in item.map { styled($0, palette: palette) } }
+                )
             case .quote(let blocks):
                 return .quote(blocks.map { styled($0, palette: palette) })
             case .thematicBreak:

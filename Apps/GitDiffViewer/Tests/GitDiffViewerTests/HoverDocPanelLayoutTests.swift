@@ -26,16 +26,19 @@ struct HoverDocPanelLayoutTests {
         (
             "a declaration with parameters",
             HoverDocument(
-                title: "configure(session:)", declaration: code("func configure(session: CaptureSession) -> Bool"),
+                title: "configure(session:)",
+                declaration: code("func configure(session: CaptureSession) -> Bool"),
                 summary: prose("Configures a capture session."),
                 parameters: [HoverDocument.Field(name: "session", text: prose("The session to configure."))],
-                returns: prose("Whether it succeeded."))
+                returns: prose("Whether it succeeded.")
+            )
         ),
         (
             "parameters without a declaration",
             HoverDocument(
                 summary: prose("Configures a capture session."),
-                parameters: [HoverDocument.Field(name: "session", text: prose("The session to configure."))])
+                parameters: [HoverDocument.Field(name: "session", text: prose("The session to configure."))]
+            )
         ),
         ("a declaration alone, again", HoverDocument(declaration: code("struct CameraConfiguration")))
     ]

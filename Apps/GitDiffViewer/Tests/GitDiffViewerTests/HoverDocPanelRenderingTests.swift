@@ -28,7 +28,9 @@ import Testing
         let name: NSAppearance.Name = dark ? .darkAqua : .aqua
         let appearance = try #require(NSAppearance(named: name))
         let document = HoverDocument.build(
-            from: HoverContent(markdown: Self.markdown, source: .languageServer), palette: .system)
+            from: HoverContent(markdown: Self.markdown, source: .languageServer),
+            palette: .system
+        )
         let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, material: .popover, appearance: appearance)
         return panel
@@ -55,7 +57,8 @@ import Testing
         let panel = try preparedPanel(dark: dark)
         let root = try #require(panel.contentViewForTests)
         let body = try #require(
-            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") })
+            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") }
+        )
         let container = try #require(body.textContainer)
         let bodyLayoutHeight =
             body.textLayoutManager?.usageBoundsForTextContainer.height
@@ -77,8 +80,12 @@ import Testing
         body.textStorage?.setAttributedString(original)
 
         let drawn = Drawings(
-            bodyHeight: bodyHeight, bodyLayoutHeight: bodyLayoutHeight, full: full, withoutBody: withoutBody,
-            withoutLabel: withoutLabel)
+            bodyHeight: bodyHeight,
+            bodyLayoutHeight: bodyLayoutHeight,
+            full: full,
+            withoutBody: withoutBody,
+            withoutLabel: withoutLabel
+        )
         Self.drawings[dark] = drawn
         return drawn
     }
@@ -111,7 +118,8 @@ import Testing
         let device = color.usingColorSpace(.deviceRGB)
         return PixelColor(
             deviceRGB: device.map { ($0.redComponent, $0.greenComponent, $0.blueComponent, $0.alphaComponent) },
-            luminance: luminance(color))
+            luminance: luminance(color)
+        )
     }
 
     private func colorDifference(_ lhs: PixelColor, _ rhs: PixelColor) -> CGFloat {
@@ -178,7 +186,9 @@ import Testing
     /// whose bytes differ are read, and each distinct pixel value becomes a colour once: making colours for every
     /// differing pixel held the main actor for a large part of this suite's time.
     private func countPixels(
-        _ first: NSBitmapImageRep, _ second: NSBitmapImageRep, where counts: (PixelColor, PixelColor) -> Bool
+        _ first: NSBitmapImageRep,
+        _ second: NSBitmapImageRep,
+        where counts: (PixelColor, PixelColor) -> Bool
     ) -> Int {
         let bytes = SameLayoutBytes(first, second)
         var colors: [UInt64: PixelColor] = [:]
@@ -263,13 +273,16 @@ import Testing
         let panel = try preparedPanel(dark: dark)
         let root = try #require(panel.contentViewForTests)
         let declaration = try #require(
-            descendants(of: root, as: NSTextView.self).first { $0.string.contains("func greet") })
+            descendants(of: root, as: NSTextView.self).first { $0.string.contains("func greet") }
+        )
         let nameRange = (declaration.string as NSString).range(of: "greet")
         let color = try #require(
-            declaration.textStorage?.attribute(.foregroundColor, at: nameRange.location, effectiveRange: nil))
+            declaration.textStorage?.attribute(.foregroundColor, at: nameRange.location, effectiveRange: nil)
+        )
         let foreground = try #require(color as? NSColor)
         let chip = try #require(
-            sequence(first: declaration as NSView, next: \.superview).compactMap { $0 as? NSBox }.first)
+            sequence(first: declaration as NSView, next: \.superview).compactMap { $0 as? NSBox }.first
+        )
         let appearance = try #require(NSAppearance(named: dark ? .darkAqua : .aqua))
         var ratio: CGFloat?
         appearance.performAsCurrentDrawingAppearance {
@@ -290,7 +303,8 @@ import Testing
         let panel = try preparedPanel(dark: dark)
         let root = try #require(panel.contentViewForTests)
         let body = try #require(
-            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") })
+            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") }
+        )
         let container = try #require(body.textContainer)
         let bodyHeight =
             body.textLayoutManager?.usageBoundsForTextContainer.height
@@ -308,7 +322,9 @@ import Testing
         let appearance = try #require(NSAppearance(named: .aqua))
         let markdown = Self.markdown + "\n\n" + String(repeating: "Long details wrap inside the panel. ", count: 100)
         let document = HoverDocument.build(
-            from: HoverContent(markdown: markdown, source: .languageServer), palette: .system)
+            from: HoverContent(markdown: markdown, source: .languageServer),
+            palette: .system
+        )
         let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, appearance: appearance)
         let root = try #require(panel.contentViewForTests)

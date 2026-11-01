@@ -124,8 +124,11 @@ extension SettingOverride {
         reader.applyingStoredValues { for key in keys { reader.reload(key: key) } }
         return keys.map { key in
             SettingOverride(
-                key: key, label: Self.label(of: key), value: Self.value(of: key, in: reader),
-                defaultValue: Self.value(of: key, in: base))
+                key: key,
+                label: Self.label(of: key),
+                value: Self.value(of: key, in: reader),
+                defaultValue: Self.value(of: key, in: base)
+            )
         }
     }
 

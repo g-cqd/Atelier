@@ -63,7 +63,8 @@ struct SwiftExternalScannerTests {
                 "catch_keyword", "_as_custom", "_as_quest_custom", "_as_bang_custom", "_async_keyword_custom",
                 "_custom_operator", "_hash_symbol_custom", "_directive_if", "_directive_elseif", "_directive_else",
                 "_directive_endif", "_fake_try_bang"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["swift"] != nil)
     }
 
@@ -93,7 +94,10 @@ struct SwiftExternalScannerTests {
     func `continuation punctuation suppresses a semicolon`(_ input: String) {
         var scanner = SwiftExternalScanner()
         let result = scan(
-            input, allowing: ["_implicit_semi", "_explicit_semi", "_eq_custom", "else"], scanner: &scanner)
+            input,
+            allowing: ["_implicit_semi", "_explicit_semi", "_eq_custom", "else"],
+            scanner: &scanner
+        )
         #expect(result.name != "_implicit_semi")
     }
 
@@ -101,7 +105,8 @@ struct SwiftExternalScannerTests {
     func `explicit semicolon requires both semicolon symbols`() {
         var scanner = SwiftExternalScanner()
         #expect(
-            scan("; next", allowing: ["_implicit_semi", "_explicit_semi"], scanner: &scanner).name == "_explicit_semi")
+            scan("; next", allowing: ["_implicit_semi", "_explicit_semi"], scanner: &scanner).name == "_explicit_semi"
+        )
         scanner = SwiftExternalScanner()
         #expect(scan("; next", allowing: ["_explicit_semi"], scanner: &scanner).name == nil)
     }
@@ -126,7 +131,10 @@ struct SwiftExternalScannerTests {
         var lexer = StringScannerLexer(utf8: [0xFF])
         #expect(
             !scanner.scan(
-                &lexer, validSymbols: [Bool](repeating: true, count: SwiftExternalScanner.externalNames.count)))
+                &lexer,
+                validSymbols: [Bool](repeating: true, count: SwiftExternalScanner.externalNames.count)
+            )
+        )
     }
 
     @Test
@@ -167,13 +175,17 @@ struct SwiftExternalScannerTests {
         var restored = SwiftExternalScanner()
         restored.deserialize(bytes[...])
         let resumed = scan(
-            " after\"##", allowing: ["raw_str_part", "raw_str_continuing_indicator", "raw_str_end_part"],
-            scanner: &restored)
+            " after\"##",
+            allowing: ["raw_str_part", "raw_str_continuing_indicator", "raw_str_end_part"],
+            scanner: &restored
+        )
         #expect(resumed.name == "raw_str_end_part")
         restored.deserialize([])
         let reset = scan(
-            " after\"##", allowing: ["raw_str_part", "raw_str_continuing_indicator", "raw_str_end_part"],
-            scanner: &restored)
+            " after\"##",
+            allowing: ["raw_str_part", "raw_str_continuing_indicator", "raw_str_end_part"],
+            scanner: &restored
+        )
         #expect(reset.name == nil)
     }
 
@@ -182,7 +194,8 @@ struct SwiftExternalScannerTests {
         var scanner = SwiftExternalScanner()
         #expect(
             scan("anything", allowing: ["raw_str_continuing_indicator", "_fake_try_bang"], scanner: &scanner).name
-                == nil)
+                == nil
+        )
     }
 
     @Test(arguments: tokenCases)

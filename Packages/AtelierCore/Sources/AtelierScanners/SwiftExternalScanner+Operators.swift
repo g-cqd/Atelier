@@ -111,8 +111,11 @@ extension SwiftExternalScanner {
     // Preserve the pinned scanner's operator loop and its match precedence.
     // swiftlint:disable:next cyclomatic_complexity
     static func eatOperators(
-        _ lexer: inout some ScannerLexer, validSymbols: [Bool], markEnd: Bool,
-        priorChar: UInt32, symbolResult: inout TokenType?
+        _ lexer: inout some ScannerLexer,
+        validSymbols: [Bool],
+        markEnd: Bool,
+        priorChar: UInt32,
+        symbolResult: inout TokenType?
     ) -> Bool {
         var possibleOperators: UInt32 = 0
         for index in operators.indices

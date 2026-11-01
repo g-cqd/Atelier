@@ -151,7 +151,8 @@ public final class DocumentBuffer {
     /// - Returns: The file's text and what the buffer let go of for it, or nil when the buffer kept its newer text.
     /// - Throws: The read's error.
     public func reloadFromDisk(
-        offloadFileRead: BlockingFileRead, syncLiveState: () -> Void
+        offloadFileRead: BlockingFileRead,
+        syncLiveState: () -> Void
     ) async throws -> (file: LoadedFile, replaced: ReplacedContents)? {
         let path = filePath
         let version = documentVersion
@@ -161,7 +162,11 @@ public final class DocumentBuffer {
         guard documentVersion == version, filePath == path, !isSavingInBackground else { return nil }
         syncLiveState()
         let replaced = BufferEditSnapshot(
-            textBuffer: textBuffer, textCursor: textCursor, lineEnding: lineEnding, selection: selection)
+            textBuffer: textBuffer,
+            textCursor: textCursor,
+            lineEnding: lineEnding,
+            selection: selection
+        )
         let replacedContents = replaceContents(with: file, modifiedAt: date)
         let reloaded = BufferEditSnapshot(textBuffer: textBuffer, textCursor: textCursor, lineEnding: lineEnding)
         editHistory.recordChange(from: replaced, to: reloaded, coalescingWindow: nil)
@@ -190,8 +195,11 @@ public final class DocumentBuffer {
     /// - Returns: The storage the buffer let go of, to free off the main actor; the buffer keeps no reference to it.
     public func replaceContents(with file: LoadedFile, modifiedAt date: Date?) -> ReplacedContents {
         let replaced = ReplacedContents(
-            highlights: highlightedLines, textBuffer: textBuffer, fileLines: cachedFileLines,
-            documentText: cachedDocumentText)
+            highlights: highlightedLines,
+            textBuffer: textBuffer,
+            fileLines: cachedFileLines,
+            documentText: cachedDocumentText
+        )
         postOpenProcessingTask?.cancel()
         postOpenProcessingTask = nil
         textBuffer = file.textBuffer

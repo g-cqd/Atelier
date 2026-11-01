@@ -67,9 +67,13 @@ package struct ScopeLines: Sendable, Equatable {
             open.append(first ... last)
             kept.append(
                 Scope(
-                    lines: first ... last, openColumn: column(from: starts[first], to: scope.range.lowerBound),
-                    closeColumn: column(from: starts[last], to: scope.range.upperBound - 1), kind: scope.kind,
-                    depth: open.count))
+                    lines: first ... last,
+                    openColumn: column(from: starts[first], to: scope.range.lowerBound),
+                    closeColumn: column(from: starts[last], to: scope.range.upperBound - 1),
+                    kind: scope.kind,
+                    depth: open.count
+                )
+            )
         }
         var depths = [UInt8](repeating: 0, count: lineRanges.count)
         var innermost = [Int32](repeating: -1, count: lineRanges.count)

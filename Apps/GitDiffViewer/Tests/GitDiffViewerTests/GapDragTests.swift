@@ -66,9 +66,11 @@ struct GapDragTests {
         let key = GapKey(fileIndex: 0, gapIndex: 0)
         #expect(between().handles == [.extendsChangeAbove, .extendsChangeBelow])
         #expect(
-            GapMarker(key: key, hiddenRows: 4, isLeading: true, isTrailing: false).handles == [.extendsChangeBelow])
+            GapMarker(key: key, hiddenRows: 4, isLeading: true, isTrailing: false).handles == [.extendsChangeBelow]
+        )
         #expect(
-            GapMarker(key: key, hiddenRows: 4, isLeading: false, isTrailing: true).handles == [.extendsChangeAbove])
+            GapMarker(key: key, hiddenRows: 4, isLeading: false, isTrailing: true).handles == [.extendsChangeAbove]
+        )
         #expect(GapMarker(key: key, hiddenRows: 4, isLeading: true, isTrailing: true).handles.isEmpty)
     }
 

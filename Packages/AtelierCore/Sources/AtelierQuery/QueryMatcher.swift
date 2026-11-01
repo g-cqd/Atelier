@@ -99,7 +99,7 @@ public enum QueryMatcher: Sendable {
     /// Calls `body` once for each way `pattern` matches `node`, with the way's captures and predicates pushed on
     /// `state`, which it leaves as it found it. It stops, and returns false, as soon as `body` returns false.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    private static func forEachWay(
+    static func forEachWay(
         of pattern: QueryPattern,
         at node: SyntaxNode,
         bytes: Span<UInt8>,
@@ -174,7 +174,7 @@ public enum QueryMatcher: Sendable {
     }
 
     /// Calls `body` once for each way all of `parts` match `node`, as a sequence matches one node with each of them.
-    private static func forEachWay(
+    static func forEachWay(
         ofParts parts: ArraySlice<QueryPattern>,
         at node: SyntaxNode,
         bytes: Span<UInt8>,
@@ -199,7 +199,7 @@ public enum QueryMatcher: Sendable {
     /// way that takes it captures, and tree-sitter keeps only the longer (``removeShorterWays(_:)``). So the matcher
     /// does not make such a way, and a way that ends with a limit set is none.
     // swiftlint:disable:next function_parameter_count
-    private static func forEachWay(
+    static func forEachWay(
         ofSteps steps: ArraySlice<QueryPattern>,
         from cursor: Int,
         limit: Int?,
@@ -215,7 +215,14 @@ public enum QueryMatcher: Sendable {
                 for fieldNode in node.fields[name] ?? [] {
                     let finished = forEachWay(of: fieldPattern, at: fieldNode, bytes: bytes, state: &state) { state in
                         forEachWay(
-                            ofSteps: rest, from: cursor, limit: limit, of: node, bytes: bytes, state: &state, body)
+                            ofSteps: rest,
+                            from: cursor,
+                            limit: limit,
+                            of: node,
+                            bytes: bytes,
+                            state: &state,
+                            body
+                        )
                     }
                     guard finished else { return false }
                 }
@@ -224,52 +231,71 @@ public enum QueryMatcher: Sendable {
             case .negatedField(let name):
                 guard node.fields[name] == nil else { return true }
                 return forEachWay(
-                    ofSteps: rest, from: cursor, limit: limit, of: node, bytes: bytes, state: &state, body)
+                    ofSteps: rest,
+                    from: cursor,
+                    limit: limit,
+                    of: node,
+                    bytes: bytes,
+                    state: &state,
+                    body
+                )
 
             case .predicate(let predicate):
                 state.predicates.append(predicate)
                 defer { state.predicates.removeLast() }
                 return forEachWay(
-                    ofSteps: rest, from: cursor, limit: limit, of: node, bytes: bytes, state: &state, body)
+                    ofSteps: rest,
+                    from: cursor,
+                    limit: limit,
+                    of: node,
+                    bytes: bytes,
+                    state: &state,
+                    body
+                )
 
             case .anchor:
                 // An anchor takes the child at the cursor, whatever it is.
                 guard cursor < node.children.count else { return true }
                 return forEachWay(
-                    ofSteps: rest, from: cursor + 1, limit: nil, of: node, bytes: bytes, state: &state, body)
+                    ofSteps: rest,
+                    from: cursor + 1,
+                    limit: nil,
+                    of: node,
+                    bytes: bytes,
+                    state: &state,
+                    body
+                )
 
             case .quantified:
                 return forEachRun(
-                    ofSteps: steps, from: cursor, limit: limit, of: node, bytes: bytes, state: &state, body)
+                    ofSteps: steps,
+                    from: cursor,
+                    limit: limit,
+                    of: node,
+                    bytes: bytes,
+                    state: &state,
+                    body
+                )
 
             default:
-                let children = node.children
-                let last = min(limit ?? children.count - 1, children.count - 1)
-                guard cursor <= last else { return true }
-                for index in cursor ... last {
-                    let finished = forEachWay(of: step, at: children[index], bytes: bytes, state: &state) { state in
-                        forEachWay(
-                            ofSteps: rest, from: index + 1, limit: nil, of: node, bytes: bytes, state: &state, body)
-                    }
-                    guard finished else { return false }
-                }
-                return true
+                return forEachChildWay(
+                    step,
+                    rest: rest,
+                    from: cursor,
+                    limit: limit,
+                    of: node,
+                    bytes: bytes,
+                    state: &state,
+                    body
+                )
         }
     }
 
-    /// Calls `body` once for each way `steps`, whose first is a quantified step, match `node`'s children from `cursor`
-    /// on, as tree-sitter's quantifiers match (ts_query__parse_pattern and ts_query_cursor__advance, lib/src/query.c).
-    ///
-    /// `?` takes one child after the cursor, or none. `*` and `+` take a run of adjacent children that each match the
-    /// inner pattern, after any children they skip: the step repeats through a pass-through step whose copy seeks an
-    /// immediate match (`seeking_immediate_match`), so any other sibling, an anonymous one too, ends the run. `*` may
-    /// take none. Of the ways that differ only in how much the step takes, tree-sitter keeps the longer: a run starts
-    /// where the child before it cannot join it, and a way that takes none or stops a run short sets `limit` for the
-    /// steps after it (``forEachWay(ofSteps:from:limit:of:bytes:state:_:)``). A child joins with the first way it
-    /// matches the inner pattern.
-    // swiftlint:disable:next function_parameter_count function_body_length
-    private static func forEachRun(
-        ofSteps steps: ArraySlice<QueryPattern>,
+    /// Each way `step` matches one of `node`'s children from `cursor` on (up to `limit`), then `rest` from the child after it.
+    // swiftlint:disable:next function_parameter_count
+    private static func forEachChildWay(
+        _ step: QueryPattern,
+        rest: ArraySlice<QueryPattern>,
         from cursor: Int,
         limit: Int?,
         of node: SyntaxNode,
@@ -277,96 +303,22 @@ public enum QueryMatcher: Sendable {
         state: inout MatchState,
         _ body: (inout MatchState) -> Bool
     ) -> Bool {
-        guard case .quantified(let inner, let quantifier) = steps.first else { return true }
-        let rest = steps.dropFirst()
         let children = node.children
-        // How each child from the cursor on matches the inner pattern, if it does, found once for every run.
-        var childWays: [Way?] = []
-        childWays.reserveCapacity(children.count - cursor)
-        for child in children[cursor...] {
-            childWays.append(firstWay(of: inner, at: child, bytes: bytes, state: &state))
-        }
-        func way(at index: Int) -> Way? {
-            index < children.count ? childWays[index - cursor] : nil
-        }
-
-        if quantifier != .oneOrMore {
-            // No child: the steps after may not go past a child this step could take.
-            let firstMatch = childWays.firstIndex { $0 != nil }.map { $0 + cursor }
-            let skipLimit = [limit, firstMatch].compactMap(\.self).min()
-            guard forEachWay(ofSteps: rest, from: cursor, limit: skipLimit, of: node, bytes: bytes, state: &state, body)
-            else { return false }
-        }
-        let lastStart = min(limit ?? children.count - 1, children.count - 1)
-        guard cursor <= lastStart else { return true }
-        for start in cursor ... lastStart {
-            guard let first = way(at: start) else { continue }
-            if quantifier == .optional {
-                let finished = state.with(first) { state in
-                    forEachWay(ofSteps: rest, from: start + 1, limit: nil, of: node, bytes: bytes, state: &state, body)
-                }
-                guard finished else { return false }
-                continue
+        let last = min(limit ?? children.count - 1, children.count - 1)
+        guard cursor <= last else { return true }
+        for index in cursor ... last {
+            let finished = forEachWay(of: step, at: children[index], bytes: bytes, state: &state) { state in
+                forEachWay(
+                    ofSteps: rest,
+                    from: index + 1,
+                    limit: nil,
+                    of: node,
+                    bytes: bytes,
+                    state: &state,
+                    body
+                )
             }
-            // A run starts where the child before it cannot join it, or the longer run that it joins is the way.
-            if start > cursor, way(at: start - 1) != nil { continue }
-            let captureCount = state.captures.count
-            let predicateCount = state.predicates.count
-            state.captures.append(contentsOf: first.captures)
-            state.predicates.append(contentsOf: first.predicates)
-            var end = start
-            var finished: Bool
-            while true {
-                let next = end + 1
-                guard let following = way(at: next) else {
-                    finished = forEachWay(
-                        ofSteps: rest, from: next, limit: nil, of: node, bytes: bytes, state: &state, body)
-                    break
-                }
-                // The run may stop short of the next child only for steps after it that take that very child.
-                finished = forEachWay(
-                    ofSteps: rest, from: next, limit: next, of: node, bytes: bytes, state: &state, body)
-                guard finished else { break }
-                state.captures.append(contentsOf: following.captures)
-                state.predicates.append(contentsOf: following.predicates)
-                end = next
-            }
-            state.captures.removeSubrange(captureCount...)
-            state.predicates.removeSubrange(predicateCount...)
             guard finished else { return false }
-        }
-        return true
-    }
-
-    /// The captures and predicates of the first way `pattern` matches `node`, or nil when it does not.
-    private static func firstWay(
-        of pattern: QueryPattern, at node: SyntaxNode, bytes: Span<UInt8>, state: inout MatchState
-    ) -> Way? {
-        let captureCount = state.captures.count
-        let predicateCount = state.predicates.count
-        var first: Way?
-        _ = forEachWay(of: pattern, at: node, bytes: bytes, state: &state) { state in
-            first = Way(
-                captures: Array(state.captures[captureCount...]),
-                predicates: Array(state.predicates[predicateCount...]))
-            return false
-        }
-        return first
-    }
-
-    /// Whether `node`'s bytes in the source are `value`'s UTF-8, compared in place, byte for byte, as tree-sitter
-    /// compares a token's text: no string is built for the node, and a node that reaches outside the source matches
-    /// nothing.
-    /// - Complexity: O(1) when the lengths differ; O(`value`'s UTF-8 length) otherwise.
-    private static func bytes(of node: SyntaxNode, in source: Span<UInt8>, equal value: String) -> Bool {
-        let range = node.byteRange
-        guard range.lowerBound >= 0, range.upperBound <= source.count, range.count == value.utf8.count else {
-            return false
-        }
-        var offset = range.lowerBound
-        for byte in value.utf8 {
-            guard source[offset] == byte else { return false }
-            offset += 1
         }
         return true
     }
@@ -377,13 +329,15 @@ public enum QueryMatcher: Sendable {
 extension QueryMatcher {
     /// The captures and predicates of the way being matched, pushed as the way goes deeper into its pattern and popped
     /// as it backs out, so every way of a walk shares the two buffers.
-    private struct MatchState {
+    struct MatchState {
         var captures: [QueryMatch.Capture] = []
         var predicates: [Predicate] = []
 
         /// Calls `body` with `capture` of `node` pushed, when there is one, and pops it after.
         mutating func with(
-            _ capture: QueryPattern.Capture?, of node: SyntaxNode, _ body: (inout MatchState) -> Bool
+            _ capture: QueryPattern.Capture?,
+            of node: SyntaxNode,
+            _ body: (inout MatchState) -> Bool
         ) -> Bool {
             guard let capture else { return body(&self) }
             captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
@@ -406,7 +360,7 @@ extension QueryMatcher {
     }
 
     /// One way a pattern matched a node: its captures, and the predicates they must pass.
-    private struct Way {
+    struct Way {
         var captures: [QueryMatch.Capture]
         var predicates: [Predicate]
     }
@@ -462,7 +416,9 @@ extension QueryMatcher {
     /// Whether every capture of `shorter` is one of `longer`'s, each matched once: the same capture of the same node.
     /// With `strictly` false, `longer` must hold nothing else, so the two capture the same nodes.
     private static func captures(
-        _ longer: [QueryMatch.Capture], contain shorter: [QueryMatch.Capture], strictly: Bool
+        _ longer: [QueryMatch.Capture],
+        contain shorter: [QueryMatch.Capture],
+        strictly: Bool
     ) -> Bool {
         guard strictly ? longer.count > shorter.count : longer.count == shorter.count else { return false }
         var used = [Bool](repeating: false, count: longer.count)

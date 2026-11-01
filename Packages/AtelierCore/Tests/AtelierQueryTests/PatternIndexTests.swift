@@ -15,10 +15,16 @@ struct PatternIndexTests {
         let string = SyntaxNode(type: "string", byteRange: 5 ..< 8)
         let close = SyntaxNode(type: ")", byteRange: 8 ..< 9, isNamed: false)
         let arguments = SyntaxNode(
-            type: "arguments", children: [open, argument, comma, string, close], byteRange: 1 ..< 9)
+            type: "arguments",
+            children: [open, argument, comma, string, close],
+            byteRange: 1 ..< 9
+        )
         let call = SyntaxNode(
-            type: "call", children: [name, arguments], byteRange: 0 ..< 9,
-            fields: ["function": [name], "arguments": [arguments]])
+            type: "call",
+            children: [name, arguments],
+            byteRange: 0 ..< 9,
+            fields: ["function": [name], "arguments": [arguments]]
+        )
         let semicolon = SyntaxNode(type: ";", byteRange: 10 ..< 11, isNamed: false)
         let trailing = SyntaxNode(type: "identifier", byteRange: 12 ..< 13)
         let root = SyntaxNode(type: "program", children: [call, semicolon, trailing], byteRange: 0 ..< 13)
@@ -42,7 +48,8 @@ struct PatternIndexTests {
             (call !body) @bodiless
             [(string) "x"] @mixed
             (_ function: (identifier) @callee) @caller
-            """)
+            """
+        )
         let indexed = QueryMatcher.execute(query: query, tree: Self.tree)
         #expect(indexed == QueryMatcher.executeTryingEveryPattern(query: query, tree: Self.tree))
         #expect(indexed.count > 20)
@@ -59,7 +66,8 @@ struct PatternIndexTests {
             (call) @e (#eq? @e "f")
             [(string) "x"] @f
             (identifier) @g?
-            """)
+            """
+        )
         #expect(query.candidatePatterns(forType: "identifier") == [0, 2, 3, 5, 6])
         #expect(query.candidatePatterns(forType: "string") == [1, 2, 3, 5, 6])
         #expect(query.candidatePatterns(forType: "call") == [2, 3, 4, 5, 6])

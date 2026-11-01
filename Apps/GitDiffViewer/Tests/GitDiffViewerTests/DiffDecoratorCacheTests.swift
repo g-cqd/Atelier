@@ -21,9 +21,12 @@ struct DiffDecoratorCacheTests {
 
     private static func update(_ index: Int) -> TierUpdate {
         TierUpdate(
-            layer: .lexical, coverage: .complete,
+            layer: .lexical,
+            coverage: .complete,
             revision: SourceRevision(documentID: "f\(index)", language: .swift, key: .content("b\(index)")),
-            lines: 0 ..< 1, tokens: LineTokens(emptyLines: 1))
+            lines: 0 ..< 1,
+            tokens: LineTokens(emptyLines: 1)
+        )
     }
 
     private static func rendered(_ index: Int) -> RenderedDiff {
@@ -40,7 +43,8 @@ struct DiffDecoratorCacheTests {
                 (
                     Self.rendered(index),
                     DiffDecorator.Composition(preparation: UUID(), old: nil, new: Self.key(index))
-                ))
+                )
+            )
         }
 
         sut.publish(files)

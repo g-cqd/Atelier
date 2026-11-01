@@ -65,7 +65,8 @@ struct BlobHashingTests {
 
         #expect(error?.code == .fileReadNoSuchFile)
         #expect(
-            error?.localizedDescription == "The file “missing.swift” couldn’t be opened because there is no such file.")
+            error?.localizedDescription == "The file “missing.swift” couldn’t be opened because there is no such file."
+        )
     }
 
     /// A file of many pages, so a read past a truncation would touch pages the file no longer has.

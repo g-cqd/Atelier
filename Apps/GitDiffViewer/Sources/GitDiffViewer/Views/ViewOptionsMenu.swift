@@ -34,7 +34,9 @@ struct ViewOptionsMenu: NSViewRepresentable {
         context.coordinator.snapshot = snapshot
         button.menu = context.coordinator.menu(for: snapshot)
         button.item(at: 0)?.image = NSImage(
-            systemSymbolName: "slider.horizontal.3", accessibilityDescription: "View options")
+            systemSymbolName: "slider.horizontal.3",
+            accessibilityDescription: "View options"
+        )
     }
 
     /// The settings the menu shows, so it is rebuilt only when one of them changes.
@@ -112,8 +114,10 @@ struct ViewOptionsMenu: NSViewRepresentable {
                 toggle(SettingLabel.showsMinimap, snapshot.showsMinimap, #selector(toggleMinimap)),
                 toggle(SettingLabel.showsStatusBar, snapshot.showsStatusBar, #selector(toggleStatusBar)),
                 toggle(
-                    SettingLabel.showsHoverDocumentation, snapshot.showsHoverDocumentation,
-                    #selector(toggleHoverDocumentation)),
+                    SettingLabel.showsHoverDocumentation,
+                    snapshot.showsHoverDocumentation,
+                    #selector(toggleHoverDocumentation)
+                ),
                 toggle(SettingLabel.isolatesChanges, snapshot.isolatesChanges, #selector(toggleIsolate), key: "4"),
                 toggle(SettingLabel.compactsInlineView, snapshot.compactsInlineView, #selector(toggleCompactInline))
             ]
@@ -125,7 +129,10 @@ struct ViewOptionsMenu: NSViewRepresentable {
                 toggle(SettingLabel.bouncesAtEdges, snapshot.bouncesAtEdges, #selector(toggleBounce)),
                 toggle(SettingLabel.scrollsPastEnd, snapshot.scrollsPastEnd, #selector(toggleScrollPastEnd)),
                 toggle(
-                    SettingLabel.scrollsToFirstChange, snapshot.scrollsToFirstChange, #selector(toggleScrollToChange))
+                    SettingLabel.scrollsToFirstChange,
+                    snapshot.scrollsToFirstChange,
+                    #selector(toggleScrollToChange)
+                )
             ]
         }
 
@@ -138,7 +145,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                         ("Characters", snapshot.granularity == .character, #selector(granularityCharacter)),
                         ("Words", snapshot.granularity == .word, #selector(granularityWord)),
                         ("Syntax", snapshot.granularity == .syntax, #selector(granularitySyntax))
-                    ]),
+                    ]
+                ),
                 submenu(
                     SettingLabel.advancedMatching,
                     [
@@ -159,7 +167,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                             SettingLabel.detectsMovedBlocks, snapshot.heuristics.detectsMovedBlocks,
                             #selector(toggleMoved)
                         )
-                    ]),
+                    ]
+                ),
                 submenu(
                     SettingLabel.whitespace,
                     [
@@ -176,7 +185,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                             "Ignoring all whitespace", snapshot.heuristics.whitespace == .ignoreAll,
                             #selector(whitespaceAll)
                         )
-                    ])
+                    ]
+                )
             ]
         }
 
@@ -191,7 +201,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                         ("Tree", snapshot.treeStyle == .hierarchy, #selector(treeHierarchy)),
                         ("Tree with compact folders", snapshot.treeStyle == .compact, #selector(treeCompact)),
                         ("Flat list of paths", snapshot.treeStyle == .flat, #selector(treeFlat))
-                    ]),
+                    ]
+                ),
                 commitGroupingToggle(for: snapshot),
                 submenu(
                     SettingLabel.explorerPlacement,
@@ -205,7 +216,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                             "One merged tree in a sidebar", snapshot.explorerPlacement == .unifiedSidebar,
                             #selector(placementUnified)
                         )
-                    ])
+                    ]
+                )
             ]
         }
 

@@ -5,7 +5,9 @@ import Testing
 
 struct HTMLExternalScannerTests {
     private func scan(
-        _ input: String, allowing names: [String], scanner: inout HTMLExternalScanner
+        _ input: String,
+        allowing names: [String],
+        scanner: inout HTMLExternalScanner
     ) -> (String?, StringScannerLexer) {
         var lexer = StringScannerLexer(input)
         let valid = HTMLExternalScanner.externalNames.map { names.contains($0) }
@@ -19,7 +21,8 @@ struct HTMLExternalScannerTests {
             HTMLExternalScanner.externalNames == [
                 "_start_tag_name", "_script_start_tag_name", "_style_start_tag_name", "_end_tag_name",
                 "erroneous_end_tag_name", "/>", "_implicit_end_tag", "raw_text", "comment"
-            ])
+            ]
+        )
         #expect(BundledScanners.byGrammarName["html"] != nil)
     }
 
@@ -47,7 +50,9 @@ struct HTMLExternalScannerTests {
         ("style", "_style_start_tag_name", "a { color: red }</StYlE>")
     ])
     func `script and style raw text stop before matching end tags`(
-        _ tag: String, _ token: String, _ body: String
+        _ tag: String,
+        _ token: String,
+        _ body: String
     ) {
         var scanner = HTMLExternalScanner()
         #expect(scan(tag + ">", allowing: ["_start_tag_name", token], scanner: &scanner).0 == token)
@@ -65,7 +70,8 @@ struct HTMLExternalScannerTests {
         #expect(scan("/>", allowing: ["/>"], scanner: &scanner).0 == "/>")
         #expect(
             scan("img", allowing: ["_end_tag_name", "erroneous_end_tag_name"], scanner: &scanner).0
-                == "erroneous_end_tag_name")
+                == "erroneous_end_tag_name"
+        )
         #expect(scan("/x", allowing: ["/>"], scanner: &scanner).0 == nil)
     }
 
@@ -104,7 +110,8 @@ struct HTMLExternalScannerTests {
         #expect(scan("div", allowing: ["_start_tag_name"], scanner: &scanner).0 == "_start_tag_name")
         #expect(
             scan("span", allowing: ["_end_tag_name", "erroneous_end_tag_name"], scanner: &scanner).0
-                == "erroneous_end_tag_name")
+                == "erroneous_end_tag_name"
+        )
         #expect(scan("div", allowing: ["_end_tag_name"], scanner: &scanner).0 == "_end_tag_name")
     }
 
@@ -153,7 +160,8 @@ struct HTMLExternalScannerTests {
         restored.deserialize([])
         #expect(
             scan("my-widget", allowing: ["_end_tag_name", "erroneous_end_tag_name"], scanner: &restored).0
-                == "erroneous_end_tag_name")
+                == "erroneous_end_tag_name"
+        )
     }
 
     @Test

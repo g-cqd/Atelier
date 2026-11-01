@@ -81,7 +81,9 @@ struct GrammarLoaderJSONShapeTests {
                     "b": {"type": "STRING", "value": "1"},
                     "a": {"type": "STRING", "value": "2"},
                     "b": {"type": "STRING", "value": "3"}
-                    """#))
+                    """#
+            )
+        )
 
         #expect(grammar.rules.map(\.name) == ["b", "a"])
         #expect(grammar.rules.map(\.rule) == [.string("1"), .string("2")])
@@ -162,7 +164,8 @@ struct GrammarLoaderJSONShapeTests {
     @Test(arguments: [("1", 1), ("-2", -2), ("1.0", 1), ("1e2", 100), ("true", 1), ("false", 0)])
     func `a precedence value reads an integral number or a boolean`(value: String, expected: Int) throws {
         let grammar = try GrammarLoader.parse(
-            grammar(rules: #""r": {"type": "PREC", "value": \#(value), "content": {"type": "BLANK"}}"#))
+            grammar(rules: #""r": {"type": "PREC", "value": \#(value), "content": {"type": "BLANK"}}"#)
+        )
 
         #expect(grammar.rules.map(\.rule) == [.prec(.integer(expected), .blank)])
     }
@@ -171,7 +174,8 @@ struct GrammarLoaderJSONShapeTests {
     func `a precedence value that is neither an integer nor a name is reported missing`(value: String) {
         #expect(throws: GrammarError.missingField("value")) {
             try GrammarLoader.parse(
-                grammar(rules: #""r": {"type": "PREC", "value": \#(value), "content": {"type": "BLANK"}}"#))
+                grammar(rules: #""r": {"type": "PREC", "value": \#(value), "content": {"type": "BLANK"}}"#)
+            )
         }
     }
 
@@ -182,7 +186,8 @@ struct GrammarLoaderJSONShapeTests {
     ])
     func `an alias is named by a boolean or by 1 or 0`(named: String, expected: Bool) throws {
         let grammar = try GrammarLoader.parse(
-            grammar(rules: #""r": {"type": "ALIAS", "content": {"type": "BLANK"}, "value": "a"\#(named)}"#))
+            grammar(rules: #""r": {"type": "ALIAS", "content": {"type": "BLANK"}, "value": "a"\#(named)}"#)
+        )
 
         #expect(grammar.rules.map(\.rule) == [.alias(.blank, "a", expected)])
     }

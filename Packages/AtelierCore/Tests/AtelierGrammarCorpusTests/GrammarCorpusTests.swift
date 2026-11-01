@@ -29,8 +29,10 @@ struct GrammarCorpusTests {
         let manifest = try corpus.manifest()
         let registry = GrammarRegistry(
             cacheDirectory: FileManager.default.temporaryDirectory.appending(
-                path: "grammar-corpus-\(UUID().uuidString)"),
-            bundledManifest: manifest)
+                path: "grammar-corpus-\(UUID().uuidString)"
+            ),
+            bundledManifest: manifest
+        )
         let entry = try #require(manifest.entry(forLanguage: language))
 
         let grammar = try registry.grammar(for: language, grammarsPath: corpus.grammarsDirectory.path)
@@ -42,7 +44,8 @@ struct GrammarCorpusTests {
     @Test
     func `a changed grammar file changes its cache key`() throws {
         let grammar = try Data(
-            contentsOf: GrammarCorpus.bundled().grammarsDirectory.appending(path: "json/grammar.json"))
+            contentsOf: GrammarCorpus.bundled().grammarsDirectory.appending(path: "json/grammar.json")
+        )
         var edited = grammar
         edited.append(contentsOf: Array("\n".utf8))
 
@@ -72,7 +75,8 @@ struct GrammarCorpusTests {
         defer { directory.remove() }
         try FileManager.default.createDirectory(
             at: directory.url.appending(path: "\(GrammarCorpus.bundleName)/Contents/Resources/Grammars/json"),
-            withIntermediateDirectories: true)
+            withIntermediateDirectories: true
+        )
 
         #expect(throws: GrammarCorpusError.bundleNotFound(searched: [directory.url.path])) {
             try GrammarCorpus.bundled(searching: [directory.url])
@@ -103,8 +107,10 @@ struct GrammarCorpusTests {
         let cache = SyntaxArtifactsCache(
             registry: GrammarRegistry(
                 cacheDirectory: FileManager.default.temporaryDirectory.appending(path: "grammar-corpus-none"),
-                bundledManifest: manifest),
-            grammarsDirectory: nil)
+                bundledManifest: manifest
+            ),
+            grammarsDirectory: nil
+        )
 
         await cache.loadIfNeeded(for: "json")
 

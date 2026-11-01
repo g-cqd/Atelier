@@ -24,13 +24,24 @@ struct DiagnosticsEngineScopeTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: DiagnosticsEngineTests.sarifOutput(root: root))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(
-            path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
+            path: "A.swift",
+            contentHash: "hash-1",
+            url: root.appending(path: "A.swift")
+        )
         let request = DiagnosticsEngineTests.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: tool,
+            customPath: executable.path
+        )
 
         let configURL = root.appending(path: configName)
         try "{}".write(to: configURL, atomically: true, encoding: .utf8)
@@ -63,7 +74,10 @@ struct DiagnosticsEngineScopeTests {
             """
         let runner = FakeProcessRunner(always: .success(sarif))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let both = [
@@ -73,7 +87,12 @@ struct DiagnosticsEngineScopeTests {
         let full = try await engine.run(
             .dolly,
             request: DiagnosticsEngineTests.request(
-                root: root, files: both, corpusFingerprint: "fp-1", tool: .dolly, customPath: executable.path)
+                root: root,
+                files: both,
+                corpusFingerprint: "fp-1",
+                tool: .dolly,
+                customPath: executable.path
+            )
         )
         #expect(full.findings.count == 2)
         #expect(!full.fromCache)
@@ -81,7 +100,12 @@ struct DiagnosticsEngineScopeTests {
         let onlyA = try await engine.run(
             .dolly,
             request: DiagnosticsEngineTests.request(
-                root: root, files: [both[0]], corpusFingerprint: "fp-1", tool: .dolly, customPath: executable.path)
+                root: root,
+                files: [both[0]],
+                corpusFingerprint: "fp-1",
+                tool: .dolly,
+                customPath: executable.path
+            )
         )
         #expect(!onlyA.fromCache)
         #expect(runner.specs.count == 2)
@@ -89,7 +113,8 @@ struct DiagnosticsEngineScopeTests {
         #expect(
             narrower.arguments == [
                 "analyze", root.path, "--only-from", "-", "--format", "sarif", "--relative-to", root.path
-            ])
+            ]
+        )
         #expect(narrower.standardInput == Data("\(root.appending(path: "A.swift").path)\n".utf8))
     }
 
@@ -112,14 +137,22 @@ struct DiagnosticsEngineScopeTests {
             """
         let runner = FakeProcessRunner(always: .success(sarif))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
         let result = try await engine.run(
             .dolly,
             request: DiagnosticsEngineTests.request(
-                root: root, files: [file], corpusFingerprint: "fp-1", tool: .dolly, customPath: executable.path)
+                root: root,
+                files: [file],
+                corpusFingerprint: "fp-1",
+                tool: .dolly,
+                customPath: executable.path
+            )
         )
 
         #expect(result.status == .succeeded)
@@ -137,12 +170,20 @@ struct DiagnosticsEngineScopeTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         // A corpus is present, so only the empty file list keeps the tool from launching.
         let request = DiagnosticsEngineTests.request(
-            root: root, files: [], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
+            root: root,
+            files: [],
+            corpusFingerprint: "fp-1",
+            tool: tool,
+            customPath: executable.path
+        )
         let result = try await engine.run(tool, request: request)
         #expect(result.status == .succeeded)
         #expect(result.findings.isEmpty)
@@ -160,12 +201,20 @@ struct DiagnosticsEngineScopeTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: nil)
         let request = DiagnosticsEngineTests.request(
-            root: root, files: [file], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
+            root: root,
+            files: [file],
+            corpusFingerprint: "fp-1",
+            tool: tool,
+            customPath: executable.path
+        )
         let result = try await engine.run(tool, request: request)
         #expect(result.status == .skipped("sources not on disk"))
         #expect(runner.specs.isEmpty)
@@ -182,11 +231,19 @@ struct DiagnosticsEngineScopeTests {
         try DiagnosticsEngineTests.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let request = DiagnosticsEngineTests.request(
-            root: root, files: [], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
+            root: root,
+            files: [],
+            corpusFingerprint: "fp-1",
+            tool: tool,
+            customPath: executable.path
+        )
         #expect(await engine.cachedResult(tool, request: request) == nil)
         #expect(runner.specs.isEmpty)
     }
@@ -200,8 +257,11 @@ struct DiagnosticsEngineScopeTests {
         let root = URL(filePath: temp.file("root"))
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = ToolDiscovery(
-            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
-            environment: [:])
+            runner: runner,
+            bundledDirectory: nil,
+            homeDirectory: URL(filePath: temp.file("home")),
+            environment: [:]
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         // Nothing is installed at any rung of discovery, so the missing tool shows even though no file changed.
@@ -223,11 +283,19 @@ struct DiagnosticsEngineScopeTests {
         // The report names A.swift, which the request does not name, so the post-filter removes it.
         let runner = FakeProcessRunner(always: DiagnosticsEngineTests.sarifOutput(root: root))
         let discovery = DiagnosticsEngineTests.discovery(
-            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+            runner: runner,
+            executable: executable,
+            home: URL(filePath: temp.file("home"))
+        )
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let request = DiagnosticsEngineTests.request(
-            root: root, files: [], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+            root: root,
+            files: [],
+            corpusFingerprint: "fp-1",
+            tool: .swiftlint,
+            customPath: executable.path
+        )
         let result = try await engine.run(.swiftlint, request: request)
 
         #expect(result.status == .succeeded)

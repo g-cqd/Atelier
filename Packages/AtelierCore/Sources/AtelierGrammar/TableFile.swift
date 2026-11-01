@@ -84,7 +84,8 @@ extension ParseTableCompiler.CompilationResult {
         guard file.count >= TableFile.headerSize, file.prefix(TableFile.magic.count).elementsEqual(TableFile.magic)
         else { throw .notATableFile }
         var header = TableFileReader(
-            UnsafeRawBufferPointer(rebasing: file[TableFile.versionOffset ..< TableFile.headerSize]))
+            UnsafeRawBufferPointer(rebasing: file[TableFile.versionOffset ..< TableFile.headerSize])
+        )
         let foundVersion = Int(try header.u32())
         guard foundVersion == version else { throw .unsupportedVersion(foundVersion) }
         guard try header.u32() == 0 else { throw .malformed("header padding") }

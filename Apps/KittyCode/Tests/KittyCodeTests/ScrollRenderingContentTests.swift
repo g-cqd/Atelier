@@ -41,7 +41,8 @@ struct ScrollRenderingContentTests {
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 3"),
-            "First editor row should show line 3 after scrolling down, got: \(rowText)")
+            "First editor row should show line 3 after scrolling down, got: \(rowText)"
+        )
     }
 
     @Test
@@ -61,7 +62,8 @@ struct ScrollRenderingContentTests {
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 7"),
-            "First editor row should show line 7 after scrolling up, got: \(rowText)")
+            "First editor row should show line 7 after scrolling up, got: \(rowText)"
+        )
     }
 
     @Test
@@ -79,7 +81,8 @@ struct ScrollRenderingContentTests {
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 50"),
-            "First editor row should show line 50 after large jump, got: \(rowText)")
+            "First editor row should show line 50 after large jump, got: \(rowText)"
+        )
     }
 
     @Test
@@ -100,7 +103,8 @@ struct ScrollRenderingContentTests {
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 5"),
-            "After 5 scroll-down steps, first row should show line 5, got: \(rowText)")
+            "After 5 scroll-down steps, first row should show line 5, got: \(rowText)"
+        )
     }
 
     @Test
@@ -123,6 +127,7 @@ struct ScrollRenderingContentTests {
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 0"),
-            "After scroll down+up, first row should show line 0, got: \(rowText)")
+            "After scroll down+up, first row should show line 0, got: \(rowText)"
+        )
     }
 }

@@ -173,7 +173,8 @@ struct ParseStack: Sendable {
     /// - Complexity: O(s · d) for s stacks d states deep, comparing only stacks that share a current state, plus the
     ///   nodes two stacks that tie on errors and dynamic precedence do not share.
     static func mergingIdenticalHistories(
-        _ stacks: consuming [ParseStack], ranks: SymbolRanks = SymbolRanks([:])
+        _ stacks: consuming [ParseStack],
+        ranks: SymbolRanks = SymbolRanks([:])
     ) -> [ParseStack] {
         var pending = consume stacks
         guard pending.count > 1 else { return pending }

@@ -12,7 +12,8 @@ import Testing
 @MainActor
 @Suite(
     .mainActorLane,
-    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture")
+)
 struct ScopeRibbonTests {
     private static let text = ScopeLinesTests.text
 
@@ -33,7 +34,9 @@ struct ScopeRibbonTests {
     /// The ribbon's column down the whole gutter, in window coordinates.
     private static func ribbonBand(of gutter: DiffGutterView) -> NSRect {
         gutter.convert(
-            NSRect(x: gutter.ribbonX, y: 0, width: DiffGutterView.ribbonWidth, height: gutter.bounds.height), to: nil)
+            NSRect(x: gutter.ribbonX, y: 0, width: DiffGutterView.ribbonWidth, height: gutter.bounds.height),
+            to: nil
+        )
     }
 
     @Test
@@ -52,10 +55,14 @@ struct ScopeRibbonTests {
 
         let prepared = PreparedDiff(
             FileDiffInput(title: "", oldText: "let a = 1\n", newText: "let a = 2\n", language: .plain),
-            granularity: .word)
+            granularity: .word
+        )
         let compact = DiffRenderer.render(
-            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
-            layout: .full, withHeaders: false)
+            prepared: [prepared],
+            options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .full,
+            withHeaders: false
+        )
         guard let compactRendered = compact.unified else {
             Issue.record("expected a unified render")
             return
@@ -138,9 +145,14 @@ struct ScopeRibbonTests {
         let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .swift).new)
         let facts = try #require(SwiftSyntaxFacts.extract(text))
         let scopes = ScopeLines(
-            facts.scopes, text: text, lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text)))
+            facts.scopes,
+            text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text))
+        )
         let pane = try HostedDecoratedPane(
-            rendered: rendered, decorations: DiffDecorations(new: .init(scopes: scopes), markVersion: 1))
+            rendered: rendered,
+            decorations: DiffDecorations(new: .init(scopes: scopes), markVersion: 1)
+        )
         let gutter = try Self.gutter(of: pane)
 
         gutter.hoverScope(atRow: 10)

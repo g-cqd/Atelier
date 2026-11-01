@@ -21,8 +21,13 @@ struct RenderPipelineShelfTests {
 
     private func showFile(_ pair: FilePair) {
         harness.sut.render(
-            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+            .file(pair),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
     }
 
     /// Publishes the list of a and b, then opens the file at `index` on its own, and returns the list's render ids.
@@ -79,8 +84,13 @@ struct RenderPipelineShelfTests {
         let list = try await openFileFromList()
 
         harness.sut.render(
-            .cards(pairs), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .character, heuristics: DiffHeuristics(), keepingPublished: false)
+            .cards(pairs),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .character,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(harness.sut.cards.count == 2)
@@ -92,7 +102,9 @@ struct RenderPipelineShelfTests {
         let list = try await openFileFromList()
 
         harness.render(
-            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: false)
+            [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)],
+            keepingPublished: false
+        )
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(harness.sut.cards.first?.rendered.id == list.first)

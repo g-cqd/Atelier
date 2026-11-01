@@ -42,7 +42,9 @@ struct DecorationStoreLaidOutRowsTests {
         let location = try #require(contentManager.location(layoutManager.documentRange.location, offsetBy: offset))
         var color: NSColor?
         layoutManager.enumerateRenderingAttributes(from: layoutManager.documentRange.location, reverse: false) {
-            _, attributes, range in
+            _,
+            attributes,
+            range in
             if range.contains(location) { color = attributes[.foregroundColor] as? NSColor }
             return color == nil
         }

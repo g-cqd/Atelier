@@ -44,7 +44,8 @@ public struct SwiftSyntaxTier: AtelierHighlighting.HighlightTier {
                     Result { () throws(SwiftSyntaxHighlights.Failure) in
                         try SwiftSyntaxHighlights.Parsed(text, isCancelled: flag.isSet)
                     }
-                })
+                }
+            )
             for chunk in request.chunks {
                 let first = request.lineRanges[chunk.lowerBound].lowerBound
                 let bytes = first ..< request.lineRanges[chunk.upperBound - 1].upperBound
@@ -53,11 +54,17 @@ public struct SwiftSyntaxTier: AtelierHighlighting.HighlightTier {
                         Result { () throws(SwiftSyntaxHighlights.Failure) in
                             try parsed.tokens(in: bytes, isCancelled: flag.isSet)
                         }
-                    })
+                    }
+                )
                 await emit(
                     TierUpdate(
-                        layer: layer, coverage: coverage, revision: request.revision, lines: chunk,
-                        tokens: request.lineTokens(tokens, lines: chunk)))
+                        layer: layer,
+                        coverage: coverage,
+                        revision: request.revision,
+                        lines: chunk,
+                        tokens: request.lineTokens(tokens, lines: chunk)
+                    )
+                )
             }
         } onCancel: {
             flag.set()
@@ -70,7 +77,11 @@ public struct SwiftSyntaxTier: AtelierHighlighting.HighlightTier {
         let flag = CancellationFlag()
         let facts = await withTaskCancellationHandler {
             await SwiftSyntaxFacts.facts(
-                for: request.revision, text: request.text, in: store, isCancelled: { flag.isSet() })
+                for: request.revision,
+                text: request.text,
+                in: store,
+                isCancelled: { flag.isSet() }
+            )
         } onCancel: {
             flag.set()
         }
@@ -78,14 +89,20 @@ public struct SwiftSyntaxTier: AtelierHighlighting.HighlightTier {
         guard let facts else { throw CancellationError() }
         guard let highlights = facts.highlights else {
             throw TierFailure.gate(
-                "\(Int((facts.unexpectedShare * 100).rounded())) % of the bytes lie in unexpected nodes")
+                "\(Int((facts.unexpectedShare * 100).rounded())) % of the bytes lie in unexpected nodes"
+            )
         }
         for chunk in request.chunks {
             try Task.checkCancellation()
             await emit(
                 TierUpdate(
-                    layer: layer, coverage: coverage, revision: request.revision, lines: chunk,
-                    tokens: request.lineTokens(highlights, lines: chunk)))
+                    layer: layer,
+                    coverage: coverage,
+                    revision: request.revision,
+                    lines: chunk,
+                    tokens: request.lineTokens(highlights, lines: chunk)
+                )
+            )
         }
     }
 

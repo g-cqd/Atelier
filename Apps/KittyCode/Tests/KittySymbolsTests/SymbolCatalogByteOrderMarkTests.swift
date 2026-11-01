@@ -12,7 +12,11 @@ struct SymbolCatalogByteOrderMarkTests {
             .appendingPathExtension("json")
         defer { try? FileManager.default.removeItem(at: url) }
         let entry = SymbolMappingEntry(
-            name: "folder", visibility: .publicSymbol, assetGlyphIndex: 1, codepoint: 0x100215)
+            name: "folder",
+            visibility: .publicSymbol,
+            assetGlyphIndex: 1,
+            codepoint: 0x100215
+        )
         try SymbolJSONWriter.writeMappings([entry], to: url)
         try (Data([0xEF, 0xBB, 0xBF]) + Data(contentsOf: url)).write(to: url)
 

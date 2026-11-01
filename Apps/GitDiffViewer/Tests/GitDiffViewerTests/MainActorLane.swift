@@ -25,7 +25,9 @@ struct MainActorLane: SuiteTrait, TestTrait, TestScoping {
     var isRecursive: Bool { true }
 
     func provideScope(
-        for test: Test, testCase: Test.Case?, performing function: @Sendable () async throws -> Void
+        for test: Test,
+        testCase: Test.Case?,
+        performing function: @Sendable () async throws -> Void
     ) async throws {
         // A suite's own scope spans its tests: each of them takes the lane, not the suite as a whole.
         guard testCase != nil else { return try await function() }

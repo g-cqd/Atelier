@@ -42,10 +42,18 @@ public struct ParseTable: Sendable, Equatable, Codable {
         lostShifts: [Int: [Int: Int]] = [:]
     ) {
         self.init(
-            stateCount: stateCount, symbols: symbols, terminals: terminals, nonTerminals: nonTerminals,
-            actions: ParseActionTable(rows: actions), gotos: ParseGotoTable(rows: gotos), externalNames: externalNames,
-            externalSymbols: externalSymbols, validExternals: ExternalValidity(rows: validExternals),
-            externalIsExtra: externalIsExtra, lostShifts: lostShifts)
+            stateCount: stateCount,
+            symbols: symbols,
+            terminals: terminals,
+            nonTerminals: nonTerminals,
+            actions: ParseActionTable(rows: actions),
+            gotos: ParseGotoTable(rows: gotos),
+            externalNames: externalNames,
+            externalSymbols: externalSymbols,
+            validExternals: ExternalValidity(rows: validExternals),
+            externalIsExtra: externalIsExtra,
+            lostShifts: lostShifts
+        )
     }
 
     /// A table of compact `actions`, `gotos` and `validExternals`, as the compiler and the cache build them.
@@ -209,7 +217,10 @@ extension CommentPattern: Codable {
                 )
             default:
                 throw DecodingError.dataCorruptedError(
-                    forKey: .kind, in: c, debugDescription: "Unknown CommentPattern kind: \(kind)")
+                    forKey: .kind,
+                    in: c,
+                    debugDescription: "Unknown CommentPattern kind: \(kind)"
+                )
         }
     }
 
@@ -263,7 +274,8 @@ public struct LexTable: Sendable, Equatable, Codable {
     var modeSource: LexModeSource?
 
     public init(
-        states: [LexState] = [], keywords: [String: Int] = [:],
+        states: [LexState] = [],
+        keywords: [String: Int] = [:],
         commentPatterns: [CommentPattern] = [],
         tokens: [LexToken] = [],
         automaton: [LexAutomatonState] = [],
@@ -277,15 +289,26 @@ public struct LexTable: Sendable, Equatable, Codable {
         modeEmptyAfterSeparator: [Int?] = []
     ) {
         self.init(
-            states: states, keywords: keywords, commentPatterns: commentPatterns, tokens: tokens,
-            automaton: LexAutomaton(automaton), modeStarts: modeStarts, stateModes: stateModes, errorMode: errorMode,
+            states: states,
+            keywords: keywords,
+            commentPatterns: commentPatterns,
+            tokens: tokens,
+            automaton: LexAutomaton(automaton),
+            modeStarts: modeStarts,
+            stateModes: stateModes,
+            errorMode: errorMode,
             wordToken: wordToken,
-            keywordTokens: keywordTokens, modeValidTokens: modeValidTokens, modeEmptyTokens: modeEmptyTokens,
-            modeEmptyAfterSeparator: modeEmptyAfterSeparator, modeSource: nil)
+            keywordTokens: keywordTokens,
+            modeValidTokens: modeValidTokens,
+            modeEmptyTokens: modeEmptyTokens,
+            modeEmptyAfterSeparator: modeEmptyAfterSeparator,
+            modeSource: nil
+        )
     }
 
     init(
-        states: [LexState] = [], keywords: [String: Int] = [:],
+        states: [LexState] = [],
+        keywords: [String: Int] = [:],
         commentPatterns: [CommentPattern] = [],
         tokens: [LexToken] = [],
         automaton: LexAutomaton = LexAutomaton(),
@@ -343,9 +366,17 @@ public struct LazyLexMode: Sendable {
         start = try builder.lazyStartState(for: validTokens)
         self.validTokens = validTokens.sorted()
         emptyToken = LexTableCompiler.preferredEmptyToken(
-            in: validTokens, nfa: source.nfa, tokens: source.priorities, afterSeparator: false)
+            in: validTokens,
+            nfa: source.nfa,
+            tokens: source.priorities,
+            afterSeparator: false
+        )
         emptyTokenAfterSeparator = LexTableCompiler.preferredEmptyToken(
-            in: validTokens, nfa: source.nfa, tokens: source.priorities, afterSeparator: true)
+            in: validTokens,
+            nfa: source.nfa,
+            tokens: source.priorities,
+            afterSeparator: true
+        )
     }
 
     /// State `id` with its accepted token and moves, built now if no read reached it before.
@@ -395,7 +426,10 @@ public struct LexState: Sendable, Equatable, Codable {
         // A range is only built from ordered bounds: a damaged cache file must fail to decode, not trap.
         guard entries.allSatisfy({ $0.lower <= $0.upper }) else {
             throw DecodingError.dataCorruptedError(
-                forKey: .transitions, in: container, debugDescription: "A transition's lower bound exceeds its upper")
+                forKey: .transitions,
+                in: container,
+                debugDescription: "A transition's lower bound exceeds its upper"
+            )
         }
         self.transitions = entries.map { ($0.lower ... $0.upper, $0.target) }
         self.accepting = try container.decodeIfPresent(Int.self, forKey: .accepting)

@@ -51,7 +51,9 @@ public func openInFileSearch(state: EditorState) {
 
 @MainActor
 public func handleSearchKey(
-    _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     switch key.keyCode {
         case AsciiKey.escape:
@@ -99,7 +101,9 @@ public func handleSearchKey(
 
 @MainActor
 public func stepSearchMatch(
-    direction: SearchStepDirection, state: EditorState, pipeline: RenderPipeline
+    direction: SearchStepDirection,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) {
     guard var search = state.inFileSearch, !search.matches.isEmpty else { return }
 
@@ -119,7 +123,9 @@ public func stepSearchMatch(
 
 @MainActor
 public func jumpToMatch(
-    _ match: SearchMatch, state: EditorState, pipeline: RenderPipeline
+    _ match: SearchMatch,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) {
     state.cursorRow = match.row
     state.cursorCol = match.colStart
@@ -127,7 +133,9 @@ public func jumpToMatch(
 }
 
 public func executeSearch(
-    _ search: inout EditorState.InFileSearch, lines: [String], maxMatches: Int = 10_000
+    _ search: inout EditorState.InFileSearch,
+    lines: [String],
+    maxMatches: Int = 10_000
 ) {
     let query = SearchQuery(
         text: search.query,
@@ -167,8 +175,11 @@ func cancelInFileSearch(state: EditorState) {
 /// Starts the current query on the blocking search pool and leaves only its query visible until the result arrives.
 @MainActor
 func scheduleInFileSearch(
-    _ search: inout EditorState.InFileSearch, state: EditorState, pipeline: RenderPipeline?,
-    advanceToNext: Bool = false, moveCursorOnCompletion: Bool = true
+    _ search: inout EditorState.InFileSearch,
+    state: EditorState,
+    pipeline: RenderPipeline?,
+    advanceToNext: Bool = false,
+    moveCursorOnCompletion: Bool = true
 ) {
     cancelInFileSearch(state: state)
     search.pattern = nil
@@ -179,16 +190,21 @@ func scheduleInFileSearch(
     search.didHitLimit = false
     search.resultRequest = nil
     let query = SearchQuery(
-        text: search.query, isCaseSensitive: search.isCaseSensitive, isRegex: search.isRegex,
-        wholeWord: search.isWholeWord)
+        text: search.query,
+        isCaseSensitive: search.isCaseSensitive,
+        isRegex: search.isRegex,
+        wholeWord: search.isWholeWord
+    )
     guard !query.text.isEmpty else { return }
     search.isSearching = true
 
     let rope = state.textBuffer.ropeSnapshot
     let request = InFileSearchRequest(
-        query: query, bufferID: state.bufferManager.activeBuffer.map(ObjectIdentifier.init),
+        query: query,
+        bufferID: state.bufferManager.activeBuffer.map(ObjectIdentifier.init),
         documentVersion: state.bufferManager.activeBuffer?.documentVersion ?? 0,
-        contentHash: rope.contentHash)
+        contentHash: rope.contentHash
+    )
     let maxMatches = max(0, state.config.search.maxResults)
     let pool = state.searchPool
     // The cancellation above advanced the generation, so this search's is its own.
@@ -200,13 +216,22 @@ func scheduleInFileSearch(
         let result = await runInFileSearch(query: query, rope: rope, maxMatches: maxMatches, pool: pool)
         guard let state, !Task.isCancelled, state.inFileSearchGeneration == generation else { return }
         _ = applyInFileSearchResult(
-            state: state, request: request, pattern: result.0, scan: result.1, pipeline: pipeline,
-            advanceToNext: advanceToNext, moveCursorOnCompletion: moveCursorOnCompletion)
+            state: state,
+            request: request,
+            pattern: result.0,
+            scan: result.1,
+            pipeline: pipeline,
+            advanceToNext: advanceToNext,
+            moveCursorOnCompletion: moveCursorOnCompletion
+        )
     }
 }
 
 private func runInFileSearch(
-    query: SearchQuery, rope: Rope, maxMatches: Int, pool: BlockingOffloadPool
+    query: SearchQuery,
+    rope: Rope,
+    maxMatches: Int,
+    pool: BlockingOffloadPool
 ) async -> (SearchPattern?, SearchScanResult) {
     await withTaskExecutorPreference(pool) {
         let pattern = compilePattern(query)
@@ -220,17 +245,24 @@ private func runInFileSearch(
 @MainActor
 @discardableResult
 func applyInFileSearchResult(
-    state: EditorState, request: InFileSearchRequest, pattern: SearchPattern?, scan: SearchScanResult,
+    state: EditorState,
+    request: InFileSearchRequest,
+    pattern: SearchPattern?,
+    scan: SearchScanResult,
     pipeline: RenderPipeline?,
-    advanceToNext: Bool = false, moveCursorOnCompletion: Bool = true
+    advanceToNext: Bool = false,
+    moveCursorOnCompletion: Bool = true
 ) -> Bool {
     guard state.bufferManager.activeBuffer.map(ObjectIdentifier.init) == request.bufferID,
         (state.bufferManager.activeBuffer?.documentVersion ?? 0) == request.documentVersion,
         state.textBuffer.contentHash == request.contentHash,
         var search = state.inFileSearch,
         SearchQuery(
-            text: search.query, isCaseSensitive: search.isCaseSensitive, isRegex: search.isRegex,
-            wholeWord: search.isWholeWord) == request.query
+            text: search.query,
+            isCaseSensitive: search.isCaseSensitive,
+            isRegex: search.isRegex,
+            wholeWord: search.isWholeWord
+        ) == request.query
     else { return false }
     search.pattern = pattern
     search.matches = scan.matches
@@ -249,7 +281,9 @@ func applyInFileSearchResult(
 }
 
 public func nearestMatchIndex(
-    from row: Int, col: Int, in matches: [SearchMatch]
+    from row: Int,
+    col: Int,
+    in matches: [SearchMatch]
 ) -> Int {
     guard !matches.isEmpty else { return -1 }
 
@@ -271,7 +305,9 @@ public func nearestMatchIndex(
 
 @MainActor
 public func handleSearchPanelKey(
-    _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     // Tab key cycles focus / target
     if key.keyCode == AsciiKey.tab {
@@ -321,7 +357,9 @@ public func handleSearchPanelKey(
 
 @MainActor
 private func handleSearchPanelFindFieldKey(
-    _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     switch key.keyCode {
         case AsciiKey.escape:
@@ -400,7 +438,9 @@ private func handleSearchPanelFindFieldKey(
 
 @MainActor
 private func handleSearchPanelReplaceFieldKey(
-    _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     switch key.keyCode {
         case AsciiKey.escape:
@@ -441,7 +481,9 @@ private func handleSearchPanelReplaceFieldKey(
 
 @MainActor
 private func handleSearchPanelResultsListKey(
-    _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     if state.searchTarget == .workspace {
         return handleWorkspaceResultsListKey(key, state: state, pipeline: pipeline)
@@ -511,7 +553,9 @@ private func handleSearchPanelResultsListKey(
 
 @MainActor
 private func handleWorkspaceResultsListKey(
-    _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+    _ key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) -> Bool {
     let flatCount = workspaceFlatResultCount(state: state)
 
@@ -540,10 +584,15 @@ private func handleWorkspaceResultsListKey(
 
         case Key.enter.rawValue, Key.enterAlt.rawValue:
             if let (filePath, match) = workspaceFlatResult(
-                at: state.searchPanelSelectedIndex, state: state)
-            {
+                at: state.searchPanelSelectedIndex,
+                state: state
+            ) {
                 openWorkspaceSearchResult(
-                    filePath: filePath, match: match, state: state, pipeline: pipeline)
+                    filePath: filePath,
+                    match: match,
+                    state: state,
+                    pipeline: pipeline
+                )
             }
             return true
 
@@ -595,7 +644,8 @@ public func workspaceFlatResultCount(state: EditorState) -> Int {
 
 @MainActor
 public func workspaceFlatResult(
-    at index: Int, state: EditorState
+    at index: Int,
+    state: EditorState
 ) -> (filePath: String, match: SearchMatch)? {
     var current = 0
     for fileResult in state.workspaceSearchResults {
@@ -619,7 +669,10 @@ public func workspaceFlatResult(
 
 @MainActor
 public func openWorkspaceSearchResult(
-    filePath: String, match: SearchMatch, state: EditorState, pipeline: RenderPipeline
+    filePath: String,
+    match: SearchMatch,
+    state: EditorState,
+    pipeline: RenderPipeline
 ) {
     // Open file if not already open
     state.openFileByPath(filePath)
@@ -762,14 +815,20 @@ public func replaceCurrentMatch(state: EditorState, pipeline: RenderPipeline) {
     let endPos = TextPosition(row: match.row, col: match.colEnd)
     let selection = TextSelection(anchor: startPos, head: endPos)
     let mutation = TextOperations.deleteRange(
-        in: &state.textBuffer, at: &state.textCursor, selection: selection)
+        in: &state.textBuffer,
+        at: &state.textCursor,
+        selection: selection
+    )
     state.textDidChange(mutation, previousSnapshot: previousSnapshot)
 
     // Insert replacement
     if !replacement.isEmpty {
         let previousSnapshot2 = state.activeBufferSnapshot()
         let mutation2 = TextOperations.insert(
-            replacement, into: &state.textBuffer, at: &state.textCursor)
+            replacement,
+            into: &state.textBuffer,
+            at: &state.textCursor
+        )
         state.textDidChange(mutation2, previousSnapshot: previousSnapshot2)
     }
 
@@ -783,11 +842,15 @@ public func replaceAllInFile(state: EditorState, pipeline: RenderPipeline) {
     guard let search = state.inFileSearch, !state.readOnly else { return }
     let currentRequest = InFileSearchRequest(
         query: SearchQuery(
-            text: search.query, isCaseSensitive: search.isCaseSensitive, isRegex: search.isRegex,
-            wholeWord: search.isWholeWord),
+            text: search.query,
+            isCaseSensitive: search.isCaseSensitive,
+            isRegex: search.isRegex,
+            wholeWord: search.isWholeWord
+        ),
         bufferID: state.bufferManager.activeBuffer.map(ObjectIdentifier.init),
         documentVersion: state.bufferManager.activeBuffer?.documentVersion ?? 0,
-        contentHash: state.textBuffer.contentHash)
+        contentHash: state.textBuffer.contentHash
+    )
     guard search.isComplete, !search.isSearching, search.resultRequest == currentRequest else {
         state.statusMessage = "Search incomplete or outdated; search again before replacing all"
         return
@@ -797,7 +860,11 @@ public func replaceAllInFile(state: EditorState, pipeline: RenderPipeline) {
     let previousSnapshot = state.activeBufferSnapshot()
     // Every replacement is expanded from the lines as they were searched, never from a line already rewritten.
     let (lines, replaceCount) = applyReplacements(
-        to: state.fileContent, matches: search.matches, pattern: pattern, replacement: search.replaceText)
+        to: state.fileContent,
+        matches: search.matches,
+        pattern: pattern,
+        replacement: search.replaceText
+    )
 
     state.fileContent = lines
     state.textDidChange(previousSnapshot: previousSnapshot)

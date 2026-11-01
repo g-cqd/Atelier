@@ -63,7 +63,8 @@ let package = Package(
             dependencies: [
                 .product(name: "AemiLexers", package: "aemi"), .product(name: "AemiKernels", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         // The tier job (PERF-11): the highlight tier protocol, and every tier of a text run at once, each on its own,
         // caller-driven. Each tier lives with its engine; the apps compose them.
         .target(name: "AtelierHighlighting", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
@@ -75,7 +76,8 @@ let package = Package(
                 "AtelierHighlighting", "AtelierSyntaxModel", .product(name: "AemiLexers", package: "aemi"),
                 .product(name: "TerminalKitText", package: "TerminalKit")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         // swift-syntax support: the syntax tier's token provider, the syntactic colour tier over SwiftIDEUtils'
         // classification, and the deep stack every swift-syntax parse and tree walk runs on.
         .target(
@@ -122,7 +124,10 @@ let package = Package(
         // Doc comments without a parser: each language's comment convention rendered to markdown, declaration heads
         // read after the lexer's comment and string tokens, and the identifier under a position (HOVER-16).
         .target(
-            name: "AtelierDocComment", dependencies: ["AtelierLexers", "AtelierSyntaxModel"], swiftSettings: strict),
+            name: "AtelierDocComment",
+            dependencies: ["AtelierLexers", "AtelierSyntaxModel"],
+            swiftSettings: strict
+        ),
         // Documentation from source alone: doc comments indexed over swift-syntax trees for Swift and through
         // AtelierDocComment's extractors for other languages, and the identifier under a position, for hover content
         // that needs no build context. Files parse side by side through AemiRuntime.
@@ -176,8 +181,10 @@ let package = Package(
         // tree-sitter grammar.json loading and LR/lex table compilation. Reads grammar.json with AemiJSON's
         // Foundation-free engine; the Codable layer is not needed.
         .target(
-            name: "AtelierGrammar", dependencies: [.product(name: "AemiJSONCore", package: "AemiJSON")],
-            swiftSettings: strict),
+            name: "AtelierGrammar",
+            dependencies: [.product(name: "AemiJSONCore", package: "AemiJSON")],
+            swiftSettings: strict
+        ),
         // The GLR parser over compiled tables.
         .target(name: "AtelierParser", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         // tree-sitter .scm query parsing and matching over syntax trees.
@@ -208,40 +215,55 @@ let package = Package(
         .testTarget(
             name: "AtelierSyntaxModelTests",
             dependencies: ["AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierHighlightingTests",
             dependencies: [
                 "AtelierHighlighting", "AtelierLexers", "AtelierSwiftSyntax", "AtelierSyntaxModel",
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierFileTreeTests",
             dependencies: [
                 "AtelierFileTree", .product(name: "AemiRuntime", package: "aemi"),
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierSearchTests",
             dependencies: [
                 "AtelierSearch", .product(name: "AemiIO", package: "aemi"),
                 .product(name: "AemiRuntime", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         // Themes as values keyed by highlight role, with Xcode theme import; the apps bridge to their colour types.
         .target(name: "AtelierTheme", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(
-            name: "AtelierThemeTests", dependencies: ["AtelierTheme", "AtelierSyntaxModel"], swiftSettings: strict),
+            name: "AtelierThemeTests",
+            dependencies: ["AtelierTheme", "AtelierSyntaxModel"],
+            swiftSettings: strict
+        ),
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         .testTarget(
-            name: "AtelierParserTests", dependencies: ["AtelierParser", "AtelierScanners"], swiftSettings: strict),
+            name: "AtelierParserTests",
+            dependencies: ["AtelierParser", "AtelierScanners"],
+            swiftSettings: strict
+        ),
         .testTarget(
-            name: "AtelierQueryTests", dependencies: ["AtelierQuery", .product(name: "AemiTestKit", package: "aemi")],
-            swiftSettings: strict),
+            name: "AtelierQueryTests",
+            dependencies: ["AtelierQuery", .product(name: "AemiTestKit", package: "aemi")],
+            swiftSettings: strict
+        ),
         .testTarget(
-            name: "AtelierScannersTests", dependencies: ["AtelierScanners", "AtelierParser"], swiftSettings: strict),
+            name: "AtelierScannersTests",
+            dependencies: ["AtelierScanners", "AtelierParser"],
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierSourcesTests",
             dependencies: [
@@ -275,7 +297,8 @@ let package = Package(
                 "AtelierLexers", "AtelierSyntaxModel", .product(name: "TerminalKitText", package: "TerminalKit"),
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierSwiftSyntaxTests",
             dependencies: [
@@ -283,7 +306,8 @@ let package = Package(
                 "AtelierSyntaxModel",
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierDiagnosticsTests",
             dependencies: [
@@ -307,22 +331,36 @@ let package = Package(
                 "AtelierDocIndex", "AtelierDocComment", "AtelierSwiftSyntax", "AtelierSyntaxModel",
                 .product(name: "AemiTestKit", package: "aemi")
             ],
-            swiftSettings: strict),
+            swiftSettings: strict
+        ),
         .testTarget(
-            name: "AtelierDocCommentTests", dependencies: ["AtelierDocComment", "AtelierSyntaxModel"],
-            swiftSettings: strict),
+            name: "AtelierDocCommentTests",
+            dependencies: ["AtelierDocComment", "AtelierSyntaxModel"],
+            swiftSettings: strict
+        ),
         // The CoreText renderer's model, style sheets, height index, typesetting and tile rasterization
         // (text-renderer.md §3): pure value types and CoreText/CoreGraphics; no AppKit, no tasks of its own.
         .target(
-            name: "AtelierTextRendering", dependencies: [], swiftSettings: strict),
+            name: "AtelierTextRendering",
+            dependencies: [],
+            swiftSettings: strict
+        ),
         .testTarget(
-            name: "AtelierTextRenderingTests", dependencies: ["AtelierTextRendering"], swiftSettings: strict),
+            name: "AtelierTextRenderingTests",
+            dependencies: ["AtelierTextRendering"],
+            swiftSettings: strict
+        ),
         // The renderer's @MainActor host view (text-renderer.md §3.4-3.6): tiles as layers, the height index kept
         // live, hit-testing. AppKit and QuartzCore only; no diff knowledge.
         .target(
-            name: "AtelierTextView", dependencies: ["AtelierTextRendering"], swiftSettings: strict),
+            name: "AtelierTextView",
+            dependencies: ["AtelierTextRendering"],
+            swiftSettings: strict
+        ),
         .testTarget(
-            name: "AtelierTextViewTests", dependencies: ["AtelierTextView", "AtelierTextRendering"],
-            swiftSettings: strict)
+            name: "AtelierTextViewTests",
+            dependencies: ["AtelierTextView", "AtelierTextRendering"],
+            swiftSettings: strict
+        )
     ]
 )

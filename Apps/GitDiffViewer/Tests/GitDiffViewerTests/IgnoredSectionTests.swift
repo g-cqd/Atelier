@@ -19,7 +19,10 @@ struct IgnoredSectionTests {
     @Test
     func `ignored files are listed and diffable but never changes`() {
         var comparison = Comparison(
-            left: [entry("a.swift", "1")], right: [entry("a.swift", "2")], leftSource: nil, rightSource: nil,
+            left: [entry("a.swift", "1")],
+            right: [entry("a.swift", "2")],
+            leftSource: nil,
+            rightSource: nil,
             rightIgnored: [ignored("build/out.txt"), ignored("build/deep/gen.txt")]
         )
 
@@ -46,20 +49,33 @@ struct IgnoredSectionTests {
     @Test
     func `the explorer trees put ignored files in their own trees only when shown`() {
         let comparison = Comparison(
-            left: [entry("a.swift", "1")], right: [entry("a.swift", "2")], leftSource: nil, rightSource: nil,
+            left: [entry("a.swift", "1")],
+            right: [entry("a.swift", "2")],
+            leftSource: nil,
+            rightSource: nil,
             rightIgnored: [ignored("build/out.txt")]
         )
         let leftTree = PathNode.tree(from: ["a.swift"])
         let rightTree = PathNode.tree(from: ["a.swift"])
 
         let hidden = ExplorerTrees.build(
-            comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: true, style: .hierarchy)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: rightTree,
+            showsChangesOnly: true,
+            style: .hierarchy
+        )
         #expect(hidden.unified.flatMap(\.filePaths) == ["a.swift"])
         #expect(hidden.unifiedIgnored.isEmpty)
 
         let shown = ExplorerTrees.build(
-            comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: true,
-            showsIgnoredFiles: true, style: .compact)
+            comparison: comparison,
+            leftTree: leftTree,
+            rightTree: rightTree,
+            showsChangesOnly: true,
+            showsIgnoredFiles: true,
+            style: .compact
+        )
         #expect(shown.unified.flatMap(\.filePaths) == ["a.swift"])
         #expect(shown.rightIgnored.flatMap(\.filePaths) == ["build/out.txt"])
         #expect(shown.leftIgnored.isEmpty)

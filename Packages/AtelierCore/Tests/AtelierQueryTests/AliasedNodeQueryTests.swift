@@ -50,7 +50,10 @@ struct AliasedNodeQueryTests {
             """
         let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(json.utf8)))
         let parser = GLRParser(
-            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions
+        )
         return try parser.parse(source)
     }
 }

@@ -24,8 +24,11 @@ struct SyntaxFactsSharingTests {
     init() {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: store)
         sut = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock(), store: store))
+            preparer: preparer,
+            taskProvider: taskProvider,
+            options: DiffRenderer.Options(sides: [.old, .new]),
+            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock(), store: store)
+        )
         reader.blobContents["old"] = Self.old
         reader.blobContents["new"] = Self.new
     }
@@ -37,11 +40,18 @@ struct SyntaxFactsSharingTests {
     @Test
     func `a side is parsed once for its intraline boundaries, its colour and its hover documentation`() async throws {
         let pair = FilePair(
-            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
-            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1))
+            path: "a.swift",
+            old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1)
+        )
         sut.render(
-            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .syntax, heuristics: DiffHeuristics(), keepingPublished: false)
+            .file(pair),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .syntax,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         let file = try #require(sut.file)
         // Nothing is parsed before the text is drawn: the syntax granularity's emphasis comes after it (PERF-09).
@@ -67,11 +77,18 @@ struct SyntaxFactsSharingTests {
         reader.blobContents["old"] = text
         reader.blobContents["new"] = text + "let a = 1\n"
         let pair = FilePair(
-            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
-            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1))
+            path: "a.swift",
+            old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1)
+        )
         sut.render(
-            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
-            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+            .file(pair),
+            left: .directory(ModelTestHarness.leftURL),
+            right: .directory(ModelTestHarness.rightURL),
+            granularity: .word,
+            heuristics: DiffHeuristics(),
+            keepingPublished: false
+        )
         try await taskProvider.waitForAllTasks()
         let file = try #require(sut.file)
 
@@ -89,21 +106,33 @@ struct SyntaxFactsSharingTests {
     func `the intraline emphasis read from the facts is the one the side's own parse gives`() async throws {
         let stored = PreparedDiff(
             FileDiffInput(
-                title: "a.swift", oldText: Self.old, newText: Self.new, language: .swift,
-                oldRevision: Self.revision("old"), newRevision: Self.revision("new")),
-            granularity: .syntax, store: store)
+                title: "a.swift",
+                oldText: Self.old,
+                newText: Self.new,
+                language: .swift,
+                oldRevision: Self.revision("old"),
+                newRevision: Self.revision("new")
+            ),
+            granularity: .syntax,
+            store: store
+        )
         let parsed = PreparedDiff(
             FileDiffInput(title: "a.swift", oldText: Self.old, newText: Self.new, language: .swift),
-            granularity: .syntax)
+            granularity: .syntax
+        )
 
         /// Every change's emphasis at the syntax granularity, as the pipeline finds it once the text is drawn.
         func emphasis(_ diff: PreparedDiff) async throws -> [Int: ChangeEmphasis] {
             let structure = diff.model.structure
             return try await IntralineEmphasis.emphasis(
-                for: Array(structure.changes.indices), in: structure, pairs: diff.model.changePairs,
-                old: SubstringLines(diff.model.oldLines), new: SubstringLines(diff.model.newLines),
+                for: Array(structure.changes.indices),
+                in: structure,
+                pairs: diff.model.changePairs,
+                old: SubstringLines(diff.model.oldLines),
+                new: SubstringLines(diff.model.newLines),
                 granularity: .syntax,
-                tokens: diff.tokenSource)
+                tokens: diff.tokenSource
+            )
         }
         let fromStore = try await emphasis(stored)
         #expect(try await emphasis(parsed) == fromStore)

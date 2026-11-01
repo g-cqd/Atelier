@@ -31,8 +31,10 @@ extension CoreTextPane {
                     appendRun(&runs, token: token, unit: unit)
                 }
                 if let background = rendered.palette.rowBackground(
-                    for: row.kind, side: rendered.side, isMoved: decorations.isMoved(row))
-                {
+                    for: row.kind,
+                    side: rendered.side,
+                    isMoved: decorations.isMoved(row)
+                ) {
                     rowFills[RowIndex(index), default: []].append(.rowFill(Self.colorRef(background)))
                 }
                 let emphasis = decorations.emphasis(of: row, on: rendered.side)
@@ -52,9 +54,14 @@ extension CoreTextPane {
         let styleSheet = StyleSheet(
             font: FontSpec(postScriptName: font.fontName, pointSize: font.pointSize),
             styles: [TextStyle(foreground: Self.colorRef(rendered.palette.textColor))]
-                + HighlightRole.allCases.map { TextStyle(foreground: Self.colorRef(rendered.palette.color(for: $0))) })
+                + HighlightRole.allCases.map { TextStyle(foreground: Self.colorRef(rendered.palette.color(for: $0))) }
+        )
         let text = StyledText(
-            utf8: utf8, rowStarts: rowStarts, runs: LineRuns(runs: runs, offsets: offsets), styles: styleSheet)
+            utf8: utf8,
+            rowStarts: rowStarts,
+            runs: LineRuns(runs: runs, offsets: offsets),
+            styles: styleSheet
+        )
 
         var layers: [DecorationLayer] = []
         if !rowFills.isEmpty { layers.append(DecorationLayer(id: LayerID(0), zIndex: 0, paints: rowFills)) }
@@ -68,11 +75,16 @@ extension CoreTextPane {
         guard end > start else { return }
         let styleID = StyleID(UInt16(token.role.rawValue) + 1)
         runs.append(
-            LineRuns.Run(start: UInt32(start), length: UInt16(min(end - start, Int(UInt16.max))), style: styleID))
+            LineRuns.Run(start: UInt32(start), length: UInt16(min(end - start, Int(UInt16.max))), style: styleID)
+        )
     }
 
     private static func appendEmphasis(
-        _ fills: inout [RowIndex: [DecorationLayer.Paint]], row: Int, range: Range<Int>, unit: RowUnits, color: ColorRef
+        _ fills: inout [RowIndex: [DecorationLayer.Paint]],
+        row: Int,
+        range: Range<Int>,
+        unit: RowUnits,
+        color: ColorRef
     ) {
         let start = unit.byteOffset(atUTF16: range.lowerBound)
         let end = unit.byteOffset(atUTF16: range.upperBound)
@@ -101,7 +113,8 @@ extension CoreTextPane {
     static func colorRef(_ color: NSColor) -> ColorRef {
         .adaptive(
             light: Self.rgba(color, appearance: NSAppearance(named: .aqua)),
-            dark: Self.rgba(color, appearance: NSAppearance(named: .darkAqua)))
+            dark: Self.rgba(color, appearance: NSAppearance(named: .darkAqua))
+        )
     }
 
     private static func rgba(_ color: NSColor, appearance: NSAppearance?) -> RGBA {
@@ -109,8 +122,11 @@ extension CoreTextPane {
         let resolve = {
             let resolved = color.usingColorSpace(.sRGB) ?? color
             result = RGBA(
-                red: Float(resolved.redComponent), green: Float(resolved.greenComponent),
-                blue: Float(resolved.blueComponent), alpha: Float(resolved.alphaComponent))
+                red: Float(resolved.redComponent),
+                green: Float(resolved.greenComponent),
+                blue: Float(resolved.blueComponent),
+                alpha: Float(resolved.alphaComponent)
+            )
         }
         if let appearance { appearance.performAsCurrentDrawingAppearance(resolve) } else { resolve() }
         return result

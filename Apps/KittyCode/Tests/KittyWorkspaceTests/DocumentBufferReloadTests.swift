@@ -10,7 +10,11 @@ struct DocumentBufferReloadTests {
     @Test
     func `a reload installs the rope its read built`() throws {
         let buffer = DocumentBuffer(
-            filePath: "/project/notes.txt", fileName: "notes.txt", content: "old", language: nil)
+            filePath: "/project/notes.txt",
+            fileName: "notes.txt",
+            content: "old",
+            language: nil
+        )
         let loadedFile = try WorkspaceFileLoading.decode(Data("new\r\ntext\r\n".utf8))
         // Materialised on the read's rope only: a rope rebuilt from the text on the main actor starts without them.
         _ = loadedFile.textBuffer.lines

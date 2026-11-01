@@ -204,7 +204,9 @@ extension RubyExternalScanner {
     }
 
     static func scanShortInterpolation(
-        _ lexer: inout some ScannerLexer, hasContent: Bool, contentSymbol: TokenType
+        _ lexer: inout some ScannerLexer,
+        hasContent: Bool,
+        contentSymbol: TokenType
     ) -> Bool {
         let start = lexer.lookahead
         guard start == c("@") || start == c("$") else { return false }

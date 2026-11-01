@@ -17,7 +17,8 @@ struct HoverLazyBlocksTests {
     private static func document(paragraphs: Int) -> HoverDocument {
         HoverDocument(
             summary: prose("Loads the configuration."),
-            discussion: (0 ..< paragraphs).map { .paragraph(prose("Paragraph \($0) of the discussion.")) })
+            discussion: (0 ..< paragraphs).map { .paragraph(prose("Paragraph \($0) of the discussion.")) }
+        )
     }
 
     private static func preparedPanel(for document: HoverDocument) throws -> HoverDocPanel {
@@ -54,7 +55,9 @@ struct HoverLazyBlocksTests {
         #expect(panel.pendingDiscussion != nil)
 
         panel.prepareOffscreenForTests(
-            document: Self.document(paragraphs: 2), appearance: try #require(NSAppearance(named: .aqua)))
+            document: Self.document(paragraphs: 2),
+            appearance: try #require(NSAppearance(named: .aqua))
+        )
 
         #expect(panel.pendingDiscussion == nil)
         #expect(panel.shownBlockViews.count == 3)
@@ -65,12 +68,17 @@ struct HoverLazyBlocksTests {
         let lines = (0 ..< 600).map { "let value\($0) = compute(\($0), scale: \($0 % 7))" }
         let code = NSAttributedString(
             string: lines.joined(separator: "\n"),
-            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)])
+            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)]
+        )
         let panel = try Self.preparedPanel(
             for: HoverDocument(
-                summary: Self.prose("Loads."), discussion: [.code(code), .paragraph(Self.prose("After it."))]))
+                summary: Self.prose("Loads."),
+                discussion: [.code(code), .paragraph(Self.prose("After it."))]
+            )
+        )
         let chip = try #require(
-            panel.shownBlockViews.compactMap { $0 as? NSBox }.first { $0.boxType == NSBox.BoxType.custom })
+            panel.shownBlockViews.compactMap { $0 as? NSBox }.first { $0.boxType == NSBox.BoxType.custom }
+        )
         let codeView = try #require(Self.textViews(under: chip).first)
         #expect(codeView.string.split(separator: "\n").count < 600)
 

@@ -79,8 +79,13 @@ extension RenderPipeline {
         {
             let cards = shelf.cards
             lend(
-                shelf.prepared, from: shelf.target, rendered: { cards.indices.contains($0) ? cards[$0] : nil },
-                stamps: shelf.stamps, to: target, into: &loan)
+                shelf.prepared,
+                from: shelf.target,
+                rendered: { cards.indices.contains($0) ? cards[$0] : nil },
+                stamps: shelf.stamps,
+                to: target,
+                into: &loan
+            )
         }
         return loan
     }
@@ -88,8 +93,12 @@ extension RenderPipeline {
     /// Adds to `loan` what `prepared`, the diffs of `source` in order, lends a render of `target`: every reusable
     /// diff by identity, and each rendered file that keeps its place, with the stamp it was rendered under.
     func lend(
-        _ prepared: [PreparedDiff], from source: Target, rendered: (Int) -> RenderedDiff?, stamps: [Stamp],
-        to target: Target, into loan: inout Loan
+        _ prepared: [PreparedDiff],
+        from source: Target,
+        rendered: (Int) -> RenderedDiff?,
+        stamps: [Stamp],
+        to target: Target,
+        into loan: inout Loan
     ) {
         let oldPairs = source.pairs
         let newPairs = target.pairs
@@ -126,8 +135,10 @@ extension RenderPipeline {
         {
             let stamp = currentStamp(forIndex: 0, in: job.target)
             let file = PaneRenderer.renderInline(
-                PaneRenderer.Job(index: 0, diff: diff), options: renderOptions(for: job.target),
-                layout: renderLayout(for: job.target))
+                PaneRenderer.Job(index: 0, diff: diff),
+                options: renderOptions(for: job.target),
+                layout: renderLayout(for: job.target)
+            )
             append([diff], [(file, stamp)], for: job)
             headLanded = true
             if pairs.count == 1 {
@@ -227,7 +238,10 @@ extension RenderPipeline {
     func renderStep(_ jobs: [PaneRenderer.Job], for job: RenderJob) async throws -> [(Int, Stamped)] {
         let stamps = jobs.map { currentStamp(forIndex: $0.index, in: job.target) }
         let files = try await renderer.render(
-            jobs, options: renderOptions(for: job.target), layout: renderLayout(for: job.target))
+            jobs,
+            options: renderOptions(for: job.target),
+            layout: renderLayout(for: job.target)
+        )
         guard job.generation == generation else { throw CancellationError() }
         guard files.count == jobs.count else { throw IncompleteRender() }
         return zip(jobs, zip(files, stamps)).map { ($0.index, ($1.0, $1.1)) }
@@ -243,8 +257,12 @@ extension RenderPipeline {
         let missing = indices.filter { diffs[$0] == nil }
         if !missing.isEmpty {
             let fresh = try await preparer.prepare(
-                missing.map { pairs[$0] }, left: job.inputs.sources.left, right: job.inputs.sources.right,
-                granularity: job.inputs.granularity, heuristics: job.inputs.heuristics)
+                missing.map { pairs[$0] },
+                left: job.inputs.sources.left,
+                right: job.inputs.sources.right,
+                granularity: job.inputs.granularity,
+                heuristics: job.inputs.heuristics
+            )
             guard job.generation == generation else { throw CancellationError() }
             for (index, diff) in zip(missing, fresh) { diffs[index] = diff }
         }

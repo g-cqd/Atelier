@@ -18,7 +18,8 @@ struct KeymapResolverPhase2Tests {
         #expect(resolver.resolve(stroke(AsciiKey.escape), context: .editor) == .escapeEditor)
         #expect(resolver.resolve(stroke(AsciiKey.escape), context: .tree) == .escapeEditor)
         #expect(
-            resolver.resolve(stroke(AsciiKey.escape), context: .editorVimNormal) == .escapeEditor)
+            resolver.resolve(stroke(AsciiKey.escape), context: .editorVimNormal) == .escapeEditor
+        )
     }
 
     @Test
@@ -32,7 +33,8 @@ struct KeymapResolverPhase2Tests {
     func escapeDoesNotResolveOnRepeat() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.escape), context: .tree, isRepeat: true) == nil)
+            resolver.resolve(stroke(AsciiKey.escape), context: .tree, isRepeat: true) == nil
+        )
     }
 
     // MARK: - Editor context bindings
@@ -41,14 +43,16 @@ struct KeymapResolverPhase2Tests {
     func altBWordBackwardInEditor() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.b, .alt), context: .editor) == .editorWordBackward)
+            resolver.resolve(stroke(AsciiKey.b, .alt), context: .editor) == .editorWordBackward
+        )
     }
 
     @Test
     func altFWordForwardInEditor() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.f, .alt), context: .editor) == .editorWordForward)
+            resolver.resolve(stroke(AsciiKey.f, .alt), context: .editor) == .editorWordForward
+        )
     }
 
     @Test
@@ -62,7 +66,8 @@ struct KeymapResolverPhase2Tests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(AsciiKey.b, .alt), context: .editor, isRepeat: true)
-                == .editorWordBackward)
+                == .editorWordBackward
+        )
     }
 
     // MARK: - Vim normal mode context bindings
@@ -71,20 +76,25 @@ struct KeymapResolverPhase2Tests {
     func vimNormalModeHJKL() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.h), context: .editorVimNormal) == .vimMoveLeft)
+            resolver.resolve(stroke(AsciiKey.h), context: .editorVimNormal) == .vimMoveLeft
+        )
         #expect(
-            resolver.resolve(stroke(AsciiKey.j), context: .editorVimNormal) == .vimMoveDown)
+            resolver.resolve(stroke(AsciiKey.j), context: .editorVimNormal) == .vimMoveDown
+        )
         #expect(
-            resolver.resolve(stroke(AsciiKey.k), context: .editorVimNormal) == .vimMoveUp)
+            resolver.resolve(stroke(AsciiKey.k), context: .editorVimNormal) == .vimMoveUp
+        )
         #expect(
-            resolver.resolve(stroke(AsciiKey.l), context: .editorVimNormal) == .vimMoveRight)
+            resolver.resolve(stroke(AsciiKey.l), context: .editorVimNormal) == .vimMoveRight
+        )
     }
 
     @Test
     func vimEnterInsert() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(AsciiKey.i), context: .editorVimNormal) == .vimEnterInsert)
+            resolver.resolve(stroke(AsciiKey.i), context: .editorVimNormal) == .vimEnterInsert
+        )
     }
 
     @Test
@@ -92,7 +102,8 @@ struct KeymapResolverPhase2Tests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(AsciiKey.g, .shift), context: .editorVimNormal)
-                == .vimGotoLastLine)
+                == .vimGotoLastLine
+        )
     }
 
     @Test
@@ -115,17 +126,23 @@ struct KeymapResolverPhase2Tests {
     func treeNavigation() {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
-            resolver.resolve(stroke(Key.down.rawValue), context: .tree) == .treeDown)
+            resolver.resolve(stroke(Key.down.rawValue), context: .tree) == .treeDown
+        )
         #expect(
-            resolver.resolve(stroke(Key.up.rawValue), context: .tree) == .treeUp)
+            resolver.resolve(stroke(Key.up.rawValue), context: .tree) == .treeUp
+        )
         #expect(
-            resolver.resolve(stroke(Key.enter.rawValue), context: .tree) == .treeSelect)
+            resolver.resolve(stroke(Key.enter.rawValue), context: .tree) == .treeSelect
+        )
         #expect(
-            resolver.resolve(stroke(Key.enterAlt.rawValue), context: .tree) == .treeSelect)
+            resolver.resolve(stroke(Key.enterAlt.rawValue), context: .tree) == .treeSelect
+        )
         #expect(
-            resolver.resolve(stroke(Key.right.rawValue), context: .tree) == .treeExpandOrOpen)
+            resolver.resolve(stroke(Key.right.rawValue), context: .tree) == .treeExpandOrOpen
+        )
         #expect(
-            resolver.resolve(stroke(Key.left.rawValue), context: .tree) == .treeCollapse)
+            resolver.resolve(stroke(Key.left.rawValue), context: .tree) == .treeCollapse
+        )
     }
 
     @Test
@@ -141,7 +158,8 @@ struct KeymapResolverPhase2Tests {
         let resolver = KeymapResolver(config: KittyConfig())
         #expect(
             resolver.resolve(stroke(Key.down.rawValue), context: .tree, isRepeat: true)
-                == .treeDown)
+                == .treeDown
+        )
     }
 
     // MARK: - Context priority over global

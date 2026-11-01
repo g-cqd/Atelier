@@ -22,25 +22,36 @@ struct GrammarColorTests {
     /// Compiled tables shared by every run of these tests: the registry keys them by the grammar's hash, so a run never
     /// reads another grammar's, and only the first run on a machine compiles.
     private static let sharedCacheDirectory = FileManager.default.temporaryDirectory.appending(
-        path: "gdv-test-grammar-tables", directoryHint: .isDirectory)
+        path: "gdv-test-grammar-tables",
+        directoryHint: .isDirectory
+    )
 
     /// Services over the bundled corpus, parsing on the tier's own task so the harness's task provider waits for them.
     private static func services(
-        cacheDirectory: URL = sharedCacheDirectory, compile: GrammarRegistry? = nil
+        cacheDirectory: URL = sharedCacheDirectory,
+        compile: GrammarRegistry? = nil
     ) throws -> GrammarColorServices {
         let corpus = try GrammarCorpus.bundled()
         let manifest = try corpus.manifest()
         let registry = compile ?? GrammarRegistry(cacheDirectory: cacheDirectory, bundledManifest: manifest)
         return GrammarColorServices(
             artifacts: SyntaxArtifactsCache(
-                registry: registry, grammarsDirectory: corpus.grammarsDirectory, limits: GrammarColorServices.limits),
-            pool: nil)
+                registry: registry,
+                grammarsDirectory: corpus.grammarsDirectory,
+                limits: GrammarColorServices.limits
+            ),
+            pool: nil
+        )
     }
 
     /// Shows `path` changed from `old` to `new` in a folder comparison, on a model with `services` attached, and
     /// reports the file displayed.
     private func show(
-        _ path: String, old: String, new: String, services: GrammarColorServices?, off: Set<String> = [],
+        _ path: String,
+        old: String,
+        new: String,
+        services: GrammarColorServices?,
+        off: Set<String> = [],
         refinesSwift: Bool = true
     ) async throws -> (model: DiffViewerModel, file: RenderedDiff) {
         let sut = harness.makeSUT()
@@ -78,7 +89,9 @@ struct GrammarColorTests {
         ("tool.py", "def run():\n    return 1\n", "def run():\n    return 2\n")
     ])
     func `a JSON or Python side refines to its grammar's colour after the lexer's`(
-        path: String, old: String, new: String
+        path: String,
+        old: String,
+        new: String
     ) async throws {
         let (sut, file) = try await show(path, old: old, new: new, services: Self.services())
 
@@ -101,7 +114,11 @@ struct GrammarColorTests {
             return try ParseTableCompiler.compile(grammar)
         }
         let (sut, file) = try await show(
-            "settings.json", old: "{\"a\": 1}\n", new: "{\"a\": 2}\n", services: Self.services(compile: registry))
+            "settings.json",
+            old: "{\"a\": 1}\n",
+            new: "{\"a\": 2}\n",
+            services: Self.services(compile: registry)
+        )
 
         _ = try await started.next()
         #expect(!Self.hasGrammarColor(sut.decorations(for: file.new)?.new))
@@ -114,7 +131,11 @@ struct GrammarColorTests {
     @Test
     func `a side its grammar cannot read keeps the lexer's colour`() async throws {
         let (sut, file) = try await show(
-            "settings.json", old: "{\"a\": 1}\n", new: "{ { { nope nope nope ] ] ]\n", services: Self.services())
+            "settings.json",
+            old: "{\"a\": 1}\n",
+            new: "{ { { nope nope nope ] ] ]\n",
+            services: Self.services()
+        )
 
         try await harness.taskProvider.waitForAllTasks()
 
@@ -127,7 +148,12 @@ struct GrammarColorTests {
         let services = try Self.services()
         let parsed = services.record.parsesStarted
         let (sut, file) = try await show(
-            "settings.json", old: "{\"a\": 1}\n", new: "{\"a\": 3}\n", services: services, off: ["json"])
+            "settings.json",
+            old: "{\"a\": 1}\n",
+            new: "{\"a\": 3}\n",
+            services: services,
+            off: ["json"]
+        )
 
         try await harness.taskProvider.waitForAllTasks()
 
@@ -140,12 +166,22 @@ struct GrammarColorTests {
     func `with swift-syntax's colour off, Swift keeps the lexer's while JSON takes its grammar's`() async throws {
         let services = try Self.services()
         let (swift, swiftFile) = try await show(
-            "a.swift", old: "let a = 1\n", new: "let a = 2\n", services: services, refinesSwift: false)
+            "a.swift",
+            old: "let a = 1\n",
+            new: "let a = 2\n",
+            services: services,
+            refinesSwift: false
+        )
         try await harness.taskProvider.waitForAllTasks()
         #expect(!Self.hasRefinedColor(swift.decorations(for: swiftFile.new)?.new))
 
         let (json, jsonFile) = try await show(
-            "settings.json", old: "{\"a\": 1}\n", new: "{\"a\": 4}\n", services: services, refinesSwift: false)
+            "settings.json",
+            old: "{\"a\": 1}\n",
+            new: "{\"a\": 4}\n",
+            services: services,
+            refinesSwift: false
+        )
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(newSideHasGrammarColor(json, jsonFile))

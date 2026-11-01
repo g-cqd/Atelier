@@ -21,7 +21,8 @@ struct LexicalGrammar: Sendable {
         let inlineRules = Dictionary(
             uniqueKeysWithValues: grammar.rules.compactMap { entry -> (String, Rule)? in
                 inlineNames.contains(entry.name) ? entry : nil
-            })
+            }
+        )
         var rules: [(name: String, rule: Rule)] = []
         for (name, rule) in grammar.rules where !inlineNames.contains(name) {
             let expanded =
@@ -49,9 +50,15 @@ struct LexicalGrammar: Sendable {
 
     /// Expands each inline symbol at its use site; the grammar's finite inline set bounds the recursive tree walk.
     private static func expandingInline(
-        _ rule: Rule, definitions: [String: Rule], visiting: Set<String>, depth: Int
+        _ rule: Rule,
+        definitions: [String: Rule],
+        visiting: Set<String>,
+        depth: Int
     ) throws(GrammarError) -> Rule {
         guard depth < 64 else { throw .invalidRuleType("Inline rule nesting exceeds 64 levels") }
+        func deeper(_ content: Rule) throws(GrammarError) -> Rule {
+            try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1)
+        }
         switch rule {
             case .symbol(let name):
                 guard let definition = definitions[name] else { return rule }
@@ -59,57 +66,43 @@ struct LexicalGrammar: Sendable {
                     throw .invalidRuleType("Inline rule cycle at `\(name)`")
                 }
                 return try expandingInline(
-                    definition, definitions: definitions, visiting: visiting.union([name]), depth: depth + 1)
+                    definition,
+                    definitions: definitions,
+                    visiting: visiting.union([name]),
+                    depth: depth + 1
+                )
             case .seq(let members):
                 var expanded: [Rule] = []
                 expanded.reserveCapacity(members.count)
-                for member in members {
-                    expanded.append(
-                        try expandingInline(member, definitions: definitions, visiting: visiting, depth: depth + 1))
-                }
+                for member in members { expanded.append(try deeper(member)) }
                 return .seq(expanded)
             case .choice(let members):
                 var expanded: [Rule] = []
                 expanded.reserveCapacity(members.count)
-                for member in members {
-                    expanded.append(
-                        try expandingInline(member, definitions: definitions, visiting: visiting, depth: depth + 1))
-                }
+                for member in members { expanded.append(try deeper(member)) }
                 return .choice(expanded)
             case .repeat(let content):
-                return .repeat(
-                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .repeat(try deeper(content))
             case .repeat1(let content):
-                return .repeat1(
-                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .repeat1(try deeper(content))
             case .optional(let content):
-                return .optional(
-                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .optional(try deeper(content))
             case .prec(let value, let content):
-                return .prec(
-                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .prec(value, try deeper(content))
             case .precLeft(let value, let content):
-                return .precLeft(
-                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .precLeft(value, try deeper(content))
             case .precRight(let value, let content):
-                return .precRight(
-                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .precRight(value, try deeper(content))
             case .precDynamic(let value, let content):
-                return .precDynamic(
-                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .precDynamic(value, try deeper(content))
             case .token(let content):
-                return .token(
-                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .token(try deeper(content))
             case .immediateToken(let content):
-                return .immediateToken(
-                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .immediateToken(try deeper(content))
             case .field(let name, let content):
-                return .field(
-                    name, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+                return .field(name, try deeper(content))
             case .alias(let content, let name, let isNamed):
-                return .alias(
-                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1), name,
-                    isNamed)
+                return .alias(try deeper(content), name, isNamed)
             case .string, .pattern, .blank:
                 return rule
         }
@@ -190,7 +183,8 @@ struct LexicalGrammar: Sendable {
                 isImmediate: isImmediate,
                 completionPrecedence: Self.completionPrecedence(of: rule),
                 implicitPrecedence: (text == nil ? 0 : 2) + (isImmediate ? 1 : 0)
-            ))
+            )
+        )
         return name
     }
 

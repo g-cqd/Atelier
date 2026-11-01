@@ -27,7 +27,9 @@ private struct RepositoryTrustPrompt: ViewModifier {
                 self.shown = nil
             }
             .alert(
-                shown.map { "Trust “\($0.name)”?" } ?? "", isPresented: isPresented, presenting: shown
+                shown.map { "Trust “\($0.name)”?" } ?? "",
+                isPresented: isPresented,
+                presenting: shown
             ) { request in
                 Button("Trust") { answer(request, trusts: true) }
                 // The default button, the one Return picks, is the safe answer.
@@ -46,7 +48,8 @@ private struct RepositoryTrustPrompt: ViewModifier {
                 guard !isShown, let request = shown else { return }
                 trust.release(request)
                 shown = nil
-            })
+            }
+        )
     }
 
     private func claimIfActive() {

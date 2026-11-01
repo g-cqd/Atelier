@@ -58,9 +58,16 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
     )
 
     private init(
-        font: NSFont, textColor: NSColor, background: NSColor, selection: NSColor, gutterBackground: NSColor,
-        gutterText: NSColor, gutterChangedText: NSColor, lineHeightMultiple: Double,
-        roleColors: [HighlightRole: NSColor], diffColors: DiffColors = .standard
+        font: NSFont,
+        textColor: NSColor,
+        background: NSColor,
+        selection: NSColor,
+        gutterBackground: NSColor,
+        gutterText: NSColor,
+        gutterChangedText: NSColor,
+        lineHeightMultiple: Double,
+        roleColors: [HighlightRole: NSColor],
+        diffColors: DiffColors = .standard
     ) {
         self.font = font
         self.textColor = textColor
@@ -79,9 +86,17 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
     package func with(diffColors: DiffColors) -> DiffPalette {
         guard diffColors != self.diffColors else { return self }
         return DiffPalette(
-            font: font, textColor: textColor, background: background, selection: selection,
-            gutterBackground: gutterBackground, gutterText: gutterText, gutterChangedText: gutterChangedText,
-            lineHeightMultiple: lineHeightMultiple, roleColors: roleColors, diffColors: diffColors)
+            font: font,
+            textColor: textColor,
+            background: background,
+            selection: selection,
+            gutterBackground: gutterBackground,
+            gutterText: gutterText,
+            gutterChangedText: gutterChangedText,
+            lineHeightMultiple: lineHeightMultiple,
+            roleColors: roleColors,
+            diffColors: diffColors
+        )
     }
 
     /// The colours a theme states for its roles; a role the theme leaves out resolves through the theme's own

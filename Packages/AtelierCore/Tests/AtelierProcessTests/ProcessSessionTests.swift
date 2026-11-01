@@ -8,10 +8,15 @@ import Testing
 @Suite(.tags(.concurrency))
 struct ProcessSessionTests {
     private static func session(
-        _ executable: String, _ arguments: [String] = [], killGracePeriod: Duration = .seconds(2)
+        _ executable: String,
+        _ arguments: [String] = [],
+        killGracePeriod: Duration = .seconds(2)
     ) -> ProcessSession {
         ProcessSession(
-            executable: URL(filePath: executable), arguments: arguments, killGracePeriod: killGracePeriod)
+            executable: URL(filePath: executable),
+            arguments: arguments,
+            killGracePeriod: killGracePeriod
+        )
     }
 
     /// Drains `output` until the stream finishes, collecting every chunk it yields.

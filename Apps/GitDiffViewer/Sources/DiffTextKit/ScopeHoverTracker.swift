@@ -17,8 +17,11 @@ package final class ScopeHoverTracker: NSObject {
         self.textView = textView
         self.gutter = gutter
         let area = NSTrackingArea(
-            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-            owner: self, userInfo: nil)
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
         textView.addTrackingArea(area)
         trackingArea = area
         (textView as? DiffPaneTextView)?.onFoldCommand = { [weak self] command in self?.perform(command) ?? false }
@@ -90,7 +93,9 @@ package final class ScopeHoverTracker: NSObject {
             inContainer.y < fragment.layoutFragmentFrame.maxY
         else { return nil }
         let offset = contentManager.offset(
-            from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+            from: layoutManager.documentRange.location,
+            to: fragment.rangeInElement.location
+        )
         return rendered.rowIndex(containing: offset)
     }
 }

@@ -46,7 +46,8 @@ extension SyntaxTheme {
                 .constructor: ThemeStyle(foreground: cyan),
                 .embedded: ThemeStyle(foreground: text),
                 .escape: ThemeStyle(foreground: purple)
-            ])
+            ]
+        )
     }()
 }
 

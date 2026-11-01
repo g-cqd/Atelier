@@ -39,7 +39,10 @@ struct FileTabScrollRangeTests {
         model.pin("long.swift")
         try await Self.session.settle()
         try Self.expectFirstChange(
-            of: model, in: content, "explorers in the sidebar, side by side, opened by a double click")
+            of: model,
+            in: content,
+            "explorers in the sidebar, side by side, opened by a double click"
+        )
 
         // Both tabs close before the window is drawn again: the file list between them is not what this test reads.
         model.settings.explorerPlacement = .top
@@ -101,7 +104,8 @@ struct FileTabScrollRangeTests {
         let content = try #require(layoutManager.textContentManager)
         let origin = pane.textView.textContainerOrigin.y
         let fragment = try #require(
-            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: pane.shownTop - origin)))
+            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: pane.shownTop - origin))
+        )
         let row = pane.rendered.rowIndex(
             containing: content.offset(from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
         )
@@ -141,10 +145,13 @@ struct FileTabScrollRangeTests {
         return try textViews.map { textView in
             let gutter = try #require(
                 subviews(of: DiffGutterView.self, in: content)
-                    .first { ($0.source as? TextKit2RowGeometry)?.textView === textView })
+                    .first { ($0.source as? TextKit2RowGeometry)?.textView === textView }
+            )
             return ShownPane(
-                textView: textView, clip: try #require(textView.enclosingScrollView?.contentView),
-                rendered: try #require(gutter.rendered))
+                textView: textView,
+                clip: try #require(textView.enclosingScrollView?.contentView),
+                rendered: try #require(gutter.rendered)
+            )
         }
     }
 
@@ -152,8 +159,10 @@ struct FileTabScrollRangeTests {
     fileprivate static func window(showing model: DiffViewerModel) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered,
-            defer: false)
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: ContentView(settings: model.settings, model: model))
         return window
@@ -196,7 +205,8 @@ extension FileTabScrollRangeTests {
 
         /// The shared model and window, made and loaded on the first call, with the settings it asks for.
         private func start(
-            placement: ExplorerPlacement, mode: ViewMode
+            placement: ExplorerPlacement,
+            mode: ViewMode
         ) async throws -> (model: DiffViewerModel, window: NSWindow) {
             if let shown { return shown }
             let short = (1 ... 10).map { "let value\($0) = \($0)" }

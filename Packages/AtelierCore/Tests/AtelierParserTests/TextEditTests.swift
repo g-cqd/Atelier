@@ -55,11 +55,17 @@ struct TextEditTests {
         #expect(edited.root.children[1].byteRange == 4 ..< 7)
         #expect(
             edited.root.children[1].pointRange == Point(
-                row: 1, column: 0) ..< Point(row: 1, column: 3))
+                row: 1,
+                column: 0
+            ) ..< Point(row: 1, column: 3)
+        )
         #expect(edited.root.fields["rhs"]?.first?.byteRange == 4 ..< 7)
         #expect(
             edited.root.fields["rhs"]?.first?.pointRange == Point(
-                row: 1, column: 0) ..< Point(row: 1, column: 3))
+                row: 1,
+                column: 0
+            ) ..< Point(row: 1, column: 3)
+        )
     }
 
     @Test(arguments: [
@@ -103,7 +109,11 @@ struct TextEditTests {
         var node = SyntaxNode(type: "leaf", byteRange: 1 ..< 2)
         for _ in 1 ..< depth {
             node = SyntaxNode(
-                type: "branch", children: [node], byteRange: 1 ..< 2, fields: fieldPerLevel ? ["inner": [node]] : [:])
+                type: "branch",
+                children: [node],
+                byteRange: 1 ..< 2,
+                fields: fieldPerLevel ? ["inner": [node]] : [:]
+            )
         }
         return SyntaxTree(root: node, source: "xy")
     }

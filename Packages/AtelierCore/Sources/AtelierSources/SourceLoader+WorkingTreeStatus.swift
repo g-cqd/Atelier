@@ -48,8 +48,13 @@ extension SourceLoader {
         return entries.compactMap { entry in
             guard let path = relative(entry.path) else { return nil }
             return GitStatusEntry(
-                path: path, originalPath: entry.originalPath.flatMap(relative), status: entry.status,
-                isSubmodule: entry.isSubmodule, indexStatus: entry.indexStatus, worktreeStatus: entry.worktreeStatus)
+                path: path,
+                originalPath: entry.originalPath.flatMap(relative),
+                status: entry.status,
+                isSubmodule: entry.isSubmodule,
+                indexStatus: entry.indexStatus,
+                worktreeStatus: entry.worktreeStatus
+            )
         }
     }
 }

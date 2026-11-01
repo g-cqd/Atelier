@@ -38,11 +38,18 @@ struct SideStateBadgeStatesTests {
     @Test
     func `a working tree's load gives each file and folder the state git reports`() async throws {
         reader.entries[.directory(Self.root)] = Self.entries(
-            "edited.swift", "staged.swift", "new.swift", "dir/both.swift", "committed.swift")
+            "edited.swift",
+            "staged.swift",
+            "new.swift",
+            "dir/both.swift",
+            "committed.swift"
+        )
         reader.workingTreeStatuses[.directory(Self.root)] = Self.status(
             "1 .M N... 100644 100644 100644 aaaa aaaa edited.swift",
-            "1 M. N... 100644 100644 100644 aaaa bbbb staged.swift", "? new.swift",
-            "1 MM N... 100644 100644 100644 aaaa bbbb dir/both.swift")
+            "1 M. N... 100644 100644 100644 aaaa bbbb staged.swift",
+            "? new.swift",
+            "1 MM N... 100644 100644 100644 aaaa bbbb dir/both.swift"
+        )
         let sut = makeSUT()
 
         sut.load(.directory(Self.root), repository: Self.info)
@@ -65,7 +72,8 @@ struct SideStateBadgeStatesTests {
         (.directory(URL(filePath: "/plain", directoryHint: .isDirectory)), .unstaged)
     ])
     func `a side git reports nothing about keeps one state for every path`(
-        source: ComparisonSource, state: BadgeChangeState
+        source: ComparisonSource,
+        state: BadgeChangeState
     ) async throws {
         let sut = makeSUT()
 
@@ -80,7 +88,8 @@ struct SideStateBadgeStatesTests {
         let other = ComparisonSource.directory(URL(filePath: "/other", directoryHint: .isDirectory))
         reader.entries[.directory(Self.root)] = Self.entries("a.swift")
         reader.workingTreeStatuses[.directory(Self.root)] = Self.status(
-            "1 M. N... 100644 100644 100644 aaaa bbbb a.swift")
+            "1 M. N... 100644 100644 100644 aaaa bbbb a.swift"
+        )
         let sut = makeSUT()
         sut.load(.directory(Self.root), repository: Self.info)
         try await taskProvider.waitForAllTasks()
@@ -98,7 +107,8 @@ struct SideStateBadgeStatesTests {
     func `refreshing reads git's status alone, so staging a file fills its badge without a reload`() async throws {
         reader.entries[.directory(Self.root)] = Self.entries("edited.swift")
         reader.workingTreeStatuses[.directory(Self.root)] = Self.status(
-            "1 .M N... 100644 100644 100644 aaaa aaaa edited.swift")
+            "1 .M N... 100644 100644 100644 aaaa aaaa edited.swift"
+        )
         let sut = makeSUT()
         sut.load(.directory(Self.root), repository: Self.info)
         try await taskProvider.waitForAllTasks()
@@ -107,7 +117,8 @@ struct SideStateBadgeStatesTests {
         sut.onEntriesChanged = { entriesChanges += 1 }
 
         reader.workingTreeStatuses[.directory(Self.root)] = Self.status(
-            "1 M. N... 100644 100644 100644 aaaa bbbb edited.swift")
+            "1 M. N... 100644 100644 100644 aaaa bbbb edited.swift"
+        )
         sut.refreshBadgeStates()
         try await taskProvider.waitForAllTasks()
 

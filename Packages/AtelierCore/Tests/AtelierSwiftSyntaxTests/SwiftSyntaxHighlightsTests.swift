@@ -38,7 +38,9 @@ struct SwiftSyntaxHighlightsTests {
         for type in ["NSRect", "NSColor", "Set", "Swift", "String"] {
             #expect(
                 Self.tokens(syntactic, spelling: type, in: source).allSatisfy { $0.role == .type }
-                    && !Self.tokens(syntactic, spelling: type, in: source).isEmpty, "\(type)")
+                    && !Self.tokens(syntactic, spelling: type, in: source).isEmpty,
+                "\(type)"
+            )
         }
         #expect(Self.tokens(syntactic, spelling: "NSRect", in: source).count == 2)
         #expect(Self.tokens(syntactic, spelling: "red", in: source).isEmpty)
@@ -87,7 +89,8 @@ struct SwiftSyntaxHighlightsTests {
         // for a type, as the lexer and Xcode take a capitalized name with no semantic tokens to say otherwise.
         // Xcode colours the declaration differently from every one of those references.
         #expect(
-            Self.tokens(tokens, spelling: "Widget", in: source).map(\.role) == [.typeDeclaration, .type, .type, .type])
+            Self.tokens(tokens, spelling: "Widget", in: source).map(\.role) == [.typeDeclaration, .type, .type, .type]
+        )
         // "resize" declares the method once; nothing tells a lowercase name used after `.` from a plain member
         // access without semantic tokens, so the call stays untokenized here, as it already did before this change.
         #expect(Self.tokens(tokens, spelling: "resize", in: source).map(\.role) == [.declarationOther])
@@ -96,7 +99,8 @@ struct SwiftSyntaxHighlightsTests {
         // "scale" is a parameter's own name at its declaration, twice; used as a plain argument at the call, it
         // colours no differently than any other unresolved name would.
         #expect(
-            Self.tokens(tokens, spelling: "scale", in: source).map(\.role) == [.declarationOther, .declarationOther])
+            Self.tokens(tokens, spelling: "scale", in: source).map(\.role) == [.declarationOther, .declarationOther]
+        )
         // "with" is an argument label at its declaration; "to" is the same label, first at its declaration and then
         // at the call, each Xcode's own place for `variable.parameter`.
         #expect(Self.tokens(tokens, spelling: "with", in: source).map(\.role) == [.declarationOther])

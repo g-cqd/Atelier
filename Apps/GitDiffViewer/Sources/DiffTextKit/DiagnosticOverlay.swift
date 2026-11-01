@@ -114,14 +114,18 @@ package enum DiagnosticRowMapper {
     /// The same mapping as ``rows(for:left:right:)``, always off the main actor.
     @concurrent
     package static func rowsOffMain(
-        for rendered: RenderedText, left: SideFindings, right: SideFindings
+        for rendered: RenderedText,
+        left: SideFindings,
+        right: SideFindings
     ) async -> [Int: DiagnosticOverlay.RowDiagnostics] {
         assert(!isOnMainThread(), "rowsOffMain must run off the main actor")
         return rows(for: rendered, left: left, right: right)
     }
 
     package static func rows(
-        for rendered: RenderedText, left: SideFindings, right: SideFindings
+        for rendered: RenderedText,
+        left: SideFindings,
+        right: SideFindings
     ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
         var byRow: [Int: [Finding]] = [:]
         for (rowIndex, meta) in rendered.rows.enumerated() {
@@ -157,7 +161,11 @@ package enum DiagnosticRowMapper {
                 return DiagnosticOverlay.SquiggleRange(start: start, end: end, severity: finding.severity)
             }
             result[rowIndex] = DiagnosticOverlay.RowDiagnostics(
-                severity: severity, count: rowFindings.count, findings: rowFindings, squiggles: squiggles)
+                severity: severity,
+                count: rowFindings.count,
+                findings: rowFindings,
+                squiggles: squiggles
+            )
         }
         return result
     }

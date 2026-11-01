@@ -32,7 +32,11 @@ struct DiagnosticRedrawBenchmark {
         /// next, so every bump changes every one of them.
         func rows(count: Int, run: Int) -> [Int: DiagnosticOverlay.RowDiagnostics] {
             let diagnostics = DiagnosticOverlay.RowDiagnostics(
-                severity: run.isMultiple(of: 2) ? .warning : .error, count: 1, findings: [], squiggles: [])
+                severity: run.isMultiple(of: 2) ? .warning : .error,
+                count: 1,
+                findings: [],
+                squiggles: []
+            )
             switch self {
                 case .oneRow: return [1: diagnostics]
                 case .everyTenthRow:
@@ -71,7 +75,8 @@ struct DiagnosticRedrawBenchmark {
                 print(
                     "BENCH diagnostics bump, \(count) rows, \(wrapsLines ? "wrapped" : "unwrapped"), \(change): "
                         + "whole-layout invalidation \(Self.summary(layout)); redraw \(Self.summary(redraw)); "
-                        + "a pass with nothing to draw \(Self.summary(idle))")
+                        + "a pass with nothing to draw \(Self.summary(idle))"
+                )
             }
         }
     }
@@ -120,7 +125,12 @@ private final class BenchmarkPane {
         textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
         textView.textLayoutManager?.delegate = coordinator.fragmentProvider
         DiffTextViewCoordinator.configureWrapping(
-            wrapsLines, column: 0, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+            wrapsLines,
+            column: 0,
+            font: rendered.palette.font,
+            textView: textView,
+            scrollView: scrollView
+        )
         gutterView = DiffGutterView(clipView: scrollView.contentView)
         gutterView.source = textView
         gutterView.style = .new
@@ -134,18 +144,31 @@ private final class BenchmarkPane {
         coordinator.wrapsLines = wrapsLines
         scrollView.contentView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
-            coordinator, selector: #selector(DiffTextViewCoordinator.viewportDidResize(_:)),
-            name: NSView.frameDidChangeNotification, object: scrollView.contentView)
+            coordinator,
+            selector: #selector(DiffTextViewCoordinator.viewportDidResize(_:)),
+            name: NSView.frameDidChangeNotification,
+            object: scrollView.contentView
+        )
         textView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
-            coordinator, selector: #selector(DiffTextViewCoordinator.textViewFrameDidChange(_:)),
-            name: NSView.frameDidChangeNotification, object: textView)
+            coordinator,
+            selector: #selector(DiffTextViewCoordinator.textViewFrameDidChange(_:)),
+            name: NSView.frameDidChangeNotification,
+            object: textView
+        )
         coordinator.apply(rendered)
         let pane = DiffPaneView(
-            gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
+            gutterView: gutterView,
+            scrollView: scrollView,
+            contentView: scrollView,
+            minimapView: minimapView
+        )
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         let contentView = try #require(window.contentView)
         contentView.wantsLayer = true
         pane.frame = contentView.bounds

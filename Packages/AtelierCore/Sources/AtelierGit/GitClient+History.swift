@@ -49,7 +49,8 @@ extension GitClient {
     public func commitCount(from: String, to: String, firstParent: Bool) async throws -> Int {
         let range = "\(try Self.checked(from))..\(try Self.checked(to))"
         let data = try await run(
-            ["rev-list", "--count"] + (firstParent ? ["--first-parent"] : []) + ["--end-of-options", range])
+            ["rev-list", "--count"] + (firstParent ? ["--first-parent"] : []) + ["--end-of-options", range]
+        )
         let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard let count = Int(text), count >= 0 else {
             throw GitError.commandFailed("could not parse a commit count from: \(text)")
@@ -79,11 +80,16 @@ extension GitClient {
                 [
                     "log", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-color", "--no-relative",
                     "--no-abbrev", "--root", "--raw", "-M", "-z", GitParsers.commitChangesFormat
-                ] + walk + ["-n", String(limit), "--end-of-options", range, "--"]))
+                ] + walk + ["-n", String(limit), "--end-of-options", range, "--"]
+            )
+        )
         let oldestParent = commits.last?.parentIDs.first
         let isComplete = commits.count < limit || oldestParent == nil
         return GitCommitPage(
-            commits: commits, isComplete: isComplete, continuation: firstParent && !isComplete ? oldestParent : nil)
+            commits: commits,
+            isComplete: isComplete,
+            continuation: firstParent && !isComplete ? oldestParent : nil
+        )
     }
 
     /// The working tree's changes on top of `HEAD`: every tracked file whose content on disk or in the index differs

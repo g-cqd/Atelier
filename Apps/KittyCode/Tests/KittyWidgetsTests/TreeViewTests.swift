@@ -40,14 +40,20 @@ struct TreeViewTests {
         #expect(TreeViewLayout.contentWidth(for: tree, in: rect) == 9)
         #expect(
             TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: rect)
-                == Rect(x: 10, y: 1, width: 1, height: 5))
+                == Rect(x: 10, y: 1, width: 1, height: 5)
+        )
 
         let gripOffset = TreeViewLayout.scrollGripOffset(for: tree, in: rect, pointerRow: 2)
 
         #expect(gripOffset == 1)
         #expect(
             TreeViewLayout.scrollOffset(
-                for: tree, in: rect, pointerRow: 5, gripOffset: gripOffset ?? 0) == 19)
+                for: tree,
+                in: rect,
+                pointerRow: 5,
+                gripOffset: gripOffset ?? 0
+            ) == 19
+        )
     }
 
     @Test

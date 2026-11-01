@@ -111,6 +111,11 @@ private actor FakeDiagnosticsRunner: DiagnosticsRunning {
             try await clock.sleep(for: delay)
         }
         return DiagnosticsEngine.ToolResult(
-            tool: tool, findings: [], status: .succeeded, duration: .zero, fromCache: false)
+            tool: tool,
+            findings: [],
+            status: .succeeded,
+            duration: .zero,
+            fromCache: false
+        )
     }
 }

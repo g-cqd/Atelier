@@ -11,7 +11,9 @@ struct GitHistoryRepository {
 
     init() throws {
         root = FileManager.default.temporaryDirectory.appending(
-            path: "atelier-history-\(UUID().uuidString)", directoryHint: .isDirectory)
+            path: "atelier-history-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try git("init", "-q", "-b", "main")
     }
@@ -24,7 +26,11 @@ struct GitHistoryRepository {
     /// A client with a verdict cache of its own, so no test sees another's.
     func client() -> GitClient {
         GitClient(
-            repository: root, runner: HardenedProcessRunner(pool: pool), timeout: .seconds(30), gate: GitConfigGate())
+            repository: root,
+            runner: HardenedProcessRunner(pool: pool),
+            timeout: .seconds(30),
+            gate: GitConfigGate()
+        )
     }
 
     func write(_ relativePath: String, _ contents: String) throws {

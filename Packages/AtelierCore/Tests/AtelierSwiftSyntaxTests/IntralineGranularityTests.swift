@@ -31,7 +31,11 @@ struct IntralineGranularityTests {
         let oldTokens = SwiftSyntaxTokenRanges().tokenRangesByLine(text: old, language: .swift)
         let newTokens = SwiftSyntaxTokenRanges().tokenRangesByLine(text: new, language: .swift)
         let emphasis = IntralineDiff.emphasis(
-            old: old[...], new: new[...], granularity: .syntax, oldTokens: oldTokens[0], newTokens: newTokens[0]
+            old: old[...],
+            new: new[...],
+            granularity: .syntax,
+            oldTokens: oldTokens[0],
+            newTokens: newTokens[0]
         )
         #expect(emphasis?.old == [7 ..< 18])
         #expect(emphasis?.new == [7 ..< 18])
@@ -56,11 +60,14 @@ struct IntralineGranularityTests {
     func `objective c syntax tier keeps directives and strings whole`() {
         let byLine = SwiftSyntaxTokenRanges()
             .tokenRangesByLine(
-                text: "@interface Foo : NSObject @\"a b\"", language: .objectiveC)
+                text: "@interface Foo : NSObject @\"a b\"",
+                language: .objectiveC
+            )
         #expect(
             byLine[0] == [
                 0 ..< 10, 10 ..< 11, 11 ..< 14, 14 ..< 15, 15 ..< 16, 16 ..< 17, 17 ..< 25, 25 ..< 26, 26 ..< 32
-            ])
+            ]
+        )
     }
 
     @Test

@@ -203,7 +203,9 @@ public struct RustExternalScanner: GrammarExternalScanner {
     }
 
     private static func processLeftAsterisk(
-        _ processing: inout BlockCommentProcessing, current: UInt8, lexer: inout some ScannerLexer
+        _ processing: inout BlockCommentProcessing,
+        current: UInt8,
+        lexer: inout some ScannerLexer
     ) {
         if current == 0x2A {
             lexer.markEnd()

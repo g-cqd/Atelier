@@ -178,7 +178,12 @@ public actor DocCommentIndex {
             replace(
                 file.uri,
                 with: FileState(
-                    blobID: file.blobID, contentHash: change.contentHash, sides: file.sides, entries: entries))
+                    blobID: file.blobID,
+                    contentHash: change.contentHash,
+                    sides: file.sides,
+                    entries: entries
+                )
+            )
         }
     }
 
@@ -219,7 +224,9 @@ public actor DocCommentIndex {
     /// stable order. Other URIs' entries are deduplicated (see `collapsingHistoricalDuplicates`); `preferringURI`'s
     /// own are kept as they are, since a hover on an old blob asks about the revision it names.
     public func documentation(
-        forIdentifier name: String, preferringURI uri: String?, side: DocIndexSides = .both
+        forIdentifier name: String,
+        preferringURI uri: String?,
+        side: DocIndexSides = .both
     ) -> [DocEntry] {
         let matches = matches(named: name, side: side)
         let sameURI = uri.map { queryURI in matches.filter { $0.uri == queryURI } } ?? []
@@ -324,7 +331,11 @@ public actor DocCommentIndex {
         declarations.compactMap { declaration in
             declaration.documentation.map { markdown in
                 DocEntry(
-                    name: declaration.name, signature: declaration.signature ?? "", markdown: markdown, uri: uri)
+                    name: declaration.name,
+                    signature: declaration.signature ?? "",
+                    markdown: markdown,
+                    uri: uri
+                )
             }
         }
     }

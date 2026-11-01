@@ -66,8 +66,11 @@ package final class DiagnosticsModel {
     ///   - clock: Drives the debounce; a test injects a virtual one.
     ///   - debounce: Trailing coalesce before a run starts.
     package init(
-        engine: any DiagnosticsRunning, settings: ViewerSettings, taskProvider: any TaskProvider,
-        clock: any Clock<Duration> = ContinuousClock(), debounce: Duration = .milliseconds(250)
+        engine: any DiagnosticsRunning,
+        settings: ViewerSettings,
+        taskProvider: any TaskProvider,
+        clock: any Clock<Duration> = ContinuousClock(),
+        debounce: Duration = .milliseconds(250)
     ) {
         self.session = DiagnosticsSession(engine: engine)
         self.settings = settings
@@ -84,7 +87,9 @@ package final class DiagnosticsModel {
             DiagnosticsSides(
                 right: root.map {
                     DiagnosticsSideTarget(content: .directory($0), files: files, corpusFingerprint: corpusFingerprint)
-                }))
+                }
+            )
+        )
     }
 
     /// Plans a run over what each side offers, under the analyzed-sides setting and the user's trust, and runs it. A
@@ -105,8 +110,12 @@ package final class DiagnosticsModel {
     private func plan() -> DiagnosticsPlan {
         let trust = trust
         return DiagnosticsPlan(
-            sides: sides, mode: settings.analyzedSides, tools: settings.enabledToolLocations,
-            canExport: treeExporter != nil, isTrusted: { trust?.isTrusted($0) ?? false })
+            sides: sides,
+            mode: settings.analyzedSides,
+            tools: settings.enabledToolLocations,
+            canExport: treeExporter != nil,
+            isTrusted: { trust?.isTrusted($0) ?? false }
+        )
     }
 
     /// Runs `plan` unless diagnostics are off, it has nothing to do, or it is the plan run or running.
@@ -179,7 +188,8 @@ package final class DiagnosticsModel {
     /// Of one tool's outcomes on the two sides, the one worth showing: a failure, then a missing tool, then a skip,
     /// then a success.
     private static func moreTelling(
-        _ lhs: DiagnosticsEngine.RunStatus, _ rhs: DiagnosticsEngine.RunStatus
+        _ lhs: DiagnosticsEngine.RunStatus,
+        _ rhs: DiagnosticsEngine.RunStatus
     ) -> DiagnosticsEngine.RunStatus {
         func rank(_ status: DiagnosticsEngine.RunStatus) -> Int {
             switch status {
@@ -250,15 +260,22 @@ package final class DiagnosticsModel {
     /// Analyzes one side: a folder in place, a ref's tree exported into a private folder for as long as its tools
     /// need it, and answered from the engine's cache by tree when that tree was analyzed before.
     private func analyze(
-        _ run: DiagnosticsPlan.SideRun, tools: [DiagnosticTool: ToolLocation], session: DiagnosticsSession,
-        exporter: (any DiagnosticsTreeExporting)?, generation: Int
+        _ run: DiagnosticsPlan.SideRun,
+        tools: [DiagnosticTool: ToolLocation],
+        session: DiagnosticsSession,
+        exporter: (any DiagnosticsTreeExporting)?,
+        generation: Int
     ) async {
         let side = run.side
         let target = run.target
         switch target.content {
             case .directory(let root):
                 let request = DiagnosticsEngine.Request(
-                    root: root, files: target.files, corpusFingerprint: target.corpusFingerprint, tools: tools)
+                    root: root,
+                    files: target.files,
+                    corpusFingerprint: target.corpusFingerprint,
+                    tools: tools
+                )
                 await session.analyze(request) { [weak self] update in
                     await self?.apply(update, side: side, generation: generation)
                 }
@@ -274,8 +291,12 @@ package final class DiagnosticsModel {
                     return
                 }
                 let request = DiagnosticsEngine.Request(
-                    root: repository, files: target.files, corpusFingerprint: tree, tools: tools,
-                    contentIdentity: "tree:\(tree)")
+                    root: repository,
+                    files: target.files,
+                    corpusFingerprint: tree,
+                    tools: tools,
+                    contentIdentity: "tree:\(tree)"
+                )
                 await session.analyze(request, materializingWith: exporter.materializer(for: tree, in: repository)) {
                     [weak self] update in
                     await self?.apply(update, side: side, generation: generation)
@@ -285,11 +306,19 @@ package final class DiagnosticsModel {
 
     /// Reports every tool of `tools` as failed on `side`, when the side itself could not be read.
     private func fail(
-        _ tools: some Collection<DiagnosticTool>, on side: DiagnosticsSide, because reason: String, generation: Int
+        _ tools: some Collection<DiagnosticTool>,
+        on side: DiagnosticsSide,
+        because reason: String,
+        generation: Int
     ) {
         for (index, tool) in tools.enumerated() {
             let result = DiagnosticsEngine.ToolResult(
-                tool: tool, findings: [], status: .failed(reason), duration: .zero, fromCache: false)
+                tool: tool,
+                findings: [],
+                status: .failed(reason),
+                duration: .zero,
+                fromCache: false
+            )
             apply(.init(result: result, isLast: index == tools.count - 1), side: side, generation: generation)
         }
     }
