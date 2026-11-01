@@ -1,3 +1,5 @@
+import AemiKernels
+
 /// Tokens cut at line boundaries and rebased on their line, with every line's tokens in one flat buffer of 12-byte
 /// ``LineToken``s.
 ///
@@ -100,7 +102,7 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
             let past = Int(offsets[line + 1])
             guard first < past else { continue }
             let start = lineRanges[line].lowerBound
-            if nonASCII < start { nonASCII = UTF16Offsets.firstNonASCII(in: text, from: start) }
+            if nonASCII < start { nonASCII = Self.firstNonASCII(in: text, from: start) }
             guard nonASCII < start + tokens[past - 1].range.upperBound else { continue }
             let prefix = nonASCII - start
             var byte = nonASCII
@@ -156,6 +158,11 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
         while offsets.count <= lineCount { offsets.append(UInt32(flat.count)) }
         self.tokens = flat
         self.offsets = offsets
+    }
+
+    /// The offset of the first byte of `bytes` at or after `start` that is not ASCII, or `bytes.count` when none is.
+    private static func firstNonASCII(in bytes: Span<UInt8>, from start: Int) -> Int {
+        AemiKernels.firstNonASCII(bytes.extracting(start ..< bytes.count).bytes).map { start + $0 } ?? bytes.count
     }
 }
 

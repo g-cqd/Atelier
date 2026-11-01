@@ -15,10 +15,11 @@ public struct LexicalHighlightEngine: HighlightEngine {
         highlight(utf8: source.span, language: language)
     }
 
-    /// Lexical tokens over borrowed UTF-8 bytes, with byte offsets; the scan allocates only the returned array.
+    /// Lexical tokens over borrowed UTF-8 bytes, with byte offsets. The scan's `Token`s are mapped to
+    /// ``HighlightToken``s, one more array a scan: AemiLexers builds only its own token type (aemi ADR 0022).
     /// - Complexity: O(bytes + tokens)
     public func highlight(utf8 source: Span<UInt8>, language: Language) -> [HighlightToken] {
-        SyntaxHighlighter.scan(utf8: source, language: language, as: HighlightToken.self)
+        SyntaxHighlighter.tokens(utf8: source, language: language).map(Self.highlightToken)
     }
 
     /// Tokens over UTF-16 units with UTF-16 offsets in `byteRange`, for a store that indexes by UTF-16 unit.
@@ -28,28 +29,5 @@ public struct LexicalHighlightEngine: HighlightEngine {
 
     static func highlightToken(_ token: Token) -> HighlightToken {
         HighlightToken(byteRange: token.range, role: token.kind.role, layer: .lexical)
-    }
-}
-
-extension HighlightToken: ScannerToken {
-    init(kind: TokenKind, range: Range<Int>) {
-        self.init(byteRange: range, role: kind.role, layer: .lexical)
-    }
-}
-
-extension TokenKind {
-    /// The role a scanner token carries into the shared model.
-    public var role: HighlightRole {
-        switch self {
-            case .keyword: .keyword
-            case .string: .string
-            case .comment: .comment
-            case .number: .number
-            case .type: .type
-            case .attribute: .attribute
-            case .tag: .tag
-            case .attributeName: .property
-            case .entity: .escape
-        }
     }
 }

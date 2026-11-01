@@ -57,8 +57,14 @@ let package = Package(
         .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "2066528fb5e085108fe92496333e0a2b118bdac1")
     ],
     targets: [
-        // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
-        .target(name: "AtelierSyntaxModel", swiftSettings: strict),
+        // The vocabulary highlighting is expressed in: languages, roles and tokens. The language, role and line token
+        // types are AemiLexers', re-exported, so a scan's tokens need no conversion (aemi ADR 0022).
+        .target(
+            name: "AtelierSyntaxModel",
+            dependencies: [
+                .product(name: "AemiLexers", package: "aemi"), .product(name: "AemiKernels", package: "aemi")
+            ],
+            swiftSettings: strict),
         // The tier job (PERF-11): the highlight tier protocol, and every tier of a text run at once, each on its own,
         // caller-driven. Each tier lives with its engine; the apps compose them.
         .target(name: "AtelierHighlighting", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
@@ -71,12 +77,13 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        // Hand-written scanners over borrowed UTF-8 bytes for the lexical tier; a scan allocates only its token array.
-        // They also scan a line at a time from its entry state, over TerminalKitText's line sources (P1a).
+        // The lexical tier over aemi's AemiLexers, re-exported: hand-written scanners over borrowed UTF-8 bytes, also
+        // a line at a time from its entry state, over TerminalKitText's line sources (P1a).
         .target(
             name: "AtelierLexers",
             dependencies: [
-                "AtelierHighlighting", "AtelierSyntaxModel", .product(name: "TerminalKitText", package: "TerminalKit")
+                "AtelierHighlighting", "AtelierSyntaxModel", .product(name: "AemiLexers", package: "aemi"),
+                .product(name: "TerminalKitText", package: "TerminalKit")
             ],
             swiftSettings: strict),
         // swift-syntax support: the syntax tier's token provider, the syntactic colour tier over SwiftIDEUtils'

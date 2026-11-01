@@ -1,7 +1,6 @@
+import AtelierLexers
 import AtelierSyntaxModel
 import Testing
-
-@testable import AtelierLexers
 
 /// The scanners behind the shared engine interface.
 struct LexicalHighlightEngineTests {

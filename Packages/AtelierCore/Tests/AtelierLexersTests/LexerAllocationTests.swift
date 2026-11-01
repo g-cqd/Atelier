@@ -1,8 +1,7 @@
 import AemiTestKit
+import AtelierLexers
 import AtelierSyntaxModel
 import Testing
-
-@testable import AtelierLexers
 
 /// The allocation bound describes the optimized lexer. An unoptimized build allocates once per token.
 private let isDebugBuild: Bool = {
@@ -12,6 +11,12 @@ private let isDebugBuild: Bool = {
         false
     #endif
 }()
+
+/// The corpus-wide checks, run one at a time: the allocation counter is process-wide, so a corpus scan running beside
+/// the allocation test would add its own allocations to the count. The scanners' own corpus checks are aemi's
+/// (AemiLexersTests); these are the engine's.
+@Suite(.serialized)
+struct LexerCorpusTests {}
 
 extension LexerCorpusTests {
     /// A scan allocates its token array and little else, whatever the size of the source: no string, set or array per

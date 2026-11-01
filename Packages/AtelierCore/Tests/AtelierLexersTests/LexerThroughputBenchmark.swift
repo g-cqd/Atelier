@@ -1,8 +1,7 @@
+import AtelierLexers
 import AtelierSyntaxModel
 import Foundation
 import Testing
-
-@testable import AtelierLexers
 
 /// Opt-in timing of each scanner over a generated corpus of about two megabytes, through the engine's UTF-8 entry
 /// point, in a release build: `GDV_BENCH=1 swift test -c release --filter LexerThroughputBenchmark`. The checksum
