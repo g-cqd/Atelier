@@ -11,15 +11,16 @@ struct LexicalHighlightEngineTests {
         let tokens = engine.highlight(utf8: source, language: .swift)
         #expect(tokens.map(\.role) == [.keyword, .number, .comment])
         #expect(tokens.allSatisfy { $0.layer == .lexical && $0.modifiers.isEmpty })
-        #expect(tokens.map(\.byteRange) == SyntaxHighlighter.tokens(utf8: source, language: .swift).map(\.range))
+        #expect(tokens.map(\.byteRange) == SyntaxHighlighter.tokens(utf8: source, language: .swift).map(\.byteRange))
     }
 
-    @Test(arguments: [
-        (TokenKind.keyword, HighlightRole.keyword), (.string, .string), (.comment, .comment), (.number, .number),
-        (.type, .type), (.attribute, .attribute), (.tag, .tag), (.attributeName, .property), (.entity, .escape)
-    ])
-    func `every token kind maps to one role`(kind: TokenKind, role: HighlightRole) {
-        #expect(kind.role == role)
+    @Test(arguments: Language.allCases)
+    func `the engine keeps the scanners' tokens as they come`(language: Language) {
+        let source = Array(LexerCorpus.text(language, fragments: 50, seed: 1).utf8)
+        let tokens = LexicalHighlightEngine().highlight(utf8: source, language: language)
+
+        #expect(tokens == SyntaxHighlighter.tokens(utf8: source, language: language))
+        #expect(tokens.allSatisfy { $0.layer == .lexical && $0.modifiers.isEmpty })
     }
 
     @Test

@@ -15,19 +15,15 @@ public struct LexicalHighlightEngine: HighlightEngine {
         highlight(utf8: source.span, language: language)
     }
 
-    /// Lexical tokens over borrowed UTF-8 bytes, with byte offsets. The scan's `Token`s are mapped to
-    /// ``HighlightToken``s, one more array a scan: AemiLexers builds only its own token type (aemi ADR 0022).
+    /// Lexical tokens over borrowed UTF-8 bytes, with byte offsets, as the scanners build them: already
+    /// ``HighlightToken``s at ``HighlightLayer/lexical``, so nothing is mapped (aemi ADR 0022, amended).
     /// - Complexity: O(bytes + tokens)
     public func highlight(utf8 source: Span<UInt8>, language: Language) -> [HighlightToken] {
-        SyntaxHighlighter.tokens(utf8: source, language: language).map(Self.highlightToken)
+        SyntaxHighlighter.tokens(utf8: source, language: language)
     }
 
     /// Tokens over UTF-16 units with UTF-16 offsets in `byteRange`, for a store that indexes by UTF-16 unit.
     public func highlight(utf16 source: [UInt16], language: Language) -> [HighlightToken] {
-        SyntaxHighlighter.tokens(utf16: source, language: language).map(Self.highlightToken)
-    }
-
-    static func highlightToken(_ token: Token) -> HighlightToken {
-        HighlightToken(byteRange: token.range, role: token.kind.role, layer: .lexical)
+        SyntaxHighlighter.tokens(utf16: source, language: language)
     }
 }

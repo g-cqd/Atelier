@@ -35,8 +35,8 @@ public struct LexicalIdentifierLocator: IdentifierLocating {
         let first = units[start]
         guard first < UInt16(UInt8(ascii: "0")) || first > UInt16(UInt8(ascii: "9")) else { return nil }
         let tokens = SyntaxHighlighter.tokens(in: text, language: language)
-        let covering = tokens.first { $0.range.contains(start) }
-        if let kind = covering?.kind, kind != .type, kind != .attribute { return nil }
+        let covering = tokens.first { $0.byteRange.contains(start) }
+        if let role = covering?.role, role != .type, role != .attribute { return nil }
         return String(decoding: units[start ..< end], as: UTF16.self)
     }
 
