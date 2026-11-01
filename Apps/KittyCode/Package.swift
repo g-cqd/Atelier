@@ -31,7 +31,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "2ff331f0f1e2ba2a5e6078599c6a69a7e47403e5"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "06ad519a2133884ef9cd9ab7b29cc4e1759ded91"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "ebe456e455fd0c0b3d315d39a5d5dadbde3ca300"),
         // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or

@@ -47,7 +47,7 @@ let package = Package(
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "2ff331f0f1e2ba2a5e6078599c6a69a7e47403e5"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "06ad519a2133884ef9cd9ab7b29cc4e1759ded91"),
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "ebe456e455fd0c0b3d315d39a5d5dadbde3ca300"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2"),
