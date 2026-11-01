@@ -1,6 +1,6 @@
+public import AemiDiff
 import AemiIO
 public import AemiRuntime
-public import AtelierDiff
 public import AtelierGit
 public import AtelierProcess
 import AtelierSyntaxModel

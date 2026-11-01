@@ -31,12 +31,12 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "06ad519a2133884ef9cd9ab7b29cc4e1759ded91"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "52ade84f19fd7407708d780a6a9433d1245224ed"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "ebe456e455fd0c0b3d315d39a5d5dadbde3ca300"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "6d8e8624ff08f7cab3c7d4feb71e3e5650f9c4b1"),
         // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
         // versions in the same graph.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "0d73316de03a412fb23123cd1f1c42d57cd79308")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b7e3bdefb7cecf4b73424ce287c0f1c8b81796b1")
     ],
     targets: [
         // Layer 2d — File system browsing
@@ -59,7 +59,7 @@ let package = Package(
             dependencies: [
                 "KittyFileTree", .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AtelierGit", package: "AtelierCore"),
-                .product(name: "AtelierDiff", package: "AtelierCore"),
+                .product(name: "AemiDiff", package: "aemi"),
                 .product(name: "TerminalKitText", package: "TerminalKit")
             ],
             swiftSettings: strict),

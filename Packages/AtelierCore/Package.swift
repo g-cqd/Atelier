@@ -24,7 +24,6 @@ let package = Package(
     products: [
         .library(name: "AtelierSyntaxModel", targets: ["AtelierSyntaxModel"]),
         .library(name: "AtelierHighlighting", targets: ["AtelierHighlighting"]),
-        .library(name: "AtelierDiff", targets: ["AtelierDiff"]),
         .library(name: "AtelierLexers", targets: ["AtelierLexers"]),
         .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"]),
         .library(name: "AtelierProcess", targets: ["AtelierProcess"]),
@@ -47,14 +46,14 @@ let package = Package(
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
-        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "06ad519a2133884ef9cd9ab7b29cc4e1759ded91"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "ebe456e455fd0c0b3d315d39a5d5dadbde3ca300"),
+        .package(url: "https://github.com/g-cqd/TerminalKit.git", revision: "52ade84f19fd7407708d780a6a9433d1245224ed"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "6d8e8624ff08f7cab3c7d4feb71e3e5650f9c4b1"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2"),
         // Pinned to the tip of AemiJSON's main (`JSON.withRawJSONBytes`, JSON5 escapes), which pins the same aemi
         // revision; the private mirror needs the g-cqd SSH credentials. Iterate locally with
         // `.package(path: "../../../AemiJSON")`.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "0d73316de03a412fb23123cd1f1c42d57cd79308")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b7e3bdefb7cecf4b73424ce287c0f1c8b81796b1")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, roles and tokens. The language, role and line token
@@ -68,15 +67,6 @@ let package = Package(
         // The tier job (PERF-11): the highlight tier protocol, and every tier of a text run at once, each on its own,
         // caller-driven. Each tier lives with its engine; the apps compose them.
         .target(name: "AtelierHighlighting", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
-        // Line and intraline diffing, moved blocks, hunk layout and unified patches. Pure value code.
-        .target(
-            name: "AtelierDiff",
-            dependencies: [
-                "AtelierSyntaxModel", .product(name: "TerminalKitText", package: "TerminalKit"),
-                .product(name: "AemiKernel", package: "aemi")
-            ],
-            swiftSettings: strict
-        ),
         // The lexical tier over aemi's AemiLexers, re-exported: hand-written scanners over borrowed UTF-8 bytes, also
         // a line at a time from its entry state, over TerminalKitText's line sources (P1a).
         .target(
@@ -91,7 +81,8 @@ let package = Package(
         .target(
             name: "AtelierSwiftSyntax",
             dependencies: [
-                "AtelierDiff", "AtelierHighlighting", "AtelierLexers", "AtelierSyntaxModel",
+                .product(name: "AemiDiff", package: "aemi"), "AtelierHighlighting", "AtelierLexers",
+                "AtelierSyntaxModel",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftIDEUtils", package: "swift-syntax")
@@ -156,7 +147,7 @@ let package = Package(
         .target(
             name: "AtelierSources",
             dependencies: [
-                "AtelierGit", "AtelierProcess", "AtelierDiff", "AtelierSyntaxModel",
+                "AtelierGit", "AtelierProcess", .product(name: "AemiDiff", package: "aemi"), "AtelierSyntaxModel",
                 .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict
@@ -214,13 +205,6 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        .testTarget(
-            name: "AtelierDiffTests",
-            dependencies: [
-                "AtelierDiff", .product(name: "TerminalKitText", package: "TerminalKit"),
-                .product(name: "AemiTestKit", package: "aemi")
-            ],
-            swiftSettings: strict),
         .testTarget(
             name: "AtelierSyntaxModelTests",
             dependencies: ["AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
@@ -295,7 +279,8 @@ let package = Package(
         .testTarget(
             name: "AtelierSwiftSyntaxTests",
             dependencies: [
-                "AtelierSwiftSyntax", "AtelierDiff", "AtelierLexers", "AtelierSyntaxModel",
+                "AtelierSwiftSyntax", .product(name: "AemiDiff", package: "aemi"), "AtelierLexers",
+                "AtelierSyntaxModel",
                 .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict),

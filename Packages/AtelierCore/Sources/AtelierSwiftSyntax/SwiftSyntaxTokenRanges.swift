@@ -1,4 +1,4 @@
-public import AtelierDiff
+public import AemiDiff
 public import AtelierSyntaxModel
 import SwiftParser
 import SwiftSyntax

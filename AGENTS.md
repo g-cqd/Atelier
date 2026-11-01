@@ -25,7 +25,7 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
   directly. Select testability explicitly for optimized tests: `swift test -c release --enable-testable-imports`.
 - Run allocation ceilings in a filtered process without unrelated suites. Taking a minimum across
   repeated samples can reduce interference but does not guarantee an uncontaminated measurement.
-- Diffing goes through `AtelierDiff`: `LineDiff.diffLines(old:new:pipeline:)` over any `DiffSource` (a rope, a
+- Diffing goes through aemi's `AemiDiff` (moved from `AtelierDiff`, aemi ADR 0023): `LineDiff.diffLines(old:new:pipeline:)` over any `DiffSource` (a rope, a
   mapped file, `SubstringLines`, `ByteLines`); `LineChangeMarkers` turns an edit script into gutter marks. No other
   diff code lives in the umbrella.
 - Highlighting goes through `HighlightEngine` (`AtelierSyntaxModel`): the scanners are `LexicalHighlightEngine`

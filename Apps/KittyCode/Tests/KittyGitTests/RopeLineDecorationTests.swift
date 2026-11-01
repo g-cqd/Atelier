@@ -1,4 +1,4 @@
-import AtelierDiff
+import AemiDiff
 import AtelierFileTree
 import AtelierProcess
 import AtelierTestSupport
@@ -42,6 +42,18 @@ import Testing
         #expect(source.line(at: 4_096) == "line 4096")
         #expect(source.line(at: 8_999) == "line 8999")
         #expect(rope._testSnapshotCachesAreEmpty)
+    }
+
+    /// Moved from AtelierDiff's tests with the diff (aemi ADR 0023): the rope is TerminalKit's, which aemi cannot see.
+    @Test func `a rope is a diff source`() {
+        let old = "a\nb\nc\n"
+        let new = "a\nc\nd\n"
+
+        #expect(
+            LineDiff.diffLines(old: Rope(old), new: Rope(new))
+                == LineDiff.diffLines(
+                    old: SubstringLines(DiffModel.lines(of: old) + [""]),
+                    new: SubstringLines(DiffModel.lines(of: new) + [""])))
     }
 
     @Test func `rope decorations equal line array decorations`() {

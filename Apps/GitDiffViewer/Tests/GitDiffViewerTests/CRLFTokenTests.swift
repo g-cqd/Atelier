@@ -1,4 +1,4 @@
-import AtelierDiff
+import AemiDiff
 import AtelierSyntaxModel
 import Foundation
 import Testing

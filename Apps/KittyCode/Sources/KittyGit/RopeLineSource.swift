@@ -1,4 +1,4 @@
-import AtelierDiff
+import AemiDiff
 import Foundation
 public import TerminalKitText
 

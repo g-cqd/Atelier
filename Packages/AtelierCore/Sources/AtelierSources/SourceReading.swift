@@ -1,5 +1,5 @@
+import AemiDiff
 import AemiRuntime
-import AtelierDiff
 public import AtelierGit
 import AtelierSyntaxModel
 public import Foundation

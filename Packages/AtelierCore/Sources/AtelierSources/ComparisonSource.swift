@@ -1,4 +1,4 @@
-import AtelierDiff
+import AemiDiff
 public import AtelierGit
 import AtelierSyntaxModel
 public import Foundation
