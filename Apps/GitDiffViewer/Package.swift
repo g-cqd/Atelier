@@ -24,10 +24,10 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "bfc4f5a701e8d80e5c63b13f606b578c5c0410c0"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "00f8ea22a0a373685e62bff0aa86eac7fdfd8972"),
         // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
         // versions in the same graph.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "1e0d930021be64548c7d52c648358324ad112008")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "2066528fb5e085108fe92496333e0a2b118bdac1")
     ],
     targets: [
         // Re-exports the core diff, lexers and language vocabulary under the app's own module name.
