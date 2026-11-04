@@ -343,11 +343,14 @@ private final class CardInList {
         settle()
     }
 
-    /// Lays out and displays what needs it, and lets the run loop turn once, as it does between two events.
+    /// Lays out and displays what needs it, and lets the run loop turn a few short times, as it does between events (a
+    /// runner without a display lays out the viewport a turn or two later than a desktop session does).
     private func settle() {
-        window.contentView?.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
-        CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true)
+        for _ in 0 ..< 4 {
+            window.contentView?.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0.05, false)
+        }
         window.contentView?.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
     }

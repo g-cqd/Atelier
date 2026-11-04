@@ -164,11 +164,16 @@ private final class HostedFilePane {
         return rows
     }
 
-    /// Lays out and displays what needs it, and lets the run loop turn once, as it does between two events.
+    /// Lays out and displays what needs it, and lets the run loop turn a few short times, as it does between events. A
+    /// runner without a display (CI's macOS) lays out the viewport a turn or two later than a desktop session does, so
+    /// a single zero-length turn leaves the rows unavailable there; the turns are bounded, and the text is still laid
+    /// out only for what shows.
     private func settle() {
-        host.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
-        CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true)
+        for _ in 0 ..< 4 {
+            host.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0.05, false)
+        }
         host.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
     }
