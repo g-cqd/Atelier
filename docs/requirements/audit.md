@@ -143,7 +143,7 @@ and the 10:50 cleanup deleted the measured patches the review and the renderer d
 - **No build and no test run.** Six Wave 1 agents were building. The pre-push hook built and tested AtelierCore and
   GitDiffViewer on `ce0880c` at 13:48 and passed; the later commits were merged after their tracks' own checks, and
   pushed at `ebafb9f`. I re-ran none of them.
-- **Installed app.** `~/Applications/GitDiffViewer.app` was signed at 13:52:56 (team `<team-id>`) from `ce0880c`, and
+- **Installed app.** `~/Applications/GitDiffViewer.app` was signed at 13:52:56 (the local development team) from `ce0880c`, and
   runs on a work repository. I made no visual check.
 - **Work in progress:** none on a branch at `ebafb9f`; Wave 1's tracks have merged except 1K, which has not started.
   Wave 2 has not started.
@@ -174,7 +174,7 @@ and the 10:50 cleanup deleted the measured patches the review and the renderer d
   Was: Met.
 
 #### PROC-03 · Install, re-sign, relaunch — **Implemented**
-- The installed bundle was signed at 13:52:56 by the local development identity (team `<team-id>`),
+- The installed bundle was signed at 13:52:56 by the local development identity (the local development team),
   `codesign --verify --deep --strict` passes, and its binary is the one built from `ce0880c`. It runs on a work
   repository against `origin/develop`, as R87 asked.
 - Between 12:30 and 13:52 the installed app lagged `main` by four code commits. At `ebafb9f` it lacks 33 commits,
