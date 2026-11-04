@@ -49,7 +49,7 @@ jobs:
     name: AtelierCore
     needs: changes
     if: ${{ needs.changes.outputs.core == 'true' || contains(fromJSON('["schedule", "workflow_dispatch", "merge_group"]'), github.event_name) }}
-    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@1b272203f7a8b89b0faf66bdab4aef5365a68b88 # swift-ci 1b27220
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@c930444a6f6f462ddce3fbad7df9f8e2acc3e04b # swift-ci c930444
     permissions:
       contents: write # reusable publish permission; this package publishes no archives
     with:
@@ -59,7 +59,7 @@ jobs:
     name: GitDiffViewer
     needs: changes
     if: ${{ needs.changes.outputs.gitdiffviewer == 'true' || contains(fromJSON('["schedule", "workflow_dispatch", "merge_group"]'), github.event_name) }}
-    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@1b272203f7a8b89b0faf66bdab4aef5365a68b88 # swift-ci 1b27220
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@c930444a6f6f462ddce3fbad7df9f8e2acc3e04b # swift-ci c930444
     permissions:
       contents: write # reusable publish permission; this package publishes no archives
     with:
@@ -69,7 +69,7 @@ jobs:
     name: KittyCode
     needs: changes
     if: ${{ needs.changes.outputs.kittycode == 'true' || contains(fromJSON('["schedule", "workflow_dispatch", "merge_group"]'), github.event_name) }}
-    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@1b272203f7a8b89b0faf66bdab4aef5365a68b88 # swift-ci 1b27220
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@c930444a6f6f462ddce3fbad7df9f8e2acc3e04b # swift-ci c930444
     permissions:
       contents: write # reusable publish permission; KittyCode releases through kittycode-release.yml
     with:
