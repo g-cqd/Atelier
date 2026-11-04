@@ -1,0 +1,5 @@
+{
+  "project": { "linux": false },
+  "checks": { "macos-thread": ["push", "pull-request", "merge-queue", "tag", "dispatch", "nightly"] },
+  "quality": { "discipline": {} }
+}

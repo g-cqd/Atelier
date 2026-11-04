@@ -43,6 +43,7 @@ package final class SettingsScope {
         refresh()
         observers = [ViewerSettings.projectsChangedNotification, ViewerSettings.settingChangedNotification]
             .map {
+                // @al:accept -- each token is stored in `observers` (this map's result) and removed in `deinit`
                 NotificationCenter.default.addObserver(forName: $0, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated { self?.refresh() }
                 }

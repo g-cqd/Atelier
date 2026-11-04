@@ -1,29 +1,35 @@
-# One caller of aemi's reusable quality workflow per package. Each job runs from its package directory
-# (`package-path`); a change under Packages/ rebuilds every consumer, a change under one app rebuilds that app.
 name: CI
 
+# One call of the family's pinned swift-ci workflow per package (`package-path`), each configured by its own
+# `.ci/action.json` (https://github.com/g-cqd/swift-ci); `.ci/swift-ci local` in a package runs the same checks. A change
+# under Packages/ checks every package (the apps depend on AtelierCore); a change under one app checks that app.
+# Scheduled, manual and merge-queue runs check everything.
 on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   changes:
+    name: Plan · Detect Changed Packages
     runs-on: ubuntu-latest
     outputs:
       core: ${{ steps.filter.outputs.core }}
       gitdiffviewer: ${{ steps.filter.outputs.gitdiffviewer }}
       kittycode: ${{ steps.filter.outputs.kittycode }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Plan · Classify Changed Paths
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
           filters: |
@@ -40,30 +46,31 @@ jobs:
               - '.github/**'
 
   core:
+    name: AtelierCore
     needs: changes
-    if: ${{ needs.changes.outputs.core == 'true' }}
-    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@2a0ce71b93918ffdcc961ba4db8d01b66e5915f1 # aemi 2a0ce71
+    if: ${{ needs.changes.outputs.core == 'true' || contains(fromJSON('["schedule", "workflow_dispatch", "merge_group"]'), github.event_name) }}
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@751891ec227bce31e9d01b977b2552c49d0d4a4c # swift-ci 751891e
+    permissions:
+      contents: write # reusable publish permission; this package publishes no archives
     with:
       package-path: Packages/AtelierCore
-      dev-env-var: ATELIER_DEV
-      enable-linux: false
-      enable-sanitizers: true
-      sanitizers: thread
 
   gitdiffviewer:
+    name: GitDiffViewer
     needs: changes
-    if: ${{ needs.changes.outputs.gitdiffviewer == 'true' }}
-    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@2a0ce71b93918ffdcc961ba4db8d01b66e5915f1 # aemi 2a0ce71
+    if: ${{ needs.changes.outputs.gitdiffviewer == 'true' || contains(fromJSON('["schedule", "workflow_dispatch", "merge_group"]'), github.event_name) }}
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@751891ec227bce31e9d01b977b2552c49d0d4a4c # swift-ci 751891e
+    permissions:
+      contents: write # reusable publish permission; this package publishes no archives
     with:
       package-path: Apps/GitDiffViewer
-      dev-env-var: ATELIER_DEV
-      enable-linux: false
 
   kittycode:
+    name: KittyCode
     needs: changes
-    if: ${{ needs.changes.outputs.kittycode == 'true' }}
-    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@2a0ce71b93918ffdcc961ba4db8d01b66e5915f1 # aemi 2a0ce71
+    if: ${{ needs.changes.outputs.kittycode == 'true' || contains(fromJSON('["schedule", "workflow_dispatch", "merge_group"]'), github.event_name) }}
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@751891ec227bce31e9d01b977b2552c49d0d4a4c # swift-ci 751891e
+    permissions:
+      contents: write # reusable publish permission; KittyCode releases through kittycode-release.yml
     with:
       package-path: Apps/KittyCode
-      dev-env-var: ATELIER_DEV
-      enable-linux: false
