@@ -50,26 +50,25 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
   one, and read the file system off the main actor. After adding a test that draws, lays out, sweeps or reads files
   on the main actor, make your final GitDiffViewer suite run the budget run:
   `Apps/GitDiffViewer/scripts/main-actor-budget.sh` runs the whole suite with the main thread sampled, ranks the
-  suites by their main-thread time and fails past the budget. Run it once, after rebasing onto `main`, with
+  suites by their main-thread time and fails past the budget. Run it once, before committing, with
   `work run --weight 8`: an exclusive job now waits at most a minute and then holds only new heavy jobs, for three
-  minutes at most, so two lanes' budget runs no longer overlap and inflate each other. The coordinator does not run
-  it again. A suite over the 1 s budget only under load: rerun once, and report both runs if it is over twice. It exits 2 with "no usable sample" when
+  minutes at most, so a budget run is not inflated by other heavy jobs on the machine.
+  A suite over the 1 s budget only under load: rerun once, and report both runs if it is over twice. It exits 2 with "no usable sample" when
   `sample` fails to attach to the test process; that says nothing of the suites, so run it again.
 
-## Builds, hand-back and worktrees
+## Builds, hand-back and one checkout
 
 The global rules apply (`engineering-practices` §5, `planner` Orchestration Mode): build once per completed step,
 in one configuration, and never check a change against a matrix of configurations; build release once per task.
 Here that means:
 - **While you work,** build the debug tests of the one package you changed (`swift build --build-tests` in
   `Packages/AtelierCore`, `Apps/GitDiffViewer` or `Apps/KittyCode`), and run filtered tests with `--skip-build`.
-- **Before handing back,** rebase onto `main`, build once, and run the full suite of each package you changed. If
-  you changed a core target's API, also run the suite of each app whose `Package.swift` links that target. The
-  coordinator lands your branch on that run without rebuilding, and asks you to run again, from your warm build,
-  only when `main` has since changed the same packages.
-- **Worktrees:** at most three, one per lane (GitDiffViewer, core highlighting, parser and grammar), long-lived
-  and reused from task to task. Work in the worktree you are given and never create one. Read-only agents
-  work in the main checkout without writing to it.
+- **Before committing,** build once and run the full suite of each package you changed. If you changed a core
+  target's API, also run the suite of each app whose `Package.swift` links that target. Then commit to `main`
+  (PROC-05).
+- **One checkout, one topic at a time:** no worktrees. Work in the main checkout, on `main`, on one topic: take the
+  next task from the shared queue (`work next`), finish it, commit it, then take the next. Never start a second
+  topic beside a running one. Read-only agents may run alongside, without writing to the checkout.
 
 ## Moving code between packages
 
@@ -91,8 +90,8 @@ Use `xcrun swift` when the `swift` on PATH is a swiftly shim without a selected 
 - The work runs first in, first out, validity first (book PROC-13). A regression that breaks validity is fixed
   before its work lands. One that costs only performance joins the work queue, section 9 of
   `docs/reviews/2026-09-23-fix-plan.md`, with its measurement and origin, and the work lands.
-- `planner`'s `scripts/order_tasks.py` orders a task list by that rule, and plans several agents' work so that no two
-  run on overlapping files at once.
+- The shared `work` queue (`planner`'s `scripts/work.py`, scope `atelier`) holds the topics in that order; `work
+  order` shows it and `work next` takes the next one.
 - Never wait on a build, a test run or an agent with a fixed sleep. Start long commands in the background and let
   the harness report their end, or use `engineering-practices`' `scripts/wait-for.sh`, which returns the moment the
   work ends. The suites here take minutes; a fixed sleep either wastes them or checks too early.
