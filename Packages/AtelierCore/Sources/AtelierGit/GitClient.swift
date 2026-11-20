@@ -108,12 +108,32 @@ public struct GitClient: Sendable {
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Files of the tree at `ref`, filtered to the supported extensions.
+    /// Files of the tree at `ref`, filtered to the supported extensions. The branch `HEAD` points at before its first
+    /// commit, as in a new repository, has the empty tree.
     public func tree(at ref: String, isSupported: @Sendable (String) -> Bool) async throws -> [GitTreeEntry] {
-        GitParsers.tree(
-            try await run(["ls-tree", "-r", "-l", "-z", "--end-of-options", try Self.checked(ref)]),
-            isSupported: isSupported
-        )
+        let listing: Data
+        do {
+            listing = try await run(["ls-tree", "-r", "-l", "-z", "--end-of-options", try Self.checked(ref)])
+        } catch GitError.commandFailed(let message) {
+            if await namesUnbornBranch(ref) { return [] }
+            throw GitError.commandFailed(message)
+        }
+        return GitParsers.tree(listing, isSupported: isSupported)
+    }
+
+    /// Whether `ref` names the branch `HEAD` points at while that branch has no commit yet: `HEAD` itself, the
+    /// branch's short name or its full name.
+    func namesUnbornBranch(_ ref: String) async -> Bool {
+        guard let head = try? await runReadingStatus(["symbolic-ref", "-q", "HEAD"]), head.terminationStatus == 0
+        else { return false }
+        let branch = String(decoding: head.standardOutput, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let shortName = branch.hasPrefix("refs/heads/") ? String(branch.dropFirst("refs/heads/".count)) : branch
+        guard ref == "HEAD" || ref == branch || ref == shortName else { return false }
+        guard let commit = try? await runReadingStatus(["rev-parse", "--verify", "--quiet", "HEAD"]) else {
+            return false
+        }
+        return commit.terminationStatus != 0
     }
 
     /// The branch and every path that is not clean, untracked files listed one by one, and ignored files unless
@@ -232,9 +252,15 @@ public struct GitClient: Sendable {
     /// `--no-show-signature` because a repository that sets `log.showSignature` makes `git log` run the signature
     /// program on every commit that carries a `gpgsig` header; the pinned `gpg.program` is the second layer.
     private func recentCommits(limit: Int) async throws -> [GitCommit] {
-        GitParsers.commits(
-            try await run(["log", "--no-show-signature", "--format=%H%x1f%h%x1f%s", "-n", String(limit)])
-        )
+        do {
+            return GitParsers.commits(
+                try await run(["log", "--no-show-signature", "--format=%H%x1f%h%x1f%s", "-n", String(limit)])
+            )
+        } catch GitError.commandFailed(let message) {
+            // A new repository has a branch but no commit yet: it has no history, and is still a repository.
+            if await namesUnbornBranch("HEAD") { return [] }
+            throw GitError.commandFailed(message)
+        }
     }
 
     /// The repository's remotes, one per name, with their `fetch` URL; a remote with only a `push` line is left
