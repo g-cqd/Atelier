@@ -19,6 +19,22 @@ public enum GitParsers {
         return entries
     }
 
+    /// Splits `ls-files -s -z` output: `<mode> <object> <stage>\t<path>\0` per index entry.
+    public static func indexEntries(_ data: Data) -> [GitIndexEntry] {
+        data.split(separator: 0)
+            .compactMap { record in
+                guard let tab = record.firstIndex(of: 9) else { return nil }
+                let fields = String(decoding: record[record.startIndex ..< tab], as: UTF8.self).split(separator: " ")
+                guard fields.count == 3, let stage = Int(fields[2]) else { return nil }
+                return GitIndexEntry(
+                    path: String(decoding: record[record.index(after: tab)...], as: UTF8.self),
+                    mode: String(fields[0]),
+                    objectID: String(fields[1]),
+                    stage: stage
+                )
+            }
+    }
+
     /// Splits `ls-files -z` output: one NUL-terminated path per record, in index order.
     public static func paths(_ data: Data) -> [String] {
         data.split(separator: 0, omittingEmptySubsequences: true).map { String(decoding: $0, as: UTF8.self) }

@@ -279,23 +279,41 @@ public struct DirectorySource: SourceProvider {
     let hashes: WorkingTreeHashes
 
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
-    /// git ignores. Elsewhere, a folder scan that leaves hidden files out. The `stat` pass, the scan and every hash
-    /// run on the pool.
+    /// git ignores. A tracked file git reports clean takes the blob its index holds, unread: git compares it after
+    /// its own conversions (line endings, filters), knows it unchanged when sparse checkout or `skip-worktree` leaves
+    /// it off the disk, and knows it whatever its size. Every other file, and every file of a folder outside a
+    /// repository, is hashed as it is on disk. Elsewhere, a folder scan that leaves hidden files out. The `stat`
+    /// pass, the scan and every hash run on the pool.
     ///
     /// Only the files whose stamp changed since the folder's last listing are read: every other one keeps the blob
     /// id ``WorkingTreeHashes`` holds for it. A file that cannot be hashed, because it vanished, shrank or is not
     /// readable since it was listed, is listed without a blob id, so it counts as changed and is read when shown,
-    /// instead of failing the whole folder.
+    /// instead of failing the whole folder. A symbolic link is listed with the blob of its target's path, as git
+    /// stores it.
     /// - Throws: `CancellationError` when the task is cancelled, even after the last file is hashed: a cancelled
     ///   listing never passes for a finished one, empty or partial.
     @concurrent
     public func entries() async throws -> [GitTreeEntry] {
-        let files =
-            if let git = await gitClient() {
-                try await Self.stat(try await git.workingTreePaths(), under: root, on: offload)
-            } else {
-                try await Self.scan(root, on: offload)
-            }
+        guard let view = try await gitView() else {
+            return try await hashed(try await Self.scan(root, on: offload))
+        }
+        let clean = view.clean.keys.filter { SourceLoader.isSupported(path: $0) }
+        let changed = view.changed.filter { SourceLoader.isSupported(path: $0) }
+        async let sizes = Self.sizes(of: clean, under: root, on: offload)
+        let hashed = try await hashed(try await Self.stat(changed, under: root, on: offload))
+        let known = try await sizes
+        let indexed = clean.compactMap { path in
+            view.clean[path]
+                .map {
+                    GitTreeEntry(relativePath: path, blobID: $0.objectID, size: known[path] ?? 0)
+                }
+        }
+        return (indexed + hashed).sorted { $0.relativePath < $1.relativePath }
+    }
+
+    /// The listed `files` with their blob ids, read only for the files whose stamp changed since the folder's last
+    /// listing.
+    private func hashed(_ files: [File]) async throws -> [GitTreeEntry] {
         let folder = root.standardizedFileURL.path(percentEncoded: false)
         let known = hashes.entries(of: folder)
         var kept: [String: WorkingTreeHashes.Entry] = [:]
@@ -328,6 +346,42 @@ public struct DirectorySource: SourceProvider {
         }
     }
 
+    /// What git says of a folder inside a repository, paths relative to the folder: the index entry of every tracked
+    /// file whose working-tree file git reports clean, and the paths it reports untracked, conflicted or changed in
+    /// the working tree.
+    struct GitView {
+        let clean: [String: GitIndexEntry]
+        let changed: [String]
+    }
+
+    /// The folder as git sees it, through the index and one status; nil for a folder outside every repository.
+    private func gitView() async throws -> GitView? {
+        guard let repository = await SourceLoader.repositoryRoot(containing: root, runner: runner),
+            let prefix = SourceLoader.prefix(of: root, under: repository)
+        else { return nil }
+        async let index = SourceLoader.git(root, runner: runner).indexEntries()
+        async let status = SourceLoader.git(repository, runner: runner).status(includingIgnored: false)
+        let changes = SourceLoader.entries(try await status.entries, under: prefix)
+        return Self.view(index: try await index, changes: changes)
+    }
+
+    /// See ``GitView``: a submodule is left out on both lists, as a ref's listing leaves it out.
+    static func view(index: [GitIndexEntry], changes: [GitStatusEntry]) -> GitView {
+        let changed = Set(
+            changes.filter { change in
+                !change.isSubmodule
+                    && (change.status == .untracked || change.status == .conflicted
+                        || change.worktreeStatus != .unmodified)
+            }
+            .map(\.path)
+        )
+        var clean: [String: GitIndexEntry] = [:]
+        for entry in index where entry.stage == 0 && !entry.isSubmodule && !changed.contains(entry.path) {
+            clean[entry.path] = entry
+        }
+        return GitView(clean: clean, changed: changed.sorted())
+    }
+
     /// Files git ignores, listed but neither hashed nor sized: they exist on this side alone, so there is nothing
     /// to compare them with, and a tree full of build output holds tens of thousands of them.
     @concurrent
@@ -338,8 +392,38 @@ public struct DirectorySource: SourceProvider {
             .map { GitTreeEntry(relativePath: $0, blobID: nil, size: 0) }
     }
 
+    /// The text of the blob the entry was listed with when the repository stores it, which is the file git compares
+    /// for a clean file; otherwise the file as it is on disk, a symbolic link's target path for a link.
     public func content(of entry: GitTreeEntry) async throws -> String {
-        SourceLoader.text(from: try await FileSource.read(root.appending(path: entry.relativePath), on: offload))
+        if let blob = entry.blobID, let git = await gitClient(), let data = try? await git.blobs([blob])[blob] {
+            return SourceLoader.text(from: data)
+        }
+        return SourceLoader.text(from: try await readOnDisk(entry))
+    }
+
+    /// Many entries at once: the stored blobs through one `cat-file --batch`, the rest read from disk.
+    public func contents(of entries: [GitTreeEntry]) async throws -> [String: String] {
+        var stored: [String: Data] = [:]
+        if let git = await gitClient() {
+            let ids = Array(Set(entries.compactMap(\.blobID)))
+            for start in stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize) {
+                let batch = Array(ids[start ..< min(start + SourceLoader.blobBatchSize, ids.count)])
+                stored.merge(try await git.blobs(batch)) { first, _ in first }
+            }
+        }
+        let blobs = stored
+        let pairs = try await mapConcurrently(entries, limit: SourceLoader.hashingConcurrency) { entry in
+            if let data = entry.blobID.flatMap({ blobs[$0] }) {
+                return (entry.relativePath, SourceLoader.text(from: data))
+            }
+            return (entry.relativePath, SourceLoader.text(from: try await readOnDisk(entry)))
+        }
+        return Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+    }
+
+    private func readOnDisk(_ entry: GitTreeEntry) async throws -> Data {
+        let path = root.appending(path: entry.relativePath).path(percentEncoded: false)
+        return try await offload.run { try SourceLoader.workingTreeContents(atPath: path) }
     }
 
     private struct File: Sendable {
@@ -361,26 +445,44 @@ public struct DirectorySource: SourceProvider {
     private static func stat(_ paths: [String], under root: URL, on offload: any BlockingOffload) async throws
         -> [File]
     {
-        let batches = stride(from: 0, to: paths.count, by: statBatchSize)
-            .map { Array(paths[$0 ..< min($0 + statBatchSize, paths.count)]) }
-        return try await mapConcurrently(batches, limit: 2) { batch in
-            try await offload.run { stat(batch, under: root) }
-        }
-        .flatMap(\.self)
+        try await batches(of: paths, on: offload) { stat($0, under: root) }.flatMap(\.self)
     }
 
-    /// Keeps the regular, supported files among `paths`, each with the stamp `lstat` gives it: an index entry whose
-    /// file is gone, a symbolic link, a submodule or an unsupported extension is left out, as is anything under a
-    /// directory the folder scan would skip.
-    private static func stat(_ paths: [String], under root: URL) -> [File] {
+    /// The sizes of the files at `paths` that exist, a link's being its target path's length; on `offload`.
+    private static func sizes(of paths: [String], under root: URL, on offload: any BlockingOffload) async throws
+        -> [String: Int]
+    {
+        let base = basePath(of: root)
+        let found = try await batches(of: paths, on: offload) { batch in
+            batch.compactMap { path in FileStamp(fileOrLinkAt: base + path).map { (path, $0.size) } }
+        }
+        return Dictionary(found.flatMap(\.self), uniquingKeysWith: { first, _ in first })
+    }
+
+    private static func batches<Result: Sendable>(
+        of paths: [String],
+        on offload: any BlockingOffload,
+        _ work: @escaping @Sendable ([String]) -> Result
+    ) async throws -> [Result] {
+        let batches = stride(from: 0, to: paths.count, by: statBatchSize)
+            .map { Array(paths[$0 ..< min($0 + statBatchSize, paths.count)]) }
+        return try await mapConcurrently(batches, limit: 2) { batch in try await offload.run { work(batch) } }
+    }
+
+    private static func basePath(of root: URL) -> String {
         let rootPath = root.standardizedFileURL.path(percentEncoded: false)
-        let base = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        return rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+    }
+
+    /// The regular files and symbolic links among `paths`, each with the stamp `lstat` gives it: a path whose file is
+    /// gone, a directory (a submodule) or a path git lists that is anything else is left out.
+    private static func stat(_ paths: [String], under root: URL) -> [File] {
+        let base = basePath(of: root)
         var files: [File] = []
         files.reserveCapacity(paths.count)
         for path in paths {
-            guard SourceLoader.isSupported(path: path), !liesUnderSkippedDirectory(path) else { continue }
             let fullPath = base + path
-            guard let stamp = FileStamp(regularFileAt: fullPath) else { continue }
+            guard let stamp = FileStamp(fileOrLinkAt: fullPath) else { continue }
             files.append(File(fullPath: fullPath, relativePath: path, stamp: stamp))
         }
         return files

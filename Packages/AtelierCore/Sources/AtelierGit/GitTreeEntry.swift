@@ -52,3 +52,24 @@ public struct RepositoryInfo: Sendable, Hashable {
         self.commits = commits
     }
 }
+
+/// One entry of the index, as `git ls-files -s` lists it: the blob git stores for a tracked path.
+public struct GitIndexEntry: Sendable, Hashable {
+    /// The path, relative to the directory git ran in.
+    public let path: String
+    /// The octal mode: `100644`, `100755`, `120000` for a symbolic link, `160000` for a submodule.
+    public let mode: String
+    public let objectID: String
+    /// 0 for a merged path, 1 to 3 for the sides of a conflict.
+    public let stage: Int
+
+    public init(path: String, mode: String, objectID: String, stage: Int) {
+        self.path = path
+        self.mode = mode
+        self.objectID = objectID
+        self.stage = stage
+    }
+
+    /// Whether the entry is a submodule's recorded commit rather than a file.
+    public var isSubmodule: Bool { mode == "160000" }
+}

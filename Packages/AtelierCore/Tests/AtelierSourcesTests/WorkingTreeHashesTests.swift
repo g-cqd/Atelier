@@ -66,7 +66,9 @@ struct WorkingTreeHashesTests {
         let toplevel = root.standardizedFileURL.path(percentEncoded: false)
         let runner = FakeProcessRunner { spec in
             if spec.arguments.contains("--show-toplevel") { return .success(toplevel + "\n") }
-            if spec.arguments.contains("ls-files") { return .success("a.swift\0Sources/b.swift\0") }
+            // Both files untracked: the index holds nothing, and the status names each one.
+            if spec.arguments.contains("ls-files") { return .success("") }
+            if spec.arguments.contains("status") { return .success("? a.swift\0? Sources/b.swift\0") }
             // The configuration listing: an empty one refuses nothing.
             return .success("")
         }

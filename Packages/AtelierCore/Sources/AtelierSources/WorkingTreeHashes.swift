@@ -1,5 +1,6 @@
 import AemiIO
 import Darwin
+import Foundation
 import Synchronization
 
 /// A file's identity and version as `stat` reports them: device and inode tell a replaced file from the one it
@@ -25,6 +26,16 @@ struct FileStamp: Hashable, Sendable {
     init?(regularFileAt path: String) {
         var status = stat()
         guard lstat(path, &status) == 0, status.st_mode & S_IFMT == S_IFREG else { return nil }
+        self.init(status)
+    }
+
+    /// The stamp of the regular file or symbolic link at `path` itself, not of what a link names; nil for anything
+    /// else, a missing file included.
+    init?(fileOrLinkAt path: String) {
+        var status = stat()
+        guard lstat(path, &status) == 0 else { return nil }
+        let type = status.st_mode & S_IFMT
+        guard type == S_IFREG || type == S_IFLNK else { return nil }
         self.init(status)
     }
 
@@ -66,6 +77,15 @@ extension SourceLoader {
     /// - Returns: nil when the file cannot be read to its end (it vanished, shrank or is not readable since it was
     ///   listed) or has grown past ``maximumHashedSize``.
     static func hashedFile(atPath path: String) -> HashedFile? {
+        if let link = linkStamp(atPath: path) {
+            let readStart = FileStamp.now()
+            guard let target = linkTarget(atPath: path), linkStamp(atPath: path) == link else { return nil }
+            return HashedFile(
+                blobID: blobID(of: target),
+                stamp: link,
+                isSettled: link.modified + racyWindow <= readStart
+            )
+        }
         guard let file = try? PosixFile(path: path, mode: .readOnly) else { return nil }
         defer { file.close() }
         guard let before = try? file.stamp(), before.size <= maximumHashedSize else { return nil }
@@ -120,5 +140,36 @@ final class WorkingTreeHashes: Sendable {
                 storage.folders[storage.order.removeFirst()] = nil
             }
         }
+    }
+}
+
+extension SourceLoader {
+    /// The stamp of the symbolic link at `path`; nil when `path` is anything else.
+    static func linkStamp(atPath path: String) -> FileStamp? {
+        var status = stat()
+        guard lstat(path, &status) == 0, status.st_mode & S_IFMT == S_IFLNK else { return nil }
+        return FileStamp(status)
+    }
+
+    /// The path the symbolic link at `path` names, as bytes: what git stores as the link's blob.
+    static func linkTarget(atPath path: String) -> Data? {
+        var buffer = [UInt8](repeating: 0, count: Int(PATH_MAX) + 1)
+        let count = buffer.withUnsafeMutableBufferPointer { buffer in
+            buffer.withMemoryRebound(to: CChar.self) { readlink(path, $0.baseAddress, $0.count) }
+        }
+        guard count >= 0 else { return nil }
+        return Data(buffer[..<count])
+    }
+
+    /// A working-tree file's bytes as git reads them: a symbolic link's target path rather than what it names.
+    /// - Throws: As ``contents(atPath:)``.
+    static func workingTreeContents(atPath path: String) throws -> Data {
+        if linkStamp(atPath: path) != nil {
+            guard let target = linkTarget(atPath: path) else {
+                throw CocoaError.error(.fileReadUnknown, url: URL(filePath: path))
+            }
+            return target
+        }
+        return try contents(atPath: path)
     }
 }

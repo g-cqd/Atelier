@@ -191,6 +191,12 @@ public struct GitClient: Sendable {
         GitParsers.paths(try await run(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]))
     }
 
+    /// The index's entries under the directory git runs in, paths relative to it: what git stores for every tracked
+    /// path, the blob a clean working-tree file has without reading it.
+    public func indexEntries() async throws -> [GitIndexEntry] {
+        GitParsers.indexEntries(try await run(["ls-files", "-s", "-z"]))
+    }
+
     /// Untracked files git ignores; with `collapsingDirectories`, a directory that is ignored as a whole is one
     /// entry with a trailing slash instead of every file under it, which is what a tree filter wants.
     public func ignoredPaths(collapsingDirectories: Bool = false) async throws -> [String] {
