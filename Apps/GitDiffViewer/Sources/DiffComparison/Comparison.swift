@@ -103,12 +103,16 @@ package struct Comparison: Sendable, Equatable {
     }
 
     /// Files present on one side only whose content exists unchanged on the other side under another path.
+    /// The blob id of an empty file.
+    static let emptyBlobID = SourceLoader.blobID(of: Data())
+
     package static func exactRenames(left: [SourceEntry], right: [SourceEntry]) -> [String: String] {
         let leftPaths = Set(left.map(\.relativePath))
         let rightPaths = Set(right.map(\.relativePath))
         var rightByBlob: [String: [String]] = [:]
+        // Empty files all share one blob, so two of them say nothing of a rename: git skips them too.
         for entry in right where !leftPaths.contains(entry.relativePath) {
-            guard let blob = entry.blobID else { continue }
+            guard let blob = entry.blobID, blob != Self.emptyBlobID else { continue }
             rightByBlob[blob, default: []].append(entry.relativePath)
         }
         var renames: [String: String] = [:]

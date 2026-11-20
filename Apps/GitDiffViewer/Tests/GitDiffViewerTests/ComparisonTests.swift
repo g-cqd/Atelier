@@ -35,6 +35,19 @@ struct ComparisonTests {
     }
 
     @Test
+    func `a deleted empty file and an added empty file are not a rename`() {
+        let empty = Comparison.emptyBlobID
+        let comparison = Comparison(
+            left: [entry("old/__init__.py", empty)],
+            right: [entry("new/.gitkeep", empty)],
+            leftSource: nil,
+            rightSource: nil
+        )
+
+        #expect(comparison.statuses == ["old/__init__.py": .onlyLeft, "new/.gitkeep": .onlyRight])
+    }
+
+    @Test
     func `git renames refine the comparison without overriding exact ones`() {
         var comparison = Comparison(
             left: [entry("a.swift", "1"), entry("x.swift", "5")],
