@@ -10,7 +10,7 @@ import Testing
 struct PatchSourceTests {
     @Test
     func `binary content becomes a one line size marker and binary extensions are skipped`() {
-        #expect(SourceLoader.text(from: Data([0x68, 0x69, 0x00, 0x01])) == "(binary file, 4 bytes)\n")
+        #expect(SourceLoader.text(from: Data([0x68, 0x69, 0x00, 0x01])).hasPrefix("(binary file, 4 bytes, blob "))
         #expect(SourceLoader.text(from: Data("hi\n".utf8)) == "hi\n")
         #expect(!SourceLoader.isSupported(path: "Assets.xcassets/icon.png"))
         #expect(SourceLoader.isSupported(path: "Makefile"))
@@ -54,5 +54,44 @@ struct PatchSourceTests {
         #expect(try await loader.content(of: oldEntries[0], in: old) == "\nsame\nold\n")
         #expect(try await loader.content(of: newEntries[0], in: new) == "\nsame\nnew\n")
         #expect(await loader.renames(from: old, to: new) == ["Was.swift": "Is.swift"])
+    }
+
+    @Test
+    func `a patch with a byte that is not UTF-8 opens`() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PatchSourceTests-\(UUID().uuidString).patch")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var patch = Data("diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-caf\n+caf".utf8)
+        patch.append(contentsOf: [0xE9, 0x0A])
+        try patch.write(to: url)
+
+        let entries = try await TestProcesses.loader.entries(of: .patch(url, side: .new))
+
+        #expect(entries.map(\.relativePath) == ["a.txt"])
+    }
+
+    @Test
+    func `a binary file of a patch is listed, its two sides told apart`() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PatchSourceTests-\(UUID().uuidString).patch")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        diff --git a/logo.dat b/logo.dat
+        index 1111111..2222222 100644
+        Binary files a/logo.dat and b/logo.dat differ
+        diff --git a/added.dat b/added.dat
+        new file mode 100644
+        index 0000000..3333333
+        Binary files /dev/null and b/added.dat differ
+
+        """
+        .write(to: url, atomically: true, encoding: .utf8)
+
+        let old = try await TestProcesses.loader.entries(of: .patch(url, side: .old))
+        let new = try await TestProcesses.loader.entries(of: .patch(url, side: .new))
+        let oldLogo = try #require(old.first { $0.relativePath == "logo.dat" })
+        let newLogo = try #require(new.first { $0.relativePath == "logo.dat" })
+
+        #expect(old.map(\.relativePath) == ["logo.dat"])
+        #expect(new.map(\.relativePath).sorted() == ["added.dat", "logo.dat"])
+        #expect(oldLogo.blobID != newLogo.blobID)
     }
 }

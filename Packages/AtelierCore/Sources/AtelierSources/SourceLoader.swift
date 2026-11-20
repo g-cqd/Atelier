@@ -102,11 +102,21 @@ public struct SourceLoader: SourceReading {
     /// keeps its narrower probe (`binaryProbeLength`, the first 8 KiB) on purpose, as git and the file enumerator
     /// judge a file binary.
     public static func text(from data: Data) -> String {
+        if let unicode = TextEncoding.wideUnicode(of: data) {
+            return String(data: data, encoding: unicode) ?? binaryPlaceholder(for: data)
+        }
         if containsNUL(data) {
-            return "(binary file, \(data.count.formatted(.byteCount(style: .file))))\n"
+            return binaryPlaceholder(for: data)
         }
         let body = data.starts(with: utf8ByteOrderMark) ? data.dropFirst(utf8ByteOrderMark.count) : data
-        return String(decoding: body, as: UTF8.self)
+        if let text = String(validating: body, as: UTF8.self) { return text }
+        // Not UTF-8: every byte keeps its own character, so an edit anywhere stays visible.
+        return String(data: body, encoding: .isoLatin1) ?? String(decoding: body, as: UTF8.self)
+    }
+
+    /// The text shown for bytes a diff cannot show: their exact size and their blob id, so an edit always changes it.
+    static func binaryPlaceholder(for data: Data) -> String {
+        "(binary file, \(data.count) bytes, blob \(blobID(of: data).prefix(12)))\n"
     }
 
     private static let utf8ByteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
@@ -362,8 +372,8 @@ public final class PatchCache: Sendable {
             self.patch = patch
             var old = SideTexts(ordered: [], byPath: [:])
             var new = SideTexts(ordered: [], byPath: [:])
-            for file in patch.files where !file.isBinary {
-                let texts = file.reconstructedTexts
+            for file in patch.files {
+                let texts = file.isBinary ? Self.binaryTexts(of: file) : file.reconstructedTexts
                 if let path = file.oldPath, let text = texts.old, old.byPath[path] == nil {
                     old.ordered.append((path, text))
                     old.byPath[path] = text
@@ -375,6 +385,15 @@ public final class PatchCache: Sendable {
             }
             self.old = old
             self.new = new
+        }
+
+        /// A binary file's sides: the patch carries no text, so each side names itself, and the two differ as the
+        /// files do.
+        static func binaryTexts(of file: UnifiedPatch.FileChange) -> (old: String?, new: String?) {
+            (
+                file.oldPath.map { _ in "(binary file, old version: the patch carries no text)\n" },
+                file.newPath.map { _ in "(binary file, new version: the patch carries no text)\n" }
+            )
         }
     }
 
@@ -401,6 +420,9 @@ public final class PatchCache: Sendable {
     /// The patch is read on the pool and parsed here, off the caller's actor.
     @concurrent
     private static func parse(at url: URL, readingOn offload: any BlockingOffload) async throws -> Entry {
-        Entry(patch: UnifiedPatch(parsing: try await offload.run { try String(contentsOf: url, encoding: .utf8) }))
+        let data = try await offload.run { try Data(contentsOf: url) }
+        // A byte that is not UTF-8, in a file's line or a mail header around the patch, becomes U+FFFD instead of
+        // failing the whole patch.
+        return Entry(patch: UnifiedPatch(parsing: String(decoding: data, as: UTF8.self)))
     }
 }

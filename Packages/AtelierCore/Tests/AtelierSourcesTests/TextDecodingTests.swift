@@ -16,8 +16,33 @@ struct TextDecodingTests {
     }
 
     @Test
-    func `an invalid sequence becomes a replacement character`() {
-        #expect(SourceLoader.text(from: Data([0x61, 0xFF, 0x62, 0xC0, 0xAF, 0x63])) == "a\u{FFFD}b\u{FFFD}\u{FFFD}c")
+    func `bytes that are not UTF-8 decode one character per byte, so an edit stays visible`() {
+        #expect(SourceLoader.text(from: Data([0x61, 0xFF, 0x62, 0xC0, 0xAF, 0x63])) == "a\u{FF}b\u{C0}\u{AF}c")
+        #expect(SourceLoader.text(from: Data([0x63, 0x61, 0x66, 0xE9])) == "caf\u{E9}")
+        #expect(SourceLoader.text(from: Data([0x63, 0x61, 0x66, 0xE8])) == "caf\u{E8}")
+    }
+
+    @Test(arguments: [String.Encoding.utf16LittleEndian, .utf16BigEndian, .utf32LittleEndian, .utf32BigEndian])
+    func `a UTF-16 or UTF-32 file with its byte-order mark reads as text`(encoding: String.Encoding) throws {
+        let mark: [UInt8] =
+            switch encoding {
+                case .utf16LittleEndian: [0xFF, 0xFE]
+                case .utf16BigEndian: [0xFE, 0xFF]
+                case .utf32LittleEndian: [0xFF, 0xFE, 0x00, 0x00]
+                default: [0x00, 0x00, 0xFE, 0xFF]
+            }
+        let data = Data(mark) + (try #require("let café = 1\n".data(using: encoding)))
+
+        #expect(SourceLoader.text(from: data) == "let café = 1\n")
+    }
+
+    @Test
+    func `a binary file's placeholder tells two versions of nearly the same size apart`() {
+        let old = Data([0, 1, 2] + [UInt8](repeating: 7, count: 2_000))
+        let new = Data([0, 1, 3] + [UInt8](repeating: 7, count: 2_000))
+
+        #expect(SourceLoader.text(from: old).hasPrefix("(binary file, 2003 bytes, blob "))
+        #expect(SourceLoader.text(from: old) != SourceLoader.text(from: new))
     }
 
     @Test
