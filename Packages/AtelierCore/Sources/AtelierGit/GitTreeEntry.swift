@@ -1,16 +1,31 @@
 public import Foundation
 
-/// A blob of a tree, identified by its path relative to the repository root.
+/// A blob of a tree, identified by its path relative to the repository root, or a submodule's recorded commit.
 public struct GitTreeEntry: Sendable, Hashable {
     public let relativePath: String
-    /// Git blob object id; nil when the file was too large to hash.
+    /// Git blob object id, or a submodule's commit id; nil when the file was too large to hash.
     public let blobID: String?
     public let size: Int
+    /// The octal mode git records: `100644`, `100755` for an executable, `120000` for a symbolic link, `160000` for a
+    /// submodule; nil when the source has no modes, as a plain folder or a patch without mode lines.
+    public let mode: String?
 
-    public init(relativePath: String, blobID: String?, size: Int) {
+    public init(relativePath: String, blobID: String?, size: Int, mode: String? = nil) {
         self.relativePath = relativePath
         self.blobID = blobID
         self.size = size
+        self.mode = mode
+    }
+
+    /// Whether the entry is a submodule, whose id names a commit of another repository rather than a blob.
+    public var isSubmodule: Bool { mode == Self.submoduleMode }
+
+    /// The mode git records for a submodule.
+    public static let submoduleMode = "160000"
+
+    /// What a diff shows for a submodule, as `git diff` does: the commit it records.
+    public static func submoduleText(commit: String) -> String {
+        "Subproject commit \(commit)\n"
     }
 }
 

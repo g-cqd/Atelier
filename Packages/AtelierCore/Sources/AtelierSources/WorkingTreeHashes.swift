@@ -32,11 +32,19 @@ struct FileStamp: Hashable, Sendable {
     /// The stamp of the regular file or symbolic link at `path` itself, not of what a link names; nil for anything
     /// else, a missing file included.
     init?(fileOrLinkAt path: String) {
+        guard let (stamp, _) = Self.stampAndMode(fileOrLinkAt: path) else { return nil }
+        self = stamp
+    }
+
+    /// ``init(fileOrLinkAt:)``'s stamp with the mode git records for the file: `120000` for a symbolic link,
+    /// `100755` for a file its owner may run, `100644` otherwise.
+    static func stampAndMode(fileOrLinkAt path: String) -> (FileStamp, String)? {
         var status = stat()
         guard lstat(path, &status) == 0 else { return nil }
         let type = status.st_mode & S_IFMT
         guard type == S_IFREG || type == S_IFLNK else { return nil }
-        self.init(status)
+        let mode = type == S_IFLNK ? "120000" : status.st_mode & S_IXUSR != 0 ? "100755" : "100644"
+        return (FileStamp(status), mode)
     }
 
     /// The wall clock, on the timeline file system timestamps use.

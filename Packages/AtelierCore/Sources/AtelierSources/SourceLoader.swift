@@ -143,12 +143,19 @@ public struct SourceLoader: SourceReading {
         try await provider(for: source).ignoredEntries()
     }
 
+    /// The text a diff shows for `entry`: its file's, or for a submodule the commit it records, as `git diff` shows.
     public func content(of entry: GitTreeEntry, in source: ComparisonSource) async throws -> String {
-        try await provider(for: source).content(of: entry)
+        if entry.isSubmodule { return GitTreeEntry.submoduleText(commit: entry.blobID ?? "") }
+        return try await provider(for: source).content(of: entry)
     }
 
     public func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String] {
-        try await provider(for: source).contents(of: entries)
+        let submodules = entries.filter(\.isSubmodule)
+        var texts = try await provider(for: source).contents(of: entries.filter { !$0.isSubmodule })
+        for entry in submodules {
+            texts[entry.relativePath] = GitTreeEntry.submoduleText(commit: entry.blobID ?? "")
+        }
+        return texts
     }
 
     private func provider(for source: ComparisonSource) -> any SourceProvider {

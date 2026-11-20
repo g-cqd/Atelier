@@ -13,8 +13,15 @@ public enum GitParsers {
             let path = String(decoding: record[record.index(after: tab)...], as: UTF8.self)
             guard isSupported(path) else { continue }
             let fields = header.split(separator: " ", omittingEmptySubsequences: true)
-            guard fields.count == 4, fields[1] == "blob" else { continue }
-            entries.append(GitTreeEntry(relativePath: path, blobID: String(fields[2]), size: Int(fields[3]) ?? 0))
+            guard fields.count == 4, fields[1] == "blob" || fields[1] == "commit" else { continue }
+            entries.append(
+                GitTreeEntry(
+                    relativePath: path,
+                    blobID: String(fields[2]),
+                    size: Int(fields[3]) ?? 0,
+                    mode: String(fields[0])
+                )
+            )
         }
         return entries
     }

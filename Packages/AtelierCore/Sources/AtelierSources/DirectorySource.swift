@@ -21,13 +21,14 @@ public struct DirectorySource: SourceProvider {
     /// id ``WorkingTreeHashes`` holds for it. A file that cannot be hashed, because it vanished, shrank or is not
     /// readable since it was listed, is listed without a blob id, so it counts as changed and is read when shown,
     /// instead of failing the whole folder. A symbolic link is listed with the blob of its target's path, as git
-    /// stores it.
+    /// stores it. Inside a repository each file carries its mode, as git would record it, and a submodule is listed
+    /// with the commit it has checked out.
     /// - Throws: `CancellationError` when the task is cancelled, even after the last file is hashed: a cancelled
     ///   listing never passes for a finished one, empty or partial.
     @concurrent
     public func entries() async throws -> [GitTreeEntry] {
         guard let view = try await gitView() else {
-            return try await hashed(try await Self.scan(root, on: offload), format: .sha1)
+            return try await hashed(try await Self.scan(root, on: offload), format: nil)
         }
         let clean = view.clean.keys.filter { SourceLoader.isSupported(path: $0) }
         let changed = view.changed.filter { SourceLoader.isSupported(path: $0) }
@@ -37,15 +38,43 @@ public struct DirectorySource: SourceProvider {
         let indexed = clean.compactMap { path in
             view.clean[path]
                 .map {
-                    GitTreeEntry(relativePath: path, blobID: $0.objectID, size: known[path] ?? 0)
+                    GitTreeEntry(relativePath: path, blobID: $0.objectID, size: known[path] ?? 0, mode: $0.mode)
                 }
         }
-        return (indexed + hashed).sorted { $0.relativePath < $1.relativePath }
+        let submodules = try await submoduleEntries(view.submodules)
+        return (indexed + hashed + submodules).sorted { $0.relativePath < $1.relativePath }
+    }
+
+    /// The submodules, each with the commit it has checked out: the index's commit for one git reports unchanged,
+    /// its own `HEAD` for one git reports changed, and the index's again when that cannot be read.
+    private func submoduleEntries(_ submodules: [String: (commit: String, isChanged: Bool)]) async throws
+        -> [GitTreeEntry]
+    {
+        var entries: [GitTreeEntry] = []
+        for (path, submodule) in submodules.sorted(by: { $0.key < $1.key }) {
+            try Task.checkCancellation()
+            var commit = submodule.commit
+            if submodule.isChanged,
+                let head = try? await SourceLoader.git(root.appending(path: path), runner: runner).resolve(ref: "HEAD")
+            {
+                commit = head
+            }
+            entries.append(
+                GitTreeEntry(relativePath: path, blobID: commit, size: 0, mode: GitTreeEntry.submoduleMode)
+            )
+        }
+        return entries
     }
 
     /// The listed `files` with their blob ids in `format`, read only for the files whose stamp changed since the
     /// folder's last listing.
-    private func hashed(_ files: [File], format: ObjectFormat) async throws -> [GitTreeEntry] {
+    /// - Parameters:
+    ///   - files: The files listed, with their stamps.
+    ///   - format: The repository's object format; nil for a folder outside every repository, whose files carry no
+    ///     mode and hash as SHA-1.
+    /// - Returns: An entry per file, without a blob id for one that could not be hashed.
+    /// - Throws: `CancellationError` when the task is cancelled.
+    private func hashed(_ files: [File], format: ObjectFormat?) async throws -> [GitTreeEntry] {
         let folder = root.standardizedFileURL.path(percentEncoded: false)
         let known = hashes.entries(of: folder)
         var kept: [String: WorkingTreeHashes.Entry] = [:]
@@ -59,7 +88,7 @@ public struct DirectorySource: SourceProvider {
         }
         let hashed = try await mapConcurrently(stale, limit: SourceLoader.hashingConcurrency) {
             [offload, hashFile] file in
-            (file.relativePath, try await offload.run { hashFile(file.fullPath, format) })
+            (file.relativePath, try await offload.run { hashFile(file.fullPath, format ?? .sha1) })
         }
         var fresh: [String: HashedFile] = [:]
         for case (let path, let file?) in hashed {
@@ -73,7 +102,8 @@ public struct DirectorySource: SourceProvider {
             return GitTreeEntry(
                 relativePath: file.relativePath,
                 blobID: hashed?.blobID ?? kept[file.relativePath]?.blobID,
-                size: hashed?.stamp.size ?? file.stamp.size
+                size: hashed?.stamp.size ?? file.stamp.size,
+                mode: format == nil ? nil : file.mode
             )
         }
     }
@@ -84,6 +114,8 @@ public struct DirectorySource: SourceProvider {
     struct GitView {
         let clean: [String: GitIndexEntry]
         let changed: [String]
+        /// The submodules, each with the commit the index records and whether git reports it changed.
+        let submodules: [String: (commit: String, isChanged: Bool)]
         /// The repository's object format, which a hashed file's id must follow to match a stored one: read from the
         /// index's ids, SHA-1 for an empty index.
         let format: ObjectFormat
@@ -100,8 +132,9 @@ public struct DirectorySource: SourceProvider {
         return Self.view(index: try await index, changes: changes)
     }
 
-    /// See ``GitView``: a submodule is left out on both lists, as a ref's listing leaves it out.
+    /// See ``GitView``: a submodule is on neither file list, but on its own.
     static func view(index: [GitIndexEntry], changes: [GitStatusEntry]) -> GitView {
+        let changedSubmodules = Set(changes.filter(\.isSubmodule).map(\.path))
         let changed = Set(
             changes.filter { change in
                 !change.isSubmodule
@@ -111,11 +144,16 @@ public struct DirectorySource: SourceProvider {
             .map(\.path)
         )
         var clean: [String: GitIndexEntry] = [:]
-        for entry in index where entry.stage == 0 && !entry.isSubmodule && !changed.contains(entry.path) {
-            clean[entry.path] = entry
+        var submodules: [String: (commit: String, isChanged: Bool)] = [:]
+        for entry in index where entry.stage == 0 {
+            if entry.isSubmodule {
+                submodules[entry.path] = (entry.objectID, changedSubmodules.contains(entry.path))
+            } else if !changed.contains(entry.path) {
+                clean[entry.path] = entry
+            }
         }
         let format = index.first.map { ObjectFormat(objectID: $0.objectID) } ?? .sha1
-        return GitView(clean: clean, changed: changed.sorted(), format: format)
+        return GitView(clean: clean, changed: changed.sorted(), submodules: submodules, format: format)
     }
 
     /// Files git ignores, listed but neither hashed nor sized: they exist on this side alone, so there is nothing
@@ -166,6 +204,8 @@ public struct DirectorySource: SourceProvider {
         let fullPath: String
         let relativePath: String
         let stamp: FileStamp
+        /// The mode git would record for the file, from `lstat`; nil from a plain folder scan.
+        var mode: String?
     }
 
     /// Paths `stat`ed per blocking job: one job for most folders, and a cancellation lands between two jobs.
@@ -218,8 +258,8 @@ public struct DirectorySource: SourceProvider {
         files.reserveCapacity(paths.count)
         for path in paths {
             let fullPath = base + path
-            guard let stamp = FileStamp(fileOrLinkAt: fullPath) else { continue }
-            files.append(File(fullPath: fullPath, relativePath: path, stamp: stamp))
+            guard let (stamp, mode) = FileStamp.stampAndMode(fileOrLinkAt: fullPath) else { continue }
+            files.append(File(fullPath: fullPath, relativePath: path, stamp: stamp, mode: mode))
         }
         return files
     }
