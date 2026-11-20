@@ -22,9 +22,16 @@ extension SourceLoader {
     /// The object id git would assign to `file`'s contents as a blob, read front to back in chunks. The size in the
     /// blob header is the one `file` reports, so a file that grows during the read hashes as its first `size` bytes.
     /// - Throws: The file's error; a short read when the file shrank after it was sized.
-    static func blobID(of file: some PositionalFile) throws -> String {
+    static func blobID(of file: some PositionalFile, format: ObjectFormat = .sha1) throws -> String {
+        switch format {
+            case .sha1: try blobID(of: file, hashing: Insecure.SHA1())
+            case .sha256: try blobID(of: file, hashing: SHA256())
+        }
+    }
+
+    private static func blobID(of file: some PositionalFile, hashing hasher: some HashFunction) throws -> String {
         let size = try file.fileSize()
-        var hasher = Insecure.SHA1()
+        var hasher = hasher
         hasher.update(data: Data("blob \(size)\0".utf8))
         var chunk = [UInt8](repeating: 0, count: min(size, hashingChunkSize))
         try chunk.withUnsafeMutableBytes { buffer in

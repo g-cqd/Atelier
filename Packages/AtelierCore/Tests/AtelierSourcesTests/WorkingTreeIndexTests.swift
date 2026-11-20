@@ -160,3 +160,31 @@ struct WorkingTreeIndexTests {
         #expect(ids["b.txt"] == .some(SourceLoader.blobID(of: Data("c\n".utf8))))
     }
 }
+
+/// A SHA-256 repository: a working-tree file hashed from disk follows the repository's object format.
+struct WorkingTreeObjectFormatTests {
+    @Test
+    func `a changed file of a SHA-256 repository has a SHA-256 blob id, and a clean one HEAD's`() async throws {
+        let repository = try SourceRepository()
+        defer { repository.remove() }
+        try FileManager.default.removeItem(at: repository.root.appending(path: ".git"))
+        try repository.git("init", "-q", "-b", "main", "--object-format=sha256")
+        try repository.write("clean.txt", "c\n")
+        try repository.write("edited.txt", "a\n")
+        try repository.commit("initial")
+        try repository.write("edited.txt", "b\n")
+
+        let ids = try await repository.headAndWorkingTree()
+
+        #expect(ids.workingTree["clean.txt"] == ids.head["clean.txt"])
+        #expect(ids.workingTree["edited.txt"] == .some(SourceLoader.blobID(of: Data("b\n".utf8), format: .sha256)))
+        let stored = try repository.git("hash-object", "edited.txt").trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(ids.workingTree["edited.txt"] == .some(stored))
+    }
+
+    @Test
+    func `an id's length tells its object format`() {
+        #expect(ObjectFormat(objectID: String(repeating: "a", count: 40)) == .sha1)
+        #expect(ObjectFormat(objectID: String(repeating: "a", count: 64)) == .sha256)
+    }
+}

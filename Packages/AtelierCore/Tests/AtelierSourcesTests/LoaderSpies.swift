@@ -81,10 +81,10 @@ final class HashSpy: Sendable {
     /// The paths hashed so far, file names only, in order.
     var names: [String] { calls.map { URL(filePath: $0.path).lastPathComponent } }
 
-    func hash(_ path: String) -> HashedFile? {
+    func hash(_ path: String, format: ObjectFormat) -> HashedFile? {
         let call = Call(path: path, isInsideJob: pool.isInsideJob)
         recorded.withLock { $0.append(call) }
-        return SourceLoader.hashedFile(atPath: path)
+        return SourceLoader.hashedFile(atPath: path, format: format)
     }
 }
 

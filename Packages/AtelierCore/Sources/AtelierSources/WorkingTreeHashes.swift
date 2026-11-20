@@ -76,12 +76,12 @@ extension SourceLoader {
     /// Hashes the file at `path` for a folder listing; see ``HashedFile``.
     /// - Returns: nil when the file cannot be read to its end (it vanished, shrank or is not readable since it was
     ///   listed) or has grown past ``maximumHashedSize``.
-    static func hashedFile(atPath path: String) -> HashedFile? {
+    static func hashedFile(atPath path: String, format: ObjectFormat = .sha1) -> HashedFile? {
         if let link = linkStamp(atPath: path) {
             let readStart = FileStamp.now()
             guard let target = linkTarget(atPath: path), linkStamp(atPath: path) == link else { return nil }
             return HashedFile(
-                blobID: blobID(of: target),
+                blobID: blobID(of: target, format: format),
                 stamp: link,
                 isSettled: link.modified + racyWindow <= readStart
             )
@@ -90,7 +90,7 @@ extension SourceLoader {
         defer { file.close() }
         guard let before = try? file.stamp(), before.size <= maximumHashedSize else { return nil }
         let readStart = FileStamp.now()
-        guard let blobID = try? blobID(of: file), let after = try? file.stamp() else { return nil }
+        guard let blobID = try? blobID(of: file, format: format), let after = try? file.stamp() else { return nil }
         return HashedFile(
             blobID: blobID,
             stamp: before,
