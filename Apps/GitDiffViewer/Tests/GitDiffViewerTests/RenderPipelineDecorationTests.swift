@@ -305,6 +305,30 @@ struct RenderPipelineDecorationTests {
     }
 
     @Test
+    func `a file left while its colour lands is decorated again when it shows again`() async throws {
+        spy.isHolding = true
+        let first = try await show(pair("a.swift"))
+        sut.decorateDisplayed(first.id)
+        _ = try await spy.started.expectNext()
+        _ = try await spy.started.expectNext()
+
+        render(pair("b.swift", old: "other", new: "other"))
+        spy.release.send(())
+        spy.release.send(())
+        try await taskProvider.waitForAllTasks()
+        spy.isHolding = false
+
+        let again = try await show(pair("a.swift"))
+        sut.decorateDisplayed(again.id)
+        try await taskProvider.waitForAllTasks()
+
+        let decorations = try #require(decorations(of: again.new))
+        #expect(decorations.new.colors?.layers(onLine: 0) == [.lexical, .syntactic])
+        #expect(decorations.new.emphasis[1] == [8 ..< 9])
+        #expect(decorations.new.scopes != nil)
+    }
+
+    @Test
     func `clearing the pipeline stops the stages in flight, and nothing they find lands`() async throws {
         spy.isHolding = true
         let file = try await show(pair("a.swift"))

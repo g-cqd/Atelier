@@ -14,14 +14,18 @@ extension RenderPipeline {
         let first = visibleChanges(of: file)
         let stamp = DiffDecorator.Stamp(generation: generation, fileID: file.rendered.id)
         let clock = decorator.clock
+        let serial = decorator.nextJobSerial()
         decorator.trackMarks(
             taskProvider.task(priority: .utility) {
                 await Self.findMarks(of: diff, first: first, clock: clock) { found in
-                    await self.land(found, for: diff.id, stamp: stamp)
+                    await self.land(found, for: diff.id, stamp: stamp, serial: serial)
                 }
-                self.decorator.endMarks(diff.id, cancelled: Task.isCancelled)
+                if self.decorator.endMarks(diff.id, serial: serial, cancelled: Task.isCancelled) {
+                    self.redecorateDisplayed()
+                }
             },
-            for: diff.id
+            for: diff.id,
+            serial: serial
         )
     }
 
@@ -36,10 +40,14 @@ extension RenderPipeline {
 
     /// Takes what a marks job found, unless its job was cancelled, or its render was superseded and no published file
     /// shows its preparation any more; then decorates every published text that shows it.
-    private func land(_ found: MarksFound, for preparation: UUID, stamp: DiffDecorator.Stamp) {
+    private func land(_ found: MarksFound, for preparation: UUID, stamp: DiffDecorator.Stamp, serial: Int) {
         let files = publishedFiles()
         let shows = { (file: PublishedFile) in file.diff.id == preparation }
-        guard !Task.isCancelled, stamp.generation == generation || files.contains(where: shows) else { return }
+        guard !Task.isCancelled else { return }
+        guard stamp.generation == generation || files.contains(where: shows) else {
+            decorator.noteDroppedMarks(preparation, serial: serial)
+            return
+        }
         decorator.land(found, for: preparation)
         decorator.publish(files.map { ($0.rendered, $0.composition) })
         sendDecorated(.marks, where: shows)

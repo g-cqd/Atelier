@@ -69,6 +69,13 @@ extension RenderPipeline {
         settlePendingFolds()
     }
 
+    /// Starts again the stages of every published file a pane shows: a job that dropped what it found, its content off
+    /// screen for a moment, left its key undecorated.
+    func redecorateDisplayed() {
+        let published = Set(publishedFiles().map(\.rendered.id))
+        for id in decorator.displayedFiles where published.contains(id) { decorateDisplayed(id) }
+    }
+
     /// Gives every published text the decorations found for its content, and drops those of texts no longer published:
     /// what is published changed, by a render, a relayout or a gap drag.
     func refreshDecorations() {
@@ -142,25 +149,40 @@ extension RenderPipeline {
         let lineCount = lines.count
         let tiers = decorator.activeTiers(for: diff.language)
         let clock = decorator.clock
+        let serial = decorator.nextJobSerial()
         decorator.trackColors(
             taskProvider.task(priority: .utility) {
                 await HighlightTiers.run(request, tiers: tiers, clock: clock) { event in
                     guard case .update(let update) = event else { return }
-                    await self.land(update, lineCount: lineCount, key: key, stamp: stamp)
+                    await self.land(update, lineCount: lineCount, key: key, stamp: stamp, serial: serial)
                 }
-                self.decorator.endColors(key, cancelled: Task.isCancelled)
+                if self.decorator.endColors(key, serial: serial, cancelled: Task.isCancelled) {
+                    self.redecorateDisplayed()
+                }
             },
-            for: key
+            for: key,
+            serial: serial
         )
     }
 
     /// Takes a tier's update, unless its job was cancelled, or its render was superseded and no published file shows
-    /// its content any more; then decorates every published text that shows it.
-    private func land(_ update: TierUpdate, lineCount: Int, key: DiffDecorator.ContentKey, stamp: DiffDecorator.Stamp) {
+    /// its content any more; then decorates every published text that shows it. A dropped update marks the job
+    /// incomplete, so the side is coloured again when it shows.
+    private func land(
+        _ update: TierUpdate,
+        lineCount: Int,
+        key: DiffDecorator.ContentKey,
+        stamp: DiffDecorator.Stamp,
+        serial: Int
+    ) {
         let files = publishedFiles()
         let shows = { (file: PublishedFile) in file.composition.old == key || file.composition.new == key }
         let isShown = files.contains { $0.rendered.id == stamp.fileID || shows($0) }
-        guard !Task.isCancelled, stamp.generation == generation || isShown else { return }
+        guard !Task.isCancelled else { return }
+        guard stamp.generation == generation || isShown else {
+            decorator.noteDroppedColors(key, serial: serial)
+            return
+        }
         guard update.layer == .lexical || decorator.refinesSwiftColor else { return }
         decorator.land(update, lineCount: lineCount, for: key)
         decorator.publish(files.map { ($0.rendered, $0.composition) })
@@ -182,6 +204,7 @@ extension RenderPipeline {
         let revision = Self.revision(of: key, path: diff.title, language: diff.language)
         let store = decorator.refinesSwiftColor ? decorator.store : nil
         let stamp = DiffDecorator.Stamp(generation: generation, fileID: file.rendered.id)
+        let serial = decorator.nextJobSerial()
         decorator.trackScopes(
             taskProvider.task(priority: .utility) {
                 let scopes = await DiffDecorations.scopes(
@@ -191,19 +214,26 @@ extension RenderPipeline {
                     revision: revision,
                     store: store
                 )
-                if let scopes { self.land(scopes, key: key, stamp: stamp) }
-                self.decorator.endScopes(key, cancelled: Task.isCancelled)
+                if let scopes { self.land(scopes, key: key, stamp: stamp, serial: serial) }
+                if self.decorator.endScopes(key, serial: serial, cancelled: Task.isCancelled) {
+                    self.redecorateDisplayed()
+                }
             },
-            for: key
+            for: key,
+            serial: serial
         )
     }
 
     /// Takes a side's scopes, unless their job was cancelled, or their render was superseded and no published file
     /// shows their content any more; then decorates every published text that shows it.
-    private func land(_ scopes: ScopeLines, key: DiffDecorator.ContentKey, stamp: DiffDecorator.Stamp) {
+    private func land(_ scopes: ScopeLines, key: DiffDecorator.ContentKey, stamp: DiffDecorator.Stamp, serial: Int) {
         let files = publishedFiles()
         let shows = { (file: PublishedFile) in file.composition.old == key || file.composition.new == key }
-        guard !Task.isCancelled, stamp.generation == generation || files.contains(where: shows) else { return }
+        guard !Task.isCancelled else { return }
+        guard stamp.generation == generation || files.contains(where: shows) else {
+            decorator.noteDroppedScopes(key, serial: serial)
+            return
+        }
         decorator.land(scopes, for: key)
         decorator.publish(files.map { ($0.rendered, $0.composition) })
         sendDecorated(.scopes, where: shows)

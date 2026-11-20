@@ -58,18 +58,16 @@ package final class DiffDecorator {
     @ObservationIgnored package let viewport = DecorationViewport()
     @ObservationIgnored private var colors: [ContentKey: (tokens: LayeredLineTokens, version: Int)] = [:]
     @ObservationIgnored private var colorOrder: [ContentKey] = []
-    @ObservationIgnored private var colorJobs: [ContentKey: Task<Void, Never>] = [:]
-    /// The sides whose job ran to its end, every tier finished or failed: they are not coloured again.
-    @ObservationIgnored private var endedColors: Set<ContentKey> = []
+    /// The sides' colour jobs; a side whose job ran to its end, every tier finished or failed and every update landed,
+    /// is not coloured again.
+    @ObservationIgnored private var colorJobs = StageJobs<ContentKey>()
     @ObservationIgnored private var marks: [UUID: Marks] = [:]
     @ObservationIgnored private var marksOrder: [UUID] = []
-    @ObservationIgnored private var marksJobs: [UUID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var endedMarks: Set<UUID> = []
+    @ObservationIgnored private var marksJobs = StageJobs<UUID>()
     /// Each side's scopes, by its colour key, as they land, with the version they landed at (DIFF-03).
     @ObservationIgnored private var scopes: [ContentKey: (lines: ScopeLines, version: Int)] = [:]
     @ObservationIgnored private var scopeOrder: [ContentKey] = []
-    @ObservationIgnored private var scopeJobs: [ContentKey: Task<Void, Never>] = [:]
-    @ObservationIgnored private var endedScopes: Set<ContentKey> = []
+    @ObservationIgnored private var scopeJobs = StageJobs<ContentKey>()
     /// The rendered files a pane reported on screen, kept while they stay published, so a change of setting decorates
     /// what shows.
     @ObservationIgnored private var displayed: Set<RenderedDiff.ID> = []
@@ -124,27 +122,16 @@ package final class DiffDecorator {
 
     /// Stops every colour job and forgets every colour; emphasis and moved lines stay.
     func resetColors() {
-        for task in colorJobs.values { task.cancel() }
-        colorJobs = [:]
+        colorJobs.reset()
         colors = [:]
         colorOrder = []
-        endedColors = []
     }
 
     /// Stops the jobs whose content no published file shows any more.
     func cancel(keepingColors keys: Set<ContentKey>, marks preparations: Set<UUID>) {
-        for (key, task) in colorJobs where !keys.contains(key) {
-            task.cancel()
-            colorJobs[key] = nil
-        }
-        for (key, task) in scopeJobs where !keys.contains(key) {
-            task.cancel()
-            scopeJobs[key] = nil
-        }
-        for (id, task) in marksJobs where !preparations.contains(id) {
-            task.cancel()
-            marksJobs[id] = nil
-        }
+        colorJobs.cancel { keys.contains($0) }
+        scopeJobs.cancel { keys.contains($0) }
+        marksJobs.cancel { preparations.contains($0) }
     }
 
     func noteDisplayed(_ id: RenderedDiff.ID, published: Set<RenderedDiff.ID>) {
@@ -156,21 +143,26 @@ package final class DiffDecorator {
 
     /// Whether `key`'s colour job is running, or ran to its end: either way it needs no new job.
     func isColored(_ key: ContentKey) -> Bool {
-        colorJobs[key] != nil || endedColors.contains(key)
+        colorJobs.isStartedOrEnded(key)
     }
 
     /// Whether the marks of `preparation` are being found, or were: either way they need no new job.
     func isMarked(_ preparation: UUID) -> Bool {
-        marksJobs[preparation] != nil || endedMarks.contains(preparation)
+        marksJobs.isStartedOrEnded(preparation)
     }
 
     /// Whether `key`'s scopes are being found, or were: either way they need no new job.
     func isScoped(_ key: ContentKey) -> Bool {
-        scopeJobs[key] != nil || endedScopes.contains(key)
+        scopeJobs.isStartedOrEnded(key)
     }
 
-    func trackScopes(_ task: Task<Void, Never>, for key: ContentKey) {
-        scopeJobs[key] = task
+    /// The serial the next job of any stage is started under.
+    func nextJobSerial() -> Int {
+        colorJobs.nextSerial()
+    }
+
+    func trackScopes(_ task: Task<Void, Never>, for key: ContentKey, serial: Int) {
+        scopeJobs.track(task, for: key, serial: serial)
     }
 
     /// Keeps a side's scopes; ``publish(_:)``, which every caller runs right after, trims what none shows any more.
@@ -180,27 +172,42 @@ package final class DiffDecorator {
     }
 
     private func trimScopes() {
-        let evicted = Self.oldest(in: &scopeOrder) { published.keys.contains($0) || scopeJobs[$0] != nil }
+        let evicted = Self.oldest(in: &scopeOrder) { published.keys.contains($0) || scopeJobs.isRunning($0) }
         for key in evicted {
             scopes[key] = nil
-            endedScopes.remove(key)
+            scopeJobs.forgetEnded(key)
         }
     }
 
-    /// A side's scopes job ended; as ``endColors(_:cancelled:)``. A side whose scopes were not found has no ribbon.
-    func endScopes(_ key: ContentKey, cancelled: Bool) {
-        scopeJobs[key] = nil
-        if !cancelled { endedScopes.insert(key) }
+    /// A side's scopes job ended; as ``endColors(_:serial:cancelled:)``. A side whose scopes were not found has no
+    /// ribbon.
+    func endScopes(_ key: ContentKey, serial: Int, cancelled: Bool) -> Bool {
+        scopeJobs.end(key, serial: serial, cancelled: cancelled)
     }
 
-    func trackColors(_ task: Task<Void, Never>, for key: ContentKey) {
+    /// The scopes job `serial` of `key` dropped what it found, its content off screen meanwhile.
+    func noteDroppedScopes(_ key: ContentKey, serial: Int) {
+        scopeJobs.noteDropped(key, serial: serial)
+    }
+
+    func trackColors(_ task: Task<Void, Never>, for key: ContentKey, serial: Int) {
         started += 1
-        colorJobs[key] = task
+        colorJobs.track(task, for: key, serial: serial)
     }
 
-    func trackMarks(_ task: Task<Void, Never>, for preparation: UUID) {
+    /// The colour job `serial` of `key` dropped an update, its content off screen meanwhile.
+    func noteDroppedColors(_ key: ContentKey, serial: Int) {
+        colorJobs.noteDropped(key, serial: serial)
+    }
+
+    func trackMarks(_ task: Task<Void, Never>, for preparation: UUID, serial: Int) {
         marksStarted += 1
-        marksJobs[preparation] = task
+        marksJobs.track(task, for: preparation, serial: serial)
+    }
+
+    /// The marks job `serial` of `preparation` dropped what it found, its file off screen meanwhile.
+    func noteDroppedMarks(_ preparation: UUID, serial: Int) {
+        marksJobs.noteDropped(preparation, serial: serial)
     }
 
     /// Merges a tier's update into its side's layers; ``publish(_:)``, which every caller runs right after, trims
@@ -214,10 +221,10 @@ package final class DiffDecorator {
     }
 
     private func trimColors() {
-        let evicted = Self.oldest(in: &colorOrder) { published.keys.contains($0) || colorJobs[$0] != nil }
+        let evicted = Self.oldest(in: &colorOrder) { published.keys.contains($0) || colorJobs.isRunning($0) }
         for key in evicted {
             colors[key] = nil
-            endedColors.remove(key)
+            colorJobs.forgetEnded(key)
         }
     }
 
@@ -234,10 +241,10 @@ package final class DiffDecorator {
     }
 
     private func trimMarks() {
-        let evicted = Self.oldest(in: &marksOrder) { published.preparations.contains($0) || marksJobs[$0] != nil }
+        let evicted = Self.oldest(in: &marksOrder) { published.preparations.contains($0) || marksJobs.isRunning($0) }
         for preparation in evicted {
             marks[preparation] = nil
-            endedMarks.remove(preparation)
+            marksJobs.forgetEnded(preparation)
         }
     }
 
@@ -257,17 +264,18 @@ package final class DiffDecorator {
         return evicted
     }
 
-    /// A side's colour job ended: when it ran to its end, the side is not coloured again, whatever its tiers found; when
-    /// it was cancelled, the next display starts it again. Lines no tier reached stay plain.
-    func endColors(_ key: ContentKey, cancelled: Bool) {
-        colorJobs[key] = nil
-        if !cancelled { endedColors.insert(key) }
+    /// A side's colour job `serial` ended, unless a newer job for the side replaced it. When it ran to its end with every
+    /// update landed, the side is not coloured again, whatever its tiers found; when it was cancelled, or dropped an
+    /// update while its side was off screen, the next display starts it again. Lines no tier reached stay plain.
+    /// - Returns: True when the job ran to its end but dropped an update, so the side needs a new job now.
+    func endColors(_ key: ContentKey, serial: Int, cancelled: Bool) -> Bool {
+        colorJobs.end(key, serial: serial, cancelled: cancelled)
     }
 
-    /// A file's marks job ended; as ``endColors(_:cancelled:)``. Changes it did not reach, past its deadline, stay plain.
-    func endMarks(_ preparation: UUID, cancelled: Bool) {
-        marksJobs[preparation] = nil
-        if !cancelled { endedMarks.insert(preparation) }
+    /// A file's marks job ended; as ``endColors(_:serial:cancelled:)``. Changes it did not reach, past its deadline,
+    /// stay plain.
+    func endMarks(_ preparation: UUID, serial: Int, cancelled: Bool) -> Bool {
+        marksJobs.end(preparation, serial: serial, cancelled: cancelled)
     }
 
     /// Sets ``byText`` to the decorations of `files`, each a published file with its parts; an unchanged file keeps its
