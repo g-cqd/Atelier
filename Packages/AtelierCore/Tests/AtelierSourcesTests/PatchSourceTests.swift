@@ -94,4 +94,44 @@ struct PatchSourceTests {
         #expect(new.map(\.relativePath).sorted() == ["added.dat", "logo.dat"])
         #expect(oldLogo.blobID != newLogo.blobID)
     }
+
+    @Test
+    func `a mode-only change of a patch lists the file with each side's mode`() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PatchSourceTests-\(UUID().uuidString).patch")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        diff --git a/run.sh b/run.sh
+        old mode 100644
+        new mode 100755
+
+        """
+        .write(to: url, atomically: true, encoding: .utf8)
+
+        let old = try await TestProcesses.loader.entries(of: .patch(url, side: .old))
+        let new = try await TestProcesses.loader.entries(of: .patch(url, side: .new))
+
+        #expect(old.map(\.mode) == ["100644"])
+        #expect(new.map(\.mode) == ["100755"])
+        #expect(old.map(\.blobID) == new.map(\.blobID))
+    }
+
+    @Test
+    func `a patch path git quoted with C escapes is listed decoded`() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "PatchSourceTests-\(UUID().uuidString).patch")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try #"""
+        diff --git "a/caf\303\251.txt" "b/caf\303\251.txt"
+        --- "a/caf\303\251.txt"
+        +++ "b/caf\303\251.txt"
+        @@ -1 +1 @@
+        -a
+        +b
+
+        """#
+        .write(to: url, atomically: true, encoding: .utf8)
+
+        let entries = try await TestProcesses.loader.entries(of: .patch(url, side: .new))
+
+        #expect(entries.map(\.relativePath) == ["café.txt"])
+    }
 }

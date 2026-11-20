@@ -332,13 +332,17 @@ public struct PatchSource: SourceProvider {
     public let side: ComparisonSource.PatchSide
     public let cache: PatchCache
 
+    /// Each file of the patch on this side, with the mode the patch records for it, so a mode-only change differs.
     public func entries() async throws -> [GitTreeEntry] {
-        try await cache.entry(at: url).texts(side: side).ordered
+        let texts = try await cache.entry(at: url).texts(side: side)
+        let modes = texts.modes
+        return texts.ordered
             .map { path, text in
                 GitTreeEntry(
                     relativePath: path,
                     blobID: SourceLoader.patchBlobID(path: path, text: text),
-                    size: text.utf8.count
+                    size: text.utf8.count,
+                    mode: modes[path]
                 )
             }
     }
@@ -363,6 +367,8 @@ public final class PatchCache: Sendable {
     public struct SideTexts: Sendable {
         public var ordered: [(path: String, text: String)]
         public var byPath: [String: String]
+        /// The mode the patch records for each path that has one.
+        public var modes: [String: String] = [:]
     }
 
     /// A parsed patch with its reconstructed sides.
@@ -384,22 +390,27 @@ public final class PatchCache: Sendable {
                 if let path = file.oldPath, let text = texts.old, old.byPath[path] == nil {
                     old.ordered.append((path, text))
                     old.byPath[path] = text
+                    old.modes[path] = file.oldMode
                 }
                 if let path = file.newPath, let text = texts.new, new.byPath[path] == nil {
                     new.ordered.append((path, text))
                     new.byPath[path] = text
+                    new.modes[path] = file.newMode
                 }
             }
             self.old = old
             self.new = new
         }
 
-        /// A binary file's sides: the patch carries no text, so each side names itself, and the two differ as the
-        /// files do.
+        /// A binary file's sides: the patch carries no text, so each side names its object when the patch's
+        /// `index` line does, or which version it is, and the two differ as the files do.
         static func binaryTexts(of file: UnifiedPatch.FileChange) -> (old: String?, new: String?) {
-            (
-                file.oldPath.map { _ in "(binary file, old version: the patch carries no text)\n" },
-                file.newPath.map { _ in "(binary file, new version: the patch carries no text)\n" }
+            func text(_ object: String?, _ version: String) -> String {
+                "(binary file, \(object.map { "object \($0)" } ?? "\(version) version"): the patch carries no text)\n"
+            }
+            return (
+                file.oldPath.map { _ in text(file.oldObjectID, "old") },
+                file.newPath.map { _ in text(file.newObjectID, "new") }
             )
         }
     }
