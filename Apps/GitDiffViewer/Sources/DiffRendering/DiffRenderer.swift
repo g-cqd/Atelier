@@ -96,7 +96,7 @@ package enum DiffRenderer {
                 if row.kind == .removed { removedLines += 1 }
             }
         }
-        return RenderedDiff(
+        var rendered = RenderedDiff(
             unified: options.sides.contains(.unified)
                 ? render(rows: unifiedRows, side: .unified, options: options) : nil,
             old: options.sides.contains(.old) ? render(rows: splitRows, side: .old, options: options) : nil,
@@ -108,6 +108,8 @@ package enum DiffRenderer {
             removedLines: removedLines,
             isCombined: withHeaders
         )
+        if prepared.count == 1 { rendered.notes = prepared[0].notes }
+        return rendered
     }
 
     /// Convenience for tests and callers holding raw inputs.

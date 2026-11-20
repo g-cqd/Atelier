@@ -31,6 +31,8 @@ package final class DiffPreparer {
         let path: String
         let oldBlob: String
         let newBlob: String
+        let oldMode: String?
+        let newMode: String?
         let granularity: IntralineGranularity
         let heuristics: DiffHeuristics
 
@@ -41,6 +43,8 @@ package final class DiffPreparer {
             path = pair.path
             oldBlob = pair.old?.blobID ?? ""
             newBlob = pair.new?.blobID ?? ""
+            oldMode = pair.old?.mode
+            newMode = pair.new?.mode
             self.granularity = granularity
             self.heuristics = heuristics
         }
@@ -137,7 +141,14 @@ package final class DiffPreparer {
                 newText: newText,
                 language: language,
                 oldRevision: revision(pair.old),
-                newRevision: revision(pair.new)
+                newRevision: revision(pair.new),
+                notes: FileDiffNote.notes(
+                    oldText: pair.old == nil ? nil : oldText,
+                    newText: pair.new == nil ? nil : newText,
+                    oldMode: pair.old?.mode,
+                    newMode: pair.new?.mode,
+                    differs: pair.old.flatMap(\.blobID) != pair.new.flatMap(\.blobID)
+                )
             )
         }
         return try await mapConcurrently(inputs, limit: ProcessInfo.processInfo.activeProcessorCount, prepare)

@@ -16,6 +16,8 @@ package struct FileChangeSummary: Equatable {
     package let kind: Kind
     package let addedLines: Int
     package let removedLines: Int
+    /// What differs that the file's lines do not show, as text.
+    package var notes: [String] = []
 }
 
 /// Lines added and removed, and how many files changed. The line counts cover every changed file when the file

@@ -35,6 +35,16 @@ struct ComparisonTests {
     }
 
     @Test
+    func `a mode change makes a file different, when both sources record modes`() {
+        let old = SourceEntry(relativePath: "run.sh", blobID: "1", size: 1, mode: "100644")
+        let executable = SourceEntry(relativePath: "run.sh", blobID: "1", size: 1, mode: "100755")
+        let unknown = SourceEntry(relativePath: "run.sh", blobID: "1", size: 1)
+
+        #expect(!Comparison.isSame(old, executable))
+        #expect(Comparison.isSame(old, unknown))
+    }
+
+    @Test
     func `a deleted empty file and an added empty file are not a rename`() {
         let empty = Comparison.emptyBlobID
         let comparison = Comparison(

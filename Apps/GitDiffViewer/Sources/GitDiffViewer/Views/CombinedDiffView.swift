@@ -377,6 +377,13 @@ private struct FileCardHeader: View {
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .multilineTextAlignment(.leading)
+            if !title.summary.notes.isEmpty {
+                Text(title.summary.notes.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer()
             if let diagnostics = title.diagnostics {
                 DiagnosticCountBadge(counts: diagnostics)

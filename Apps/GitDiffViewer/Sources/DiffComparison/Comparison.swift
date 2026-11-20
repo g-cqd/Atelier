@@ -234,9 +234,11 @@ package struct Comparison: Sendable, Equatable {
         }
     }
 
+    /// Whether two entries hold the same content: the same blob and, when both sources record modes, the same mode.
     package static func isSame(_ lhs: SourceEntry, _ rhs: SourceEntry) -> Bool {
-        guard let left = lhs.blobID, let right = rhs.blobID else { return false }
-        return left == right
+        guard let left = lhs.blobID, let right = rhs.blobID, left == right else { return false }
+        guard let leftMode = lhs.mode, let rightMode = rhs.mode else { return true }
+        return leftMode == rightMode
     }
 }
 

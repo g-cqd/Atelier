@@ -129,6 +129,8 @@ package final class PreparedDiff: Sendable {
     /// How finely a pair's lines are compared, and the diff's stages, for the emphasis that comes after the text.
     package let granularity: IntralineGranularity
     package let pipeline: DiffPipeline
+    /// What differs between the sides that their lines do not show (``FileDiffNote``).
+    package let notes: [FileDiffNote]
     /// The syntax granularity's token boundaries, read from the syntax facts store when a side has a revision.
     private let tokenRanges: SwiftSyntaxTokenRanges
 
@@ -150,6 +152,7 @@ package final class PreparedDiff: Sendable {
         language = input.language
         self.granularity = granularity
         pipeline = DiffPipeline(heuristics: heuristics)
+        notes = input.notes
         model = DiffModel(structureOf: input.oldText, newText: input.newText, pipeline: pipeline)
         tokenRanges = Self.tokenRanges(for: input, store: store)
     }
@@ -180,6 +183,8 @@ package struct FileDiffInput: Sendable {
     /// What each side's content is, when its blob id is known: the key its facts are kept under.
     package let oldRevision: SourceRevision?
     package let newRevision: SourceRevision?
+    /// What differs between the sides that their lines do not show.
+    package let notes: [FileDiffNote]
 
     package init(
         title: String,
@@ -187,7 +192,8 @@ package struct FileDiffInput: Sendable {
         newText: String,
         language: Language,
         oldRevision: SourceRevision? = nil,
-        newRevision: SourceRevision? = nil
+        newRevision: SourceRevision? = nil,
+        notes: [FileDiffNote] = []
     ) {
         self.title = title
         self.oldText = oldText
@@ -195,6 +201,7 @@ package struct FileDiffInput: Sendable {
         self.language = language
         self.oldRevision = oldRevision
         self.newRevision = newRevision
+        self.notes = notes
     }
 }
 
@@ -364,6 +371,8 @@ package struct RenderedDiff: Identifiable, Sendable {
     package let removedLines: Int
     /// Several files rendered one after another, each introduced by a header row.
     package let isCombined: Bool
+    /// What differs between a single file's sides that its lines do not show; empty for several files.
+    package var notes: [FileDiffNote] = []
     /// Re-renders of the same selection keep the pane where it was.
     package var keepsScrollPosition = false
 }

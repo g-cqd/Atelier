@@ -60,6 +60,11 @@ struct StatusBarView: View {
                         Text("+\(summary.addedLines)").foregroundStyle(.green)
                         Text("−\(summary.removedLines)").foregroundStyle(.red)
                     }
+                    if !summary.notes.isEmpty {
+                        Text(summary.notes.joined(separator: " · "))
+                            .foregroundStyle(.secondary)
+                            .truncationMode(.tail)
+                    }
                 }
             case .loading:
                 Text("Comparing…").foregroundStyle(.secondary)

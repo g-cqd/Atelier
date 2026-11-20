@@ -482,7 +482,8 @@ package final class DiffViewerModel {
             kind: commitScope?.file(atPath: leftPath)?.summaryKind
                 ?? comparison.summaryKind(for: leftPath, directoryStatus: trees.statuses[leftPath]),
             addedLines: rendered?.addedLines ?? 0,
-            removedLines: rendered?.removedLines ?? 0
+            removedLines: rendered?.removedLines ?? 0,
+            notes: rendered?.notes.map(\.text) ?? []
         )
     }
 
