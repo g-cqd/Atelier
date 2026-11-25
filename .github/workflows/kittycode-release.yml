@@ -38,7 +38,7 @@ jobs:
       # The package declares tools 6.4, which no hosted macOS image ships: setup-swift, pinned as in the rest of the
       # family, installs it through swiftly.
       - name: Setup · Install Swift 6.4.1
-        uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3.0.0-beta.1
+        uses: g-cqd/swift-ci/setup-swift@2f915b39ab7ff1438e2cd6f998e517eabc875053 # swift-ci 2f915b3
         with:
           swift-version: "6.4.1"
 
