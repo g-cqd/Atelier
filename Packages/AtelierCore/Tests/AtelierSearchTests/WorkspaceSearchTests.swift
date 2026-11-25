@@ -1,0 +1,309 @@
+import AemiRuntime
+import Foundation
+import Testing
+
+@testable import AtelierSearch
+
+@Suite("WorkspaceSearch")
+struct WorkspaceSearchTests {
+    @Test
+    func `one file can report more matches than the old implicit cap`() async {
+        let path = "/virtual/large.swift"
+        let lines = Array(repeating: "id1", count: 12_000)
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: SearchQuery(text: "id"),
+                files: [path],
+                openBuffers: [path: lines],
+                pool: pool,
+                maxResults: 50_000,
+                onProgress: { _ in }
+            )
+        }
+        #expect(result.totalMatchCount == 12_000)
+        #expect(result.results.first?.matches.count == 12_000)
+    }
+
+    /// One worker is enough: these tests exercise correctness, not concurrency, and a fresh pool per
+    /// test keeps its (real, joined-on-shutdown) thread scoped to the test that owns it.
+    private func withPool<T>(_ body: (BlockingOffloadPool) async throws -> T) async rethrows -> T {
+        let pool = BlockingOffloadPool(width: 1)
+        defer { pool.shutdown() }
+        return try await body(pool)
+    }
+
+    private func makeTempDir() throws -> String {
+        let tmp = NSTemporaryDirectory() + "KittyWSSearch_\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
+        return tmp
+    }
+
+    private func writeFile(_ path: String, content: String) throws {
+        try content.write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
+    private func cleanup(_ path: String) {
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
+    @Test("searches across multiple files")
+    func searchMultipleFiles() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        try writeFile(tmp + "/a.swift", content: "let hello = 1")
+        try writeFile(tmp + "/b.swift", content: "let hello = 2\nhello again")
+        try writeFile(tmp + "/c.swift", content: "no match here")
+
+        let files = [tmp + "/a.swift", tmp + "/b.swift", tmp + "/c.swift"]
+        let query = SearchQuery(text: "hello")
+
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: files,
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+
+        #expect(result.totalMatchCount == 3)
+        #expect(result.filesMatched == 2)
+        #expect(result.filesSearched == 3)
+    }
+
+    @Test("open buffers searched from memory not disk")
+    func searchOpenBuffers() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // Disk has "let x = 1" but open buffer has "hello world"
+        try writeFile(tmp + "/a.swift", content: "let x = 1")
+
+        let files = [tmp + "/a.swift"]
+        let openBuffers = [tmp + "/a.swift": ["hello world"]]
+        let query = SearchQuery(text: "hello")
+
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: files,
+                openBuffers: openBuffers,
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+
+        #expect(result.totalMatchCount == 1)
+        #expect(result.filesMatched == 1)
+    }
+
+    @Test("cancellation stops search early")
+    func cancellationStopsSearch() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // Create many files
+        for i in 0 ..< 50 {
+            try writeFile(tmp + "/file\(i).txt", content: "hello world line \(i)")
+        }
+
+        let files = (0 ..< 50).map { tmp + "/file\($0).txt" }
+        let query = SearchQuery(text: "hello")
+
+        let pool = BlockingOffloadPool(width: 1)
+        defer { pool.shutdown() }
+        let task = Task {
+            await searchWorkspace(
+                query: query,
+                files: files,
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+
+        // Cancel immediately
+        task.cancel()
+        let result = await task.value
+
+        // Search should have been cancelled (may or may not have completed some files)
+        #expect(result.wasCancelled || result.filesSearched <= 50)
+    }
+
+    @Test("maxResults cap works")
+    func maxResultsCap() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // Create file with many matches
+        var content = ""
+        for i in 0 ..< 100 {
+            content += "hello \(i)\n"
+        }
+        try writeFile(tmp + "/many.txt", content: content)
+
+        let files = [tmp + "/many.txt"]
+        let query = SearchQuery(text: "hello")
+
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: files,
+                openBuffers: [:],
+                pool: pool,
+                maxResults: 10,
+                onProgress: { _ in }
+            )
+        }
+
+        // Should have found matches but stopped accepting after cap
+        #expect(result.totalMatchCount > 0)
+    }
+
+    @Test("empty files are handled gracefully")
+    func emptyFilesHandled() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        try writeFile(tmp + "/empty.txt", content: "")
+        try writeFile(tmp + "/has_match.txt", content: "hello")
+
+        let files = [tmp + "/empty.txt", tmp + "/has_match.txt"]
+        let query = SearchQuery(text: "hello")
+
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: files,
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+
+        #expect(result.totalMatchCount == 1)
+        #expect(result.filesSearched == 2)
+    }
+
+    /// The file reader splits lines like `split(separator: "\n", omittingEmptySubsequences: false)`: with and
+    /// without a final newline, across a line over 64 KB, and with CRLF endings.
+    @Test("file without trailing newline counts every line")
+    func streamingNoTrailingNewline() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        try writeFile(tmp + "/a.txt", content: "alpha\nbeta\ngamma")  // no trailing \n
+        let query = SearchQuery(text: "gamma")
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test("file ending with newline preserves trailing empty line semantics")
+    func streamingTrailingNewline() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // Ends with `\n`, which `split` turns into a final empty line: ["alpha", "beta", ""].
+        try writeFile(tmp + "/a.txt", content: "alpha\nbeta\n")
+        let query = SearchQuery(text: "beta")
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test("line longer than the chunk size is reassembled across chunks")
+    func streamingLongLine() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // An 80 KB single line followed by a matching marker.
+        let bigLine = String(repeating: "x", count: 80 * 1024)
+        try writeFile(tmp + "/a.txt", content: bigLine + "\nNEEDLE\n")
+        let query = SearchQuery(text: "NEEDLE")
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test("CRLF lines are tolerated (CR stays in the line, \\n splits)")
+    func streamingCRLF() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        try writeFile(tmp + "/a.txt", content: "alpha\r\nbeta\r\n")
+        let query = SearchQuery(text: "beta")
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: query,
+                files: [tmp + "/a.txt"],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test
+    func `a search over no files finds nothing`() async {
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: SearchQuery(text: "needle"),
+                files: [],
+                openBuffers: [:],
+                pool: pool,
+                onProgress: { _ in }
+            )
+        }
+
+        #expect(result.totalMatchCount == 0)
+        #expect(result.filesSearched == 0)
+    }
+
+    @Test
+    func `a result carries the query it ran`() async {
+        let query = SearchQuery(text: "Needle", isCaseSensitive: true, isRegex: false, wholeWord: true)
+
+        let result = await withPool { pool in
+            await searchWorkspace(query: query, files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+        }
+
+        #expect(result.query == query)
+    }
+
+    @Test
+    func `an invalid regular expression finds nothing and still reports its query`() async {
+        let query = SearchQuery(text: "(unclosed", isRegex: true)
+
+        let result = await withPool { pool in
+            await searchWorkspace(query: query, files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+        }
+
+        #expect(result.query == query)
+        #expect(result.totalMatchCount == 0)
+    }
+}

@@ -1,0 +1,214 @@
+import AtelierGrammarCorpus
+import AtelierSyntaxModel
+import Foundation
+import Testing
+
+@testable import AtelierGrammar
+@testable import AtelierParser
+@testable import AtelierQuery
+@testable import KittySyntax
+@testable import TerminalKitCodecs
+
+@Suite
+struct HighlighterTests {
+    @Test
+    func `Highlight produces styled spans`() {
+        let highlighter = Highlighter(theme: .monokai)
+
+        let node = SyntaxNode(type: "keyword", byteRange: 0 ..< 3, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [node], byteRange: 0 ..< 7)
+        let tree = SyntaxTree(root: root, source: "let x =")
+
+        let query = Query(patterns: [
+            .nodeMatch(type: "keyword", children: [], capture: "keyword")
+        ])
+
+        let spans = highlighter.highlight(source: "let x =", tree: tree, query: query)
+        #expect(!spans.isEmpty)
+        // First span should be styled as keyword
+        #expect(spans[0].style.bold)
+    }
+
+    @Test
+    func `Nested captures override broader captures`() {
+        var theme = Theme(defaultStyle: .default)
+        let functionStyle = Style(fg: .rgb(r: 1, g: 2, b: 3))
+        let functionNameStyle = Style(fg: .rgb(r: 4, g: 5, b: 6), italic: true)
+        let keywordStyle = Style(fg: .rgb(r: 7, g: 8, b: 9), bold: true)
+        theme.setStyle(functionStyle, for: "function")
+        theme.setStyle(functionNameStyle, for: "function.name")
+        theme.setStyle(keywordStyle, for: "keyword")
+
+        let identifier = SyntaxNode(type: "identifier", byteRange: 5 ..< 10, isNamed: true)
+        let function = SyntaxNode(
+            type: "function_definition",
+            children: [identifier],
+            byteRange: 0 ..< 20,
+            isNamed: true
+        )
+        let keyword = SyntaxNode(type: "keyword", byteRange: 20 ..< 23, isNamed: true)
+        let root = SyntaxNode(
+            type: "source",
+            children: [function, keyword],
+            byteRange: 0 ..< 23
+        )
+        let tree = SyntaxTree(root: root, source: "abcdefghijklmnopqrstuvw")
+        let query = Query(patterns: [
+            .nodeMatch(type: "function_definition", children: [], capture: "function"),
+            .nodeMatch(type: "identifier", children: [], capture: "function.name"),
+            .nodeMatch(type: "keyword", children: [], capture: "keyword")
+        ])
+
+        let spans = Highlighter(theme: theme)
+            .highlight(
+                source: tree.source,
+                tree: tree,
+                query: query
+            )
+
+        #expect(
+            spans == [
+                StyledSpan(text: "abcde", style: functionStyle),
+                StyledSpan(text: "fghij", style: functionNameStyle),
+                StyledSpan(text: "klmnopqrst", style: functionStyle),
+                StyledSpan(text: "uvw", style: keywordStyle)
+            ]
+        )
+    }
+
+    @Test
+    func `Earlier identical-range captures override later generic captures`() {
+        var theme = Theme(defaultStyle: .default)
+        let keyStyle = Style(fg: .rgb(r: 1, g: 2, b: 3))
+        let stringStyle = Style(fg: .rgb(r: 4, g: 5, b: 6))
+        theme.setStyle(keyStyle, for: "string.special.key")
+        theme.setStyle(stringStyle, for: "string")
+
+        let stringNode = SyntaxNode(type: "string", byteRange: 0 ..< 6, isNamed: true)
+        let tree = SyntaxTree(
+            root: SyntaxNode(type: "document", children: [stringNode], byteRange: 0 ..< 6),
+            source: "\"name\""
+        )
+        let query = Query(patterns: [
+            .nodeMatch(type: "string", children: [], capture: "string.special.key"),
+            .nodeMatch(type: "string", children: [], capture: "string")
+        ])
+
+        let spans = Highlighter(theme: theme)
+            .highlight(
+                source: tree.source,
+                tree: tree,
+                query: query
+            )
+
+        #expect(spans == [StyledSpan(text: "\"name\"", style: keyStyle)])
+    }
+
+    /// Upstream queries tag comments `@comment @spell` for spell checkers; the second capture must not restyle them.
+    @Test
+    func `a spell capture beside a comment capture keeps the comment style`() throws {
+        var theme = Theme(defaultStyle: .default)
+        let commentStyle = Style(fg: .rgb(r: 1, g: 2, b: 3), italic: true)
+        theme.setStyle(commentStyle, for: "comment")
+        let comment = SyntaxNode(type: "comment", byteRange: 0 ..< 7, isNamed: true)
+        let tree = SyntaxTree(
+            root: SyntaxNode(type: "source", children: [comment], byteRange: 0 ..< 7),
+            source: "// note"
+        )
+        let query = try QueryParser.parse("(comment) @comment @spell")
+        let highlighter = Highlighter(theme: theme)
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(
+            highlighter.highlight(source: tree.source, tree: tree, query: query) == [
+                StyledSpan(text: "// note", style: commentStyle)
+            ]
+        )
+        let roles = CaptureRoles(captureNames: query.captureNames)
+        #expect(highlighter.buildTokens(matches: matches, roles: roles).map(\.role) == [.comment])
+    }
+
+    @Test
+    func `LanguageHighlighter session matches one-shot grammar-backed highlighting`() async {
+        let source = "true"
+        let available = await LanguageHighlighter.ensureArtifacts(for: "json")
+        let session = LanguageHighlighter.makeSession(language: "json")
+
+        #expect(available)
+        #expect(session.isGrammarBacked)
+        #expect(
+            session.highlightDocument(source: source)
+                == LanguageHighlighter.highlightDocument(source: source, language: "json")
+        )
+    }
+
+    @Test
+    func `LanguageHighlighter session supports line-based fallback highlighting`() {
+        let session = LanguageHighlighter.makeSession(language: nil)
+        let lines = session.highlightLines(["// comment", "value"])
+
+        #expect(session.prefersLineInput)
+        #expect(lines.count == 2)
+        #expect(lines[0].map(\.text).joined() == "// comment")
+        #expect(lines[1].map(\.text).joined() == "value")
+    }
+
+    @Test
+    func `LanguageHighlighter prewarms bundled grammar artifacts used by kittycode`() async {
+        _ = await LanguageHighlighter.ensureArtifacts(for: "json")
+        let warmed = await LanguageHighlighter.prewarmArtifacts(for: ["json", "unknown_lang"])
+
+        #expect(warmed.contains("json"))
+        #expect(!warmed.contains("unknown_lang"))
+    }
+
+    @Test
+    func `prewarm leaves an uncached grammar for the first opened file`() async {
+        let language = "uncached_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        GrammarRegistry.shared.register(
+            GrammarRegistry.LanguageEntry(name: language, extensions: [], path: "json")
+        )
+
+        let warmed = await LanguageHighlighter.prewarmArtifacts(for: [language])
+
+        #expect(!warmed.contains(language))
+        #expect(!LanguageHighlighter.makeSession(language: language).isGrammarBacked)
+        let loaded = await LanguageHighlighter.ensureArtifacts(for: language)
+        #expect(loaded)
+        #expect(LanguageHighlighter.makeSession(language: language).isGrammarBacked)
+    }
+
+    @Test
+    func `Bundled language manifest drives runtime language detection`() {
+        #expect(LanguageHighlighter.detectLanguage(for: "main.SWIFT") == "swift")
+        #expect(LanguageHighlighter.detectLanguage(for: "settings.yaml") == "yaml")
+        #expect(LanguageHighlighter.detectLanguage(for: "Makefile") == nil)
+    }
+
+    /// An ordinary object parses through the bundled JSON grammar, so the session stays grammar-backed and its
+    /// query styles the object: keys as properties, apart from string values, and `true` as a built-in constant.
+    @Test
+    func `json keys stay distinct from string values through the grammar`() async {
+        var theme = Theme(defaultStyle: .default)
+        let keyStyle = Style(fg: .rgb(r: 10, g: 20, b: 30))
+        let stringStyle = Style(fg: .rgb(r: 40, g: 50, b: 60))
+        let numberStyle = Style(fg: .rgb(r: 70, g: 80, b: 90))
+        let constantStyle = Style(fg: .rgb(r: 100, g: 110, b: 120))
+        theme.setStyle(keyStyle, for: "property")
+        theme.setStyle(stringStyle, for: "string")
+        theme.setStyle(numberStyle, for: "number")
+        theme.setStyle(constantStyle, for: "constant")
+
+        let source = #"{"name":"value","count":42,"enabled":true}"#
+        let available = await LanguageHighlighter.ensureArtifacts(for: "json")
+        let session = LanguageHighlighter.makeSession(language: "json", theme: theme)
+        let spans = session.highlightDocument(source: source).flatMap { $0 }
+
+        #expect(available)
+        #expect(session.isGrammarBacked)
+        #expect(spans.first(where: { $0.text == "\"name\"" })?.style == keyStyle)
+        #expect(spans.first(where: { $0.text == "\"value\"" })?.style == stringStyle)
+        #expect(spans.first(where: { $0.text == "42" })?.style == numberStyle)
+        #expect(spans.first(where: { $0.text == "true" })?.style == constantStyle)
+    }
+}

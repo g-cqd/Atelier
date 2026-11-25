@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/alex-pinkus/tree-sitter-swift",
+  "version": "0.7.3",
+  "commit": "b8b22bffbb3441780e6471665bacfb263741c86a",
+  "released": "2026-06-01",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "unknown"
+}

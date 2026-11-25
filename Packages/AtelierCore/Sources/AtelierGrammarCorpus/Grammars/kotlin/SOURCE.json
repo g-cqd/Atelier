@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/fwcd/tree-sitter-kotlin",
+  "version": "unreleased, after 0.3.8",
+  "commit": "f3a1ea74304adad67164a0a6ffe729428748a7a7",
+  "committed": "2026-03-04",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "the same commit; 0.3.8 is older"
+}

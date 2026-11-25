@@ -1,0 +1,124 @@
+{
+  "originHash" : "fab8c6569bafddf42d93b620867959a890369b772fc29ff58947cc00744b7315",
+  "pins" : [
+    {
+      "identity" : "aemi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Aemi-Studio/aemi.git",
+      "state" : {
+        "revision" : "e34e3e517176a04f64e5d56e16f5019e55392a90"
+      }
+    },
+    {
+      "identity" : "aemihmmml",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiHMMML.git",
+      "state" : {
+        "revision" : "23d9a9d020cda1d215bd05fd9ace215c38198038"
+      }
+    },
+    {
+      "identity" : "aemijson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiJSON.git",
+      "state" : {
+        "revision" : "fb3d1649133eee852989bb7b2f40469b8a61c88d"
+      }
+    },
+    {
+      "identity" : "aemimarkdown",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiMarkdown.git",
+      "state" : {
+        "revision" : "7b7fd228e13a7089e4c973c7d96faa2e6fd84c3d"
+      }
+    },
+    {
+      "identity" : "aemimermaid",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiMermaid.git",
+      "state" : {
+        "revision" : "c29ed2ff011fb9e98f15917e48d5ff8538c1c6ce"
+      }
+    },
+    {
+      "identity" : "aemiregex",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiRegex.git",
+      "state" : {
+        "revision" : "7f6b1f8b86002f099cca32735ff90455b990c4e6"
+      }
+    },
+    {
+      "identity" : "aemitextui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiTextUI.git",
+      "state" : {
+        "revision" : "4b64bf4ea295d3ea68ceaa9ca2360beb7f5b0a3d"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "917b472dbe53ba699cbb0495f9a95a084bc6364d",
+        "version" : "1.7.4"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections.git",
+      "state" : {
+        "revision" : "844289ac455816e193f1dbbe014f3c4dbe429410",
+        "version" : "1.7.4"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "f8fad2f95ad67b45f6340c0960e2396094d67e07",
+        "version" : "5.1.1"
+      }
+    },
+    {
+      "identity" : "swift-subprocess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "state" : {
+        "revision" : "dbe21bd7dfd4ffef8c32588918542a8abfa1b54c",
+        "version" : "1.0.2"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf",
+        "version" : "604.0.0"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-system.git",
+      "state" : {
+        "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
+        "version" : "1.8.1"
+      }
+    },
+    {
+      "identity" : "terminalkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/TerminalKit.git",
+      "state" : {
+        "revision" : "c6eb30847f79edf41ff5469a21dd29ab6816c4f7"
+      }
+    }
+  ],
+  "version" : 3
+}

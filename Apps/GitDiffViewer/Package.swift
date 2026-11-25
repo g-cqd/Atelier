@@ -1,0 +1,121 @@
+// swift-tools-version: 6.4
+
+import PackageDescription
+
+// The same strict tier aemi applies to its kernel targets: Swift 6 language mode, warnings as errors, and the
+// upcoming features that tighten existentials, isolation inference and import visibility.
+let strict: [SwiftSetting] = [
+    .swiftLanguageMode(.v6),
+    .treatAllWarnings(as: .error),
+    .enableUpcomingFeature("ExistentialAny"),
+    .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableUpcomingFeature("InternalImportsByDefault"),
+    .enableUpcomingFeature("MemberImportVisibility")
+]
+
+let package = Package(
+    name: "GitDiffViewer",
+    platforms: [
+        .macOS("26.1")
+    ],
+    products: [
+        .executable(name: "GitDiffViewer", targets: ["GitDiffViewer"]),
+        .library(name: "DiffCore", targets: ["DiffCore"])
+    ],
+    dependencies: [
+        .package(path: "../../Packages/AtelierCore"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "e34e3e517176a04f64e5d56e16f5019e55392a90"),
+        // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
+        // versions in the same graph.
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "fb3d1649133eee852989bb7b2f40469b8a61c88d")
+    ],
+    targets: [
+        // Re-exports the core diff, lexers and language vocabulary under the app's own module name.
+        .target(
+            name: "DiffCore",
+            dependencies: [
+                .product(name: "AemiDiff", package: "aemi"),
+                .product(name: "AtelierLexers", package: "AtelierCore"),
+                .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore")
+            ],
+            swiftSettings: strict
+        ),
+        // Git runs through aemi's blocking-work pool and reads blobs through its POSIX file map.
+        .target(
+            name: "DiffGit",
+            dependencies: [
+                "DiffCore", .product(name: "AtelierGit", package: "AtelierCore"),
+                .product(name: "AtelierSources", package: "AtelierCore"),
+                .product(name: "AtelierProcess", package: "AtelierCore"),
+                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
+        // The one target that links swift-syntax, for the syntax tier of the intraline emphasis.
+        .target(
+            name: "DiffRendering",
+            dependencies: [
+                "DiffCore", "DiffGit", .product(name: "AtelierHighlighting", package: "AtelierCore"),
+                .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore")
+            ],
+            swiftSettings: strict
+        ),
+        .target(
+            name: "DiffTextKit",
+            dependencies: [
+                "DiffCore", "DiffRendering", .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                .product(name: "AtelierTextRendering", package: "AtelierCore"),
+                .product(name: "AtelierTextView", package: "AtelierCore"),
+                .product(name: "AemiCore", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
+        // App-tier models spawn through AemiCore's task provider; fan-out and the clock seam come from AemiRuntime.
+        // Settings and recents persist as JSON through AemiJSON. Grammar colour runs the core's grammar tier.
+        .target(
+            name: "DiffComparison",
+            dependencies: [
+                .product(name: "AemiIO", package: "aemi"),
+                "DiffCore", "DiffGit", "DiffRendering", .product(name: "AtelierFileTree", package: "AtelierCore"),
+                .product(name: "AtelierHighlighting", package: "AtelierCore"),
+                .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
+                .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierLSP", package: "AtelierCore"),
+                .product(name: "AtelierDocIndex", package: "AtelierCore"),
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiJSON", package: "AemiJSON")
+            ],
+            swiftSettings: strict
+        ),
+        .executableTarget(
+            name: "GitDiffViewer",
+            dependencies: [
+                "DiffCore", "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
+                .product(name: "AemiJSON", package: "AemiJSON")
+            ],
+            // Views, coordinators and panels all live on the main actor; nothing in the app target runs elsewhere.
+            swiftSettings: strict + [.defaultIsolation(MainActor.self)]
+        ),
+        .testTarget(
+            name: "GitDiffViewerTests",
+            dependencies: [
+                .product(name: "AemiIO", package: "aemi"),
+                "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit", "GitDiffViewer",
+                .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierGrammar", package: "AtelierCore"),
+                .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
+                .product(name: "AtelierHighlighting", package: "AtelierCore"),
+                .product(name: "AtelierSources", package: "AtelierCore"),
+                .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                .product(name: "AtelierTestSupport", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore"),
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
+            swiftSettings: strict
+        )
+    ]
+)

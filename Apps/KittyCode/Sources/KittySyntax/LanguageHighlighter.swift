@@ -1,0 +1,613 @@
+public import AemiCore
+import AtelierGrammar
+public import AtelierGrammarCorpus
+import AtelierLexers
+import AtelierParser
+import AtelierQuery
+public import AtelierSyntaxModel
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length function_body_length type_body_length
+import Foundation
+import Synchronization
+import TerminalKitStyle
+import os
+
+/// Highlighter signposts, so Instruments can attribute frame time to parsing, merging and each kind of highlight.
+private let highlighterSignposter = OSSignposter(
+    subsystem: "com.kittytui.syntax",
+    category: "highlight"
+)
+
+public enum LanguageHighlighter: Sendable {
+    /// Maximum source size in bytes for grammar-backed highlighting, the grammar tier's (`GrammarEngine`).
+    /// Beyond this, the session falls back to the lightweight lexical highlighter
+    /// to prevent runaway memory from per-byte style arrays and token lists.
+    public static let maxGrammarSourceBytes = GrammarEngine.maxSourceBytes
+
+    /// The share of a document's bytes, in percent, under ERROR nodes at which the document is highlighted lexically
+    /// rather than from its grammar, until a parse of a later version of it falls under the share again: the grammar
+    /// tier's gate (`GrammarEngine.maxErrorBytePercent`).
+    public static let maxErrorBytePercent = GrammarEngine.maxErrorBytePercent
+
+    /// Whether a document is highlighted from `tree`, its parse, by the grammar tier's gate
+    /// (`GrammarEngine.passesQualityGate(_:)`).
+    static func passesQualityGate(_ tree: SyntaxTree) -> Bool {
+        GrammarEngine.passesQualityGate(tree)
+    }
+
+    /// The grammar tier over KittyCode's grammars, for the tier job: the session's parse, gate and query, with the
+    /// tier's deadline, failure record, throughput predictor and breaker (PERF-11 step 4).
+    public static func grammarTier(
+        record: GrammarTierRecord = GrammarTierRecord(),
+        deadline: Duration = GrammarTier.defaultDeadline
+    ) -> GrammarTier {
+        GrammarTier(artifacts: .shared, record: record, deadline: deadline)
+    }
+
+    public final class Session {
+        private enum Strategy {
+            case grammar(GrammarSession)
+            case fallback
+        }
+
+        private final class GrammarSession {
+            /// The grammar tier's engine: the parser, the query and each capture's role.
+            let engine: GrammarEngine
+            let scanner: (any GrammarExternalScanner)?
+            var query: Query { engine.query }
+            let highlighter: Highlighter
+            let scratch = HighlightScratch()
+            /// The hash of the last parsed source, the quick check before `parseTree(for:)` reuses `lastParsedTree`.
+            var lastParsedSourceHash: Int?
+            var lastParsedTree: SyntaxTree?
+            /// Whether the last parse passed ``LanguageHighlighter/passesQualityGate(_:)``; false after a parse that
+            /// threw, true before any parse.
+            private(set) var passesQualityGate = true
+
+            init(engine: GrammarEngine, theme: Theme) {
+                self.engine = engine
+                scanner = engine.makeScanner()
+                highlighter = Highlighter(theme: theme)
+            }
+
+            /// A parse of `source`, reusing the previous tree when the source is equal to the last one parsed. Every new
+            /// parse decides `passesQualityGate` again, so a document that heals goes back to its grammar.
+            func parseTree(for source: String) throws(ParseError) -> SyntaxTree {
+                let sourceHash = source.hashValue
+                if let cached = lastParsedTree,
+                    let cachedHash = lastParsedSourceHash,
+                    cachedHash == sourceHash,
+                    cached.source.utf8.count == source.utf8.count,
+                    cached.source == source
+                {
+                    return cached
+                }
+                let tree: SyntaxTree
+                do {
+                    tree = try engine.parse(source, externalScanner: scanner)
+                } catch {
+                    lastParsedSourceHash = nil
+                    lastParsedTree = nil
+                    passesQualityGate = false
+                    throw error
+                }
+                lastParsedSourceHash = sourceHash
+                lastParsedTree = tree
+                passesQualityGate = LanguageHighlighter.passesQualityGate(tree)
+                return tree
+            }
+        }
+
+        private let language: String?
+        /// The language the shared lexical engine scans for `language`; plain text yields no lexical tokens.
+        private let lexicalLanguage: Language
+        private let theme: Theme
+        private var strategy: Strategy
+        private var splitScratch = SplitLinesScratch()
+        /// The theme's style for every role, looked up once, on the session's first highlight.
+        private lazy var resolver = RoleBasedThemeResolver(precomputingStylesOf: theme)
+
+        /// Optional semantic token provider (e.g. LSP) for `.semantic` layer merging.
+        public var semanticProvider: (any SemanticTokenProvider)?
+
+        /// URI used when requesting semantic tokens from the provider.
+        public var documentURI: String?
+
+        public var prefersLineInput: Bool {
+            if case .fallback = strategy {
+                return true
+            }
+            return false
+        }
+
+        /// Whether the session highlights from its grammar: it has one, and the last document it parsed passed
+        /// ``LanguageHighlighter/passesQualityGate(_:)``. A grammar session that has parsed nothing yet is.
+        public var isGrammarBacked: Bool {
+            if case .grammar(let grammarSession) = strategy {
+                return grammarSession.passesQualityGate
+            }
+            return false
+        }
+
+        public init(
+            language: String?,
+            theme: Theme = .monokai,
+            preferGrammar: Bool = true
+        ) {
+            self.language = language
+            self.lexicalLanguage = language.flatMap(Language.init(name:)) ?? .plain
+            self.theme = theme
+
+            if preferGrammar,
+                let language,
+                let artifacts = SyntaxArtifactsCache.shared.artifacts(for: language),
+                let engine = GrammarEngine(artifacts)
+            {
+                strategy = .grammar(GrammarSession(engine: engine, theme: theme))
+            } else {
+                strategy = .fallback
+            }
+        }
+
+        public func highlightDocument(source: String) -> [[StyledSpan]] {
+            let interval = highlighterSignposter.beginInterval("highlightDocument")
+            defer { highlighterSignposter.endInterval("highlightDocument", interval) }
+            return grammarHighlightedDocument(source: source) ?? lexicalLines(source: source)
+        }
+
+        /// The lines of `source` highlighted from the grammar alone; nil without a grammar, past
+        /// `maxGrammarSourceBytes`, or when the parse throws, is cancelled, or does not pass the quality gate.
+        public func grammarHighlightedDocument(source: String) -> [[StyledSpan]]? {
+            guard case .grammar(let grammarSession) = strategy,
+                source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes,
+                let tree = try? grammarSession.parseTree(for: source),
+                grammarSession.passesQualityGate
+            else { return nil }
+            let spans = grammarSession.highlighter.highlight(
+                source: source,
+                tree: tree,
+                query: grammarSession.query,
+                scratch: grammarSession.scratch
+            )
+            return splitDocumentSpans(
+                spans,
+                source: source,
+                defaultStyle: theme.defaultStyle,
+                scratch: &splitScratch
+            )
+        }
+
+        /// The grammar's unresolved structural tokens for `source`; empty without a grammar, past
+        /// `maxGrammarSourceBytes`, or when the parse fails or does not pass the quality gate.
+        public func highlightDocumentTokens(source: String) -> [HighlightToken] {
+            switch strategy {
+                case .grammar(let gs):
+                    guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
+                        return []
+                    }
+                    do {
+                        let tree = try gs.parseTree(for: source)
+                        guard gs.passesQualityGate else {
+                            return []
+                        }
+                        return gs.engine.tokens(in: tree)
+                    } catch {
+                        return []
+                    }
+                case .fallback:
+                    return []
+            }
+        }
+
+        /// Highlight a document with three-layer merging: lexical baseline,
+        /// structural tree-sitter tokens, and optional semantic tokens from LSP.
+        /// Lexical tokens always provide a baseline so no text is left unstyled.
+        public func highlightDocumentMerged(source: String) async -> [[StyledSpan]] {
+            // Layer 0: lexical baseline — always present
+            let lexicalTokens = buildLexicalTokens(source: source)
+
+            // Layer 1: structural tree-sitter tokens (may be empty)
+            let structuralTokens = highlightDocumentTokens(source: source)
+
+            // Layer 2: semantic tokens from LSP (may be empty)
+            var semanticTokens: [HighlightToken] = []
+            if let provider = semanticProvider, let uri = documentURI {
+                semanticTokens = (try? await provider.semanticTokens(for: uri)) ?? []
+            }
+
+            let allTokens = lexicalTokens + structuralTokens + semanticTokens
+            guard !allTokens.isEmpty else {
+                return highlightDocument(source: source)
+            }
+
+            let merged = HighlightMerger.merge(allTokens, sourceByteCount: source.utf8.count)
+            let spans = HighlightMerger.resolveToSpans(
+                tokens: merged,
+                source: source,
+                resolver: resolver,
+                defaultStyle: theme.defaultStyle
+            )
+
+            var scratch = splitScratch
+            let result = splitDocumentSpans(
+                spans,
+                source: source,
+                defaultStyle: theme.defaultStyle,
+                scratch: &scratch
+            )
+            return result
+        }
+
+        /// The lexical layer: the shared scanners' keyword, string, comment, number, type and attribute tokens,
+        /// the baseline the structural and semantic layers refine.
+        private func buildLexicalTokens(source: String) -> [HighlightToken] {
+            LexicalHighlightEngine().highlight(utf8: Array(source.utf8), language: lexicalLanguage)
+        }
+
+        /// The lexical layer alone, resolved to one span array per line.
+        private func lexicalLines(source: String) -> [[StyledSpan]] {
+            let utf8 = Array(source.utf8)
+            return HighlightMerger.resolveToLines(
+                tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
+                utf8: utf8,
+                resolver: resolver,
+                defaultStyle: theme.defaultStyle
+            )
+        }
+
+        /// Highlights only the visible lines, querying the tree over their byte range; without a usable parse the
+        /// lexical engine scans them instead.
+        public func highlightViewport(source: String, visibleLineRange: Range<Int>) -> [[StyledSpan]] {
+            guard !source.isEmpty else {
+                return [[StyledSpan(text: "", style: theme.defaultStyle)]]
+            }
+
+            switch strategy {
+                case .grammar(let gs):
+                    guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
+                        return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                    }
+                    do {
+                        let tree = try gs.parseTree(for: source)
+                        guard gs.passesQualityGate else {
+                            return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                        }
+
+                        let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
+                        let tokens = gs.engine.tokens(in: tree, byteRange: byteRange)
+
+                        guard !tokens.isEmpty else {
+                            return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                        }
+
+                        let viewportSource = extractViewportSource(
+                            source: source,
+                            byteRange: byteRange
+                        )
+                        let vpByteCount = viewportSource.utf8.count
+                        let localTokens = tokens.compactMap { token -> HighlightToken? in
+                            let start = token.byteRange.lowerBound - byteRange.lowerBound
+                            let end = token.byteRange.upperBound - byteRange.lowerBound
+                            guard start >= 0, end <= vpByteCount, start < end else { return nil }
+                            return HighlightToken(
+                                byteRange: start ..< end,
+                                role: token.role,
+                                modifiers: token.modifiers,
+                                layer: token.layer,
+                                priority: token.priority
+                            )
+                        }
+
+                        let merged = HighlightMerger.merge(
+                            localTokens,
+                            sourceByteCount: viewportSource.utf8.count
+                        )
+                        let spans = HighlightMerger.resolveToSpans(
+                            tokens: merged,
+                            source: viewportSource,
+                            resolver: resolver,
+                            defaultStyle: theme.defaultStyle
+                        )
+
+                        var scratch = splitScratch
+                        return splitDocumentSpans(
+                            spans,
+                            source: viewportSource,
+                            defaultStyle: theme.defaultStyle,
+                            scratch: &scratch
+                        )
+                    } catch {
+                        return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                    }
+
+                case .fallback:
+                    return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+            }
+        }
+
+        /// The three-layer merge restricted to the visible lines, for a first render ahead of
+        /// `highlightDocumentMerged(source:)`.
+        public func highlightViewportMerged(
+            source: String,
+            visibleLineRange: Range<Int>
+        ) async -> [[StyledSpan]] {
+            guard !source.isEmpty else {
+                return [[StyledSpan(text: "", style: theme.defaultStyle)]]
+            }
+
+            let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
+            let viewportSource = extractViewportSource(source: source, byteRange: byteRange)
+
+            // Layer 0: lexical baseline over the visible bytes only
+            let lexicalTokens = LexicalHighlightEngine()
+                .highlight(
+                    utf8: Array(viewportSource.utf8),
+                    language: lexicalLanguage
+                )
+
+            // Layer 1: structural tokens scoped to viewport
+            var structuralTokens: [HighlightToken] = []
+            if case .grammar(let gs) = strategy {
+                if source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes {
+                    if let tree = try? gs.parseTree(for: source) {
+                        if gs.passesQualityGate {
+                            let vpCount = viewportSource.utf8.count
+                            structuralTokens = gs.engine.tokens(in: tree, byteRange: byteRange)
+                                .compactMap { token -> HighlightToken? in
+                                    let start = token.byteRange.lowerBound - byteRange.lowerBound
+                                    let end = token.byteRange.upperBound - byteRange.lowerBound
+                                    guard start >= 0, end <= vpCount, start < end else { return nil }
+                                    return HighlightToken(
+                                        byteRange: start ..< end,
+                                        role: token.role,
+                                        modifiers: token.modifiers,
+                                        layer: token.layer,
+                                        priority: token.priority
+                                    )
+                                }
+                        }
+                    }
+                }
+            }
+
+            // Layer 2: semantic tokens from LSP scoped to viewport
+            var semanticTokens: [HighlightToken] = []
+            if let provider = semanticProvider, let uri = documentURI {
+                let allSemantic = (try? await provider.semanticTokens(for: uri)) ?? []
+                semanticTokens = allSemantic.compactMap { token in
+                    let start = token.byteRange.lowerBound - byteRange.lowerBound
+                    let end = token.byteRange.upperBound - byteRange.lowerBound
+                    guard start >= 0, end <= viewportSource.utf8.count, start < end else {
+                        return nil
+                    }
+                    return HighlightToken(
+                        byteRange: start ..< end,
+                        role: token.role,
+                        modifiers: token.modifiers,
+                        layer: token.layer,
+                        priority: token.priority
+                    )
+                }
+            }
+
+            let allTokens = lexicalTokens + structuralTokens + semanticTokens
+            guard !allTokens.isEmpty else {
+                return lexicalLines(source: viewportSource)
+            }
+
+            let merged = HighlightMerger.merge(
+                allTokens,
+                sourceByteCount: viewportSource.utf8.count
+            )
+            let spans = HighlightMerger.resolveToSpans(
+                tokens: merged,
+                source: viewportSource,
+                resolver: resolver,
+                defaultStyle: theme.defaultStyle
+            )
+
+            var scratch = splitScratch
+            return splitDocumentSpans(
+                spans,
+                source: viewportSource,
+                defaultStyle: theme.defaultStyle,
+                scratch: &scratch
+            )
+        }
+
+        // MARK: - Viewport Helpers
+
+        private func lineRangeToByteRange(source: String, lineRange: Range<Int>) -> Range<Int> {
+            let utf8 = source.utf8
+            var lineStarts: [Int] = [0]
+            for (i, byte) in utf8.enumerated() where byte == 0x0A {
+                lineStarts.append(i + 1)
+            }
+
+            let startLine = min(lineRange.lowerBound, lineStarts.count - 1)
+            let endLine = min(lineRange.upperBound, lineStarts.count)
+
+            let startByte = lineStarts[max(startLine, 0)]
+            let endByte: Int
+            if endLine < lineStarts.count {
+                endByte = lineStarts[endLine]
+            } else {
+                endByte = utf8.count
+            }
+
+            return startByte ..< endByte
+        }
+
+        private func extractViewportSource(source: String, byteRange: Range<Int>) -> String {
+            let utf8 = Array(source.utf8)
+            let start = max(byteRange.lowerBound, 0)
+            let end = min(byteRange.upperBound, utf8.count)
+            guard start < end else { return "" }
+            return String(decoding: utf8[start ..< end], as: UTF8.self)
+        }
+
+        private func extractVisibleLines(source: String, visibleLineRange: Range<Int>) -> [String] {
+            let allLines = source.split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init)
+            let start = max(visibleLineRange.lowerBound, 0)
+            let end = min(visibleLineRange.upperBound, allLines.count)
+            guard start < end else { return [""] }
+            return Array(allLines[start ..< end])
+        }
+
+        /// The visible lines through the lexical engine, scanned together so a string or comment that opens
+        /// on one visible line and closes on another is styled as one.
+        private func viewportFallback(
+            source: String,
+            visibleLineRange: Range<Int>
+        ) -> [[StyledSpan]] {
+            let lines = extractVisibleLines(source: source, visibleLineRange: visibleLineRange)
+            return lexicalLines(source: lines.joined(separator: "\n"))
+        }
+
+        public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
+        where C.Element == String {
+            highlightJoinedLines(lines.joined(separator: "\n"))
+        }
+
+        /// The lines of `text`, split on `\n`, highlighted as ``highlightLines(_:)`` highlights them once joined:
+        /// for text a document reads as one run, which splitting into lines first would only copy.
+        public func highlightJoinedLines(_ text: String) -> [[StyledSpan]] {
+            switch strategy {
+                case .fallback:
+                    return lexicalLines(source: text)
+                case .grammar:
+                    return highlightDocument(source: text)
+            }
+        }
+    }
+
+    public static func highlightDocument(
+        source: String,
+        language: String?,
+        theme: Theme = .monokai
+    ) -> [[StyledSpan]] {
+        let useGrammar = source.utf8.count <= maxGrammarSourceBytes
+        return Session(language: language, theme: theme, preferGrammar: useGrammar)
+            .highlightDocument(source: source)
+    }
+
+    /// One line through the lexical engine alone, with no grammar and no context from neighbouring lines.
+    public static func highlightLine(
+        _ line: String,
+        language: String?,
+        theme: Theme = .monokai
+    ) -> [StyledSpan] {
+        let utf8 = Array(line.utf8)
+        let lexicalLanguage = language.flatMap(Language.init(name:)) ?? .plain
+        return HighlightMerger.resolveToSpans(
+            tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
+            utf8: utf8[...],
+            resolver: RoleBasedThemeResolver(theme: theme),
+            defaultStyle: theme.defaultStyle
+        )
+    }
+
+    public static func makeSession(
+        language: String?,
+        theme: Theme = .monokai,
+        preferGrammar: Bool = true
+    ) -> Session {
+        Session(language: language, theme: theme, preferGrammar: preferGrammar)
+    }
+
+    /// The language `filename` maps to, from the runtime registry first and the bundled manifest otherwise.
+    public static func detectLanguage(for filename: String) -> String? {
+        if let registered = GrammarRegistry.shared.entry(forFilename: filename) {
+            return registered.name
+        }
+        return BundledLanguageManifest.entry(forFilename: filename)?.name
+    }
+
+    /// Every language the bundled manifest or the runtime registry names, sorted.
+    public static var bundledLanguageNames: [String] {
+        let bundled = BundledLanguageManifest.entries.map(\.name)
+        let runtime = GrammarRegistry.shared.languageNames
+        return Array(Set(bundled).union(runtime)).sorted()
+    }
+
+    /// Whether `language` has a grammar and a highlight query: trusted for a runtime registration, checked in the
+    /// bundled corpus otherwise.
+    public static func hasBundledResources(for language: String) -> Bool {
+        if let entry = GrammarRegistry.shared.entry(forLanguage: language) {
+            _ = entry
+            return true
+        }
+        guard let entry = BundledLanguageManifest.entry(forLanguage: language) else {
+            return false
+        }
+
+        return KittySyntaxResources.hasResource("grammar.json", for: entry)
+            && KittySyntaxResources.hasResource("highlights.scm", for: entry)
+    }
+
+    /// Ensures grammar artifacts are loaded for a language, compiling off the main thread.
+    /// Returns true if artifacts became available (newly loaded or already cached).
+    public static func ensureArtifacts(
+        for language: String,
+        taskProvider: any TaskProvider = .default
+    ) async -> Bool {
+        await taskProvider.detachedTask(role: .work, priority: .userInitiated) {
+            await SyntaxArtifactsCache.shared.loadIfNeeded(for: language)
+            return SyntaxArtifactsCache.shared.artifacts(for: language) != nil
+        }
+        .value
+    }
+
+    @discardableResult
+    public static func prewarmArtifacts<S: Sequence>(for languages: S) async -> Set<String>
+    where S.Element == String {
+        await SyntaxArtifactsCache.shared.prewarm(languages: languages)
+    }
+}
+
+private struct SplitLinesScratch {
+    var lines: [[StyledSpan]] = []
+}
+
+private func splitDocumentSpans(
+    _ spans: [StyledSpan],
+    source: String,
+    defaultStyle: Style,
+    scratch: inout SplitLinesScratch
+) -> [[StyledSpan]] {
+    if source.isEmpty {
+        return [[StyledSpan(text: "", style: defaultStyle)]]
+    }
+
+    scratch.lines.removeAll(keepingCapacity: true)
+    scratch.lines.append([])
+
+    for span in spans {
+        let text = span.text
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex {
+            guard let nlIndex = text[searchStart...].firstIndex(of: "\n") else {
+                scratch.lines[scratch.lines.count - 1]
+                    .append(
+                        StyledSpan(text: String(text[searchStart...]), style: span.style)
+                    )
+                break
+            }
+            if nlIndex > searchStart {
+                scratch.lines[scratch.lines.count - 1]
+                    .append(
+                        StyledSpan(text: String(text[searchStart ..< nlIndex]), style: span.style)
+                    )
+            }
+            scratch.lines.append([])
+            searchStart = text.index(after: nlIndex)
+        }
+    }
+
+    if source.last == "\n" {
+        scratch.lines.append([])
+    }
+
+    return scratch.lines.isEmpty ? [[StyledSpan(text: "", style: defaultStyle)]] : scratch.lines
+}

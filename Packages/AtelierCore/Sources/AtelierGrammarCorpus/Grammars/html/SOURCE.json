@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/tree-sitter/tree-sitter-html",
+  "version": "v0.23.2",
+  "commit": "5a5ca8551a179998360b4a4ca2c0f366a35acc03",
+  "released": "2024-11-11",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "v0.23.2",
+  "localChanges": {
+    "highlights.scm": "KittyCode's own query, kept over upstream's, which captures less"
+  }
+}

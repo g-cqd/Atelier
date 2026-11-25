@@ -1,0 +1,432 @@
+package import AppKit
+package import AtelierDiagnostics
+import DiffCore
+package import DiffRendering
+package import Foundation
+package import SwiftUI
+
+/// A read-only TextKit 2 pane showing one rendered side of a diff.
+package struct DiffTextView: NSViewRepresentable {
+    package let rendered: RenderedText
+    package let gutter: GutterStyle
+    package var keepsScrollPosition = false
+    package var wrapsLines = true
+    /// Characters per line when wrapping; zero wraps at the viewport width.
+    package var wrapColumn = 0
+    package var showsMinimap = true
+    package var syncsScrolling = true
+    package var scrollRequest: ScrollRequest?
+    package var splitController: SplitPaneController?
+    /// Reports a gap handle's drag in the gutter.
+    package var onGapDrag: ((GapDragEvent) -> Void)?
+    /// Called with the change whose gutter marker is clicked in the compact inline view (book DIFF-04).
+    package var onChangeToggle: ((ChangeKey) -> Void)?
+    /// Called once the pane shows a new render, its first included.
+    package var onDisplayed: (() -> Void)?
+    /// Shows documentation for the identifier under the pointer after it rests there.
+    package var hoverEnabled = false
+    package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
+    /// What the documentation panel is made of, from the window's setting.
+    package var hoverPanelMaterial: HoverPanelMaterial = .liquidGlass
+    /// Diagnostics drawn over this pane's rows: a squiggle in the text, and a tinted line number in the gutter.
+    package var diagnosticOverlay: DiagnosticOverlay?
+    /// Bumped by the caller whenever `diagnosticOverlay`'s content changes in place (`replace(_:)`), since the
+    /// overlay is a reference type the representable otherwise cannot see change.
+    package var diagnosticsVersion = 0
+    /// Called with a row's findings and the clicked line number's frame, in the gutter's coordinates.
+    package var onDiagnosticClick:
+        ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
+    /// Where the pane records its scroll position as its file leaves it, and finds it again when the file comes back
+    /// (book TAB-10); nil remembers nothing.
+    package var scrollMemory: PaneScrollMemory?
+    /// The left-side path of the file shown, under which ``scrollMemory`` keeps this pane's position.
+    package var scrollMemoryPath: String?
+    /// Whether the pane scrolls past the end of its text until the last line reaches the top; otherwise it stops with
+    /// the last line at the bottom.
+    package var scrollsPastEnd = false
+    /// Whether the pane rubber-bands past its edges, down, up and sideways; otherwise it stops at them.
+    package var bouncesAtEdges = false
+    /// The height of bars laid over the pane's top that AppKit does not know of, the tab bar, a SwiftUI bar: the pane
+    /// takes it as safe area of its own, so its text starts below the bar, scrolls beneath it, and the system's scroll
+    /// edge effect covers it as it covers the toolbar (book TAB-09).
+    package var underBars: CGFloat = 0
+    /// What the stages after the text found for its sides, drawn over it as they land (``decorated(with:viewport:)``).
+    package var decorations: DiffDecorations?
+    /// Called when the ribbon or a folding command folds or unfolds scopes (DIFF-03); nil folds nothing.
+    package var onScopeFold: ((ScopeFoldRequest) -> Void)?
+    /// Whether the gutter's scope ribbon draws and takes the pointer's hover, and the folding keys work (DIFF-03).
+    package var showsScopeRibbon = true
+    /// Where the pane reports the rows it shows, so they are decorated first.
+    package var viewport: DecorationViewport?
+    /// The text engine the window's panes use (text-renderer.md §4.3).
+    @Environment(\.diffTextBackend) private var textBackend
+
+    package init(
+        rendered: RenderedText,
+        gutter: GutterStyle,
+        keepsScrollPosition: Bool = false,
+        wrapsLines: Bool = true,
+        wrapColumn: Int = 0,
+        showsMinimap: Bool = true,
+        syncsScrolling: Bool = true,
+        scrollRequest: ScrollRequest? = nil,
+        splitController: SplitPaneController? = nil,
+        onGapDrag: ((GapDragEvent) -> Void)? = nil,
+        onChangeToggle: ((ChangeKey) -> Void)? = nil,
+        onDisplayed: (() -> Void)? = nil,
+        hoverEnabled: Bool = false,
+        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
+        hoverPanelMaterial: HoverPanelMaterial = .liquidGlass,
+        diagnosticOverlay: DiagnosticOverlay? = nil,
+        diagnosticsVersion: Int = 0,
+        onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
+            nil,
+        scrollMemory: PaneScrollMemory? = nil,
+        scrollMemoryPath: String? = nil,
+        scrollsPastEnd: Bool = false,
+        bouncesAtEdges: Bool = false,
+        underBars: CGFloat = 0
+    ) {
+        self.bouncesAtEdges = bouncesAtEdges
+        self.underBars = underBars
+        self.scrollMemory = scrollMemory
+        self.scrollMemoryPath = scrollMemoryPath
+        self.scrollsPastEnd = scrollsPastEnd
+        self.rendered = rendered
+        self.gutter = gutter
+        self.keepsScrollPosition = keepsScrollPosition
+        self.wrapsLines = wrapsLines
+        self.wrapColumn = wrapColumn
+        self.showsMinimap = showsMinimap
+        self.syncsScrolling = syncsScrolling
+        self.scrollRequest = scrollRequest
+        self.splitController = splitController
+        self.onGapDrag = onGapDrag
+        self.onChangeToggle = onChangeToggle
+        self.onDisplayed = onDisplayed
+        self.hoverEnabled = hoverEnabled
+        self.hoverResolver = hoverResolver
+        self.hoverPanelMaterial = hoverPanelMaterial
+        self.diagnosticOverlay = diagnosticOverlay
+        self.diagnosticsVersion = diagnosticsVersion
+        self.onDiagnosticClick = onDiagnosticClick
+    }
+
+    package func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    /// Builds this window's pane through the backend seam (text-renderer.md §4.2): a `TextKit2Pane` built with its
+    /// full options directly, since the seam's minimal `makePane(gutter:)` only covers what every backend shares; a
+    /// CoreText pane through the backend, which needs none of TextKit 2's own construction-time options. Both
+    /// backends' `view` is a `DiffPaneView`, so the gutter and minimap wiring below stays one path.
+    package func makeNSView(context: Context) -> DiffPaneView {
+        let coordinator = context.coordinator
+        let pane: any DiffTextPane =
+            switch textBackend {
+                case .textKit2: TextKit2Pane(options: paneOptions, coordinator: coordinator)
+                case .coreText: DiffTextBackends.backend(for: .coreText).makePane(gutter: gutter)
+            }
+        coordinator.pane = pane
+        guard let paneView = pane.view as? DiffPaneView else {
+            preconditionFailure("Every DiffTextBackend's pane view is a DiffPaneView")
+        }
+        paneView.gutterView.onGapDrag = onGapDrag
+        paneView.gutterView.onChangeToggle = onChangeToggle
+        paneView.gutterView.onDiagnosticClick = onDiagnosticClick
+        paneView.gutterView.onScopeFold = onScopeFold
+        if let tk2Pane = pane as? TextKit2Pane {
+            coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
+            coordinator.scrollMemory = scrollMemory
+            coordinator.show(rendered, keepingScroll: false, key: memoryKey)
+            tk2Pane.installDecorations()
+            coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: tk2Pane.textView)
+            coordinator.report(to: viewport)
+            coordinator.hoverController.attach(to: tk2Pane.textView) { [weak coordinator] in
+                coordinator?.rendered
+            }
+        } else {
+            // Drawing only (text-renderer.md §5 M1): no hover, diagnostics-in-text, scroll memory or split alignment
+            // yet for a backend other than TextKit 2.
+            pane.setWrapping(WrapMode(wrapsLines: wrapsLines, column: wrapColumn))
+            coordinator.recordShownWithoutApplying(rendered)
+            pane.show(rendered, keepingScroll: false)
+            pane.setDecorations(decorations)
+        }
+        // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
+        onDisplayed?()
+        return paneView
+    }
+
+    /// What the pane is built with, from this view's settings.
+    private var paneOptions: TextKit2Pane.Options {
+        var options = TextKit2Pane.Options(gutter: gutter)
+        options.font = rendered.palette.font
+        options.wrapsLines = wrapsLines
+        options.wrapColumn = wrapColumn
+        options.scrollsPastEnd = scrollsPastEnd
+        options.bouncesAtEdges = bouncesAtEdges
+        options.underBars = underBars
+        options.showsMinimap = showsMinimap
+        options.showsScopeRibbon = showsScopeRibbon
+        options.splitController = splitController
+        return options
+    }
+
+    package func updateNSView(_ paneView: DiffPaneView, context: Context) {
+        let coordinator = context.coordinator
+        paneView.gutterView.onGapDrag = onGapDrag
+        paneView.gutterView.onChangeToggle = onChangeToggle
+        paneView.gutterView.onDiagnosticClick = onDiagnosticClick
+        paneView.gutterView.onScopeFold = onScopeFold
+        if let tk2Pane = coordinator.pane as? TextKit2Pane {
+            updateTextKit2(tk2Pane, paneView: paneView, coordinator: coordinator)
+        } else if let pane = coordinator.pane {
+            // Drawing only (text-renderer.md §5 M1): no split alignment, scroll requests aside.
+            pane.setWrapping(WrapMode(wrapsLines: wrapsLines, column: wrapColumn))
+            if coordinator.rendered?.id != rendered.id {
+                coordinator.recordShownWithoutApplying(rendered)
+                pane.show(rendered, keepingScroll: keepsScrollPosition)
+                onDisplayed?()
+            }
+            pane.setDecorations(decorations)
+            if let scrollRequest, coordinator.handledScrollRequest != scrollRequest.id {
+                coordinator.handledScrollRequest = scrollRequest.id
+                pane.scroll(toRow: scrollRequest.row, centered: false)
+            }
+        }
+    }
+
+    /// `updateNSView`, for a pane TextKit 2 built: every option `paneOptions` cannot carry after construction, and the
+    /// memory-aware `show`, both still exact as before the seam construction (text-renderer.md §4.2).
+    private func updateTextKit2(_ tk2Pane: TextKit2Pane, paneView: DiffPaneView, coordinator: Coordinator) {
+        guard let scrollView = paneView.scrollView else { return }
+        coordinator.metrics.width = max(scrollView.contentView.bounds.width, coordinator.textView?.frame.width ?? 0)
+        if coordinator.setWrapping(wrapsLines, column: wrapColumn, font: rendered.palette.font) {
+            splitController?.wrapsLines = wrapsLines
+        }
+        Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
+        if scrollView.additionalSafeAreaInsets.top != underBars {
+            scrollView.additionalSafeAreaInsets = Self.insets(underBars: underBars)
+            coordinator.updateOverscroll(in: scrollView.contentView)
+            // The minimap gives up what the bars cover.
+            paneView.needsLayout = true
+        }
+        if coordinator.scrollsPastEnd != scrollsPastEnd {
+            coordinator.scrollsPastEnd = scrollsPastEnd
+            coordinator.updateOverscroll(in: scrollView.contentView)
+        }
+        if paneView.minimapView.isHidden == showsMinimap {
+            paneView.minimapView.isHidden = !showsMinimap
+            paneView.needsLayout = true
+        }
+        if paneView.gutterView.showsScopeRibbon != showsScopeRibbon {
+            paneView.gutterView.showsScopeRibbon = showsScopeRibbon
+            if showsScopeRibbon, let textView = coordinator.textView {
+                coordinator.scopeHover.attach(to: textView, gutter: paneView.gutterView)
+            } else {
+                coordinator.scopeHover.detach()
+            }
+        }
+        splitController?.syncsScrolling = syncsScrolling
+        coordinator.hoverController.isEnabled = hoverEnabled
+        coordinator.hoverController.resolve = hoverResolver
+        coordinator.hoverController.panelMaterial = hoverPanelMaterial
+        coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
+        coordinator.scrollMemory = scrollMemory
+        if coordinator.rendered?.id != rendered.id {
+            coordinator.decorationStore.willShow(rendered, decorations: decorations)
+            coordinator.show(rendered, keepingScroll: keepsScrollPosition, key: memoryKey)
+            onDisplayed?()
+        }
+        coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: coordinator.textView)
+        coordinator.report(to: viewport)
+        if let scrollRequest, coordinator.handledScrollRequest != scrollRequest.id {
+            coordinator.handledScrollRequest = scrollRequest.id
+            coordinator.scroll(toRow: scrollRequest.row, in: scrollView)
+        }
+    }
+
+    package static func dismantleNSView(_ paneView: DiffPaneView, coordinator: Coordinator) {
+        if coordinator.pane is TextKit2Pane {
+            coordinator.rememberPosition()
+            if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
+            coordinator.hoverController.detach()
+            coordinator.scopeHover.detach()
+            coordinator.report(to: nil)
+            coordinator.usageObservation = nil
+        }
+        NotificationCenter.default.removeObserver(coordinator)
+    }
+
+    /// The safe area a pane beneath bars `underBars` tall that AppKit does not know of takes on top of its own.
+    static func insets(underBars: CGFloat) -> NSEdgeInsets {
+        NSEdgeInsets(top: underBars, left: 0, bottom: 0, right: 0)
+    }
+
+    /// No font panel for a text that is not edited; ⌘F opens the find bar above the pane's text, and the matches light
+    /// up as the query is typed.
+    static func configurePanels(of textView: NSTextView) {
+        textView.usesFontPanel = false
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
+    }
+
+    /// Lets `scrollView` rubber-band past its edges as AppKit does by default, or stops it at them, on both axes.
+    static func setElasticity(of scrollView: NSScrollView, bouncing: Bool) {
+        let elasticity: NSScrollView.Elasticity = bouncing ? .automatic : .none
+        if scrollView.verticalScrollElasticity != elasticity { scrollView.verticalScrollElasticity = elasticity }
+        if scrollView.horizontalScrollElasticity != elasticity { scrollView.horizontalScrollElasticity = elasticity }
+    }
+
+    /// The coordinator, declared at file scope to keep this type under `type_body_length`.
+    package typealias Coordinator = DiffTextViewCoordinator
+
+    /// This pane's place in ``scrollMemory``: its file, and which of the file's panes it is.
+    var memoryKey: PaneScrollMemory.Key? {
+        let pane: PaneScrollMemory.Pane =
+            switch gutter {
+                case .dual: .unified
+                case .old: .old
+                case .new: .new
+            }
+        return scrollMemoryPath.map { PaneScrollMemory.Key(path: $0, pane: pane) }
+    }
+}
+
+@MainActor
+package final class DiffTextViewCoordinator: NSObject {
+    package let fragmentProvider = DiffFragmentProvider()
+    package let hoverController = DocHoverController()
+    /// The decorations drawn over the plain text as the stages after it land (PERF-09).
+    package let decorationStore = DecorationStore()
+    /// Outlines the scope of the row under the pointer in the text (DIFF-03).
+    package let scopeHover = ScopeHoverTracker()
+    /// Where the pane reports its visible rows, and the text it reported them for.
+    private var reported: (viewport: DecorationViewport, textID: UUID)?
+    package var metrics: ViewportMetrics { fragmentProvider.metrics }
+    package weak var textView: NSTextView?
+    package weak var gutterView: DiffGutterView?
+    package weak var minimapView: MinimapView?
+    /// The pane this window's view shows, whichever backend built it (text-renderer.md §4.2); TextKit 2's own fields
+    /// below stay in step only while `pane` is a `TextKit2Pane`.
+    package var pane: (any DiffTextPane)?
+    package var splitController: SplitPaneController?
+    package var wrapsLines = true
+    package var wrapColumn = 0
+    package private(set) var rendered: RenderedText?
+    package var handledScrollRequest: UUID?
+    /// Where this pane records and finds its scroll position; nil remembers nothing.
+    package var scrollMemory: PaneScrollMemory?
+    /// The key the text on show is remembered under.
+    var memoryKey: PaneScrollMemory.Key?
+    /// The diagnostics this pane draws, which every fragment and the gutter hold.
+    package let diagnosticsDisplay = PaneDiagnosticsDisplay()
+    package var diagnostics: DiagnosticOverlay { diagnosticsDisplay.overlay }
+    /// ``RenderedText/measuredUnwrappedWidth()`` of the text on show, measured once per render.
+    var unwrappedWidth: (id: UUID, width: CGFloat)?
+    /// Where the text on show last ended once TextKit had laid out its last row; see ``contentHeight()``.
+    var laidOutTextHeight: (id: UUID, height: CGFloat)?
+    /// Sizes the pane again whenever TextKit's usage bounds change; see ``followLayout()``.
+    var usageObservation: NSKeyValueObservation?
+    /// Whether the pane is being sized for a change of TextKit's usage bounds; see ``followLayout()``.
+    var isFollowingUsage = false
+    /// Whether the pane scrolls past the end of its text until the last line reaches the top; otherwise it stops with
+    /// the last line at the bottom. See ``updateOverscroll(in:)``.
+    package var scrollsPastEnd = false
+    /// The row asked for, or the position a file comes back to, placed at the end of the text view's next layout pass.
+    var pendingScroll: RowPlacement?
+    /// The row placed last, and where the pane was scrolled for it, placed again when the split view aligns the rows or
+    /// the pane takes a new size, unless it has been scrolled since; see ``placeAgainUnlessScrolled()``.
+    var placedRow: (placement: RowPlacement, y: CGFloat)?
+
+    package override init() {
+        super.init()
+        fragmentProvider.overlay = diagnostics
+        fragmentProvider.decorations = decorationStore.snapshot
+    }
+
+    /// Reports the rows the pane shows to `viewport`, read when asked, for the text on show; nil stops reporting.
+    package func report(to viewport: DecorationViewport?) {
+        let textID = rendered?.id
+        guard reported?.viewport !== viewport || reported?.textID != textID else { return }
+        if let reported { reported.viewport.unregister(reported.textID) }
+        reported = nil
+        guard let viewport, let textID else { return }
+        viewport.register(textID) { [weak self] in
+            guard let self, self.textView?.window != nil else { return nil }
+            let rows = self.visibleRows()
+            return rows.isEmpty ? nil : rows
+        }
+        reported = (viewport, textID)
+    }
+
+    /// Shows `overlay`'s rows, `nil` showing none, and redraws the rows whose diagnostics changed; nothing is laid out
+    /// again. A no-op unless the overlay or its version changed since the last call.
+    /// - Complexity: O(rows with diagnostics), plus ``NSTextView/redrawDiagnostics(ofRows:in:)``.
+    package func updateDiagnostics(_ overlay: DiagnosticOverlay?, version: Int) {
+        let changed = diagnosticsDisplay.update(from: overlay, version: version)
+        guard !changed.isEmpty else { return }
+        gutterView?.redrawDiagnostics(ofRows: changed)
+        guard let rendered else { return }
+        textView?.redrawDiagnostics(ofRows: changed, in: rendered)
+    }
+
+    /// Records `rendered` as shown for a backend that draws through the seam instead of ``apply(_:keepingScroll:)``,
+    /// so the next update still knows whether its text changed.
+    package func recordShownWithoutApplying(_ rendered: RenderedText) {
+        self.rendered = rendered
+    }
+
+    package func apply(_ rendered: RenderedText, keepingScroll: Bool = false) {
+        let paletteChanged = self.rendered?.palette.font != rendered.palette.font
+        self.rendered = rendered
+        fragmentProvider.rendered = rendered
+        hoverController.invalidate()
+        // A row asked for belongs to the text it was asked for; a new text starts at its top, or where it was.
+        pendingScroll = nil
+        placedRow = nil
+        guard let textView, let contentStorage = textView.textContentStorage else { return }
+        let previousOrigin = textView.enclosingScrollView?.contentView.bounds.origin ?? .zero
+        textView.backgroundColor = rendered.palette.background
+        // The band of a gap at the top of the file sits above the text, in place of the pane's own inset, so its
+        // handle sticks to the pane's top edge.
+        let inset = max(DiffPaneMetrics.containerInset, rendered.bandAbove)
+        if textView.textContainerInset.height != inset { textView.textContainerInset = NSSize(width: 0, height: inset) }
+        textView.insertionPointColor = rendered.palette.textColor
+        textView.selectedTextAttributes = [.backgroundColor: rendered.palette.selection]
+        contentStorage.performEditingTransaction {
+            guard let storage = contentStorage.textStorage else { return }
+            // TextKit replaces a large text in place in time quadratic in its length; emptying the storage first, in
+            // the same transaction, avoids that (PaneStorageReplacementBenchmark).
+            if storage.length > 0 { storage.setAttributedString(NSAttributedString()) }
+            storage.setAttributedString(rendered.attributed)
+            rendered.padEmptyLastRow(in: storage)
+        }
+        if paletteChanged, let scrollView = textView.enclosingScrollView {
+            Self.configureWrapping(
+                wrapsLines,
+                column: wrapColumn,
+                font: rendered.palette.font,
+                textView: textView,
+                scrollView: scrollView
+            )
+        }
+        gutterView?.rendered = rendered
+        minimapView?.rendered = rendered
+        gutterView?.superview?.needsLayout = true
+        if let scrollView = textView.enclosingScrollView {
+            updateOverscroll(in: scrollView.contentView)
+            let top = NSPoint(x: 0, y: -scrollView.contentView.contentInsets.top)
+            scroll(scrollView.contentView, to: keepingScroll ? previousOrigin : top)
+            splitController?.update(rendered, for: textView)
+        }
+        // Replacing the whole storage in one transaction does not always redraw the visible viewport until it
+        // scrolls; lay it out and mark the pane for display explicitly.
+        textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
+        textView.needsLayout = true
+        textView.needsDisplay = true
+        gutterView?.needsDisplay = true
+        minimapView?.needsDisplay = true
+    }
+}

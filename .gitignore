@@ -1,0 +1,10 @@
+.build/
+# Release benchmarks build in their own scratch path, so debug and release builds never evict each other.
+.build-*/
+.swiftpm/
+*.xcodeproj
+DerivedData/
+.DS_Store
+xcuserdata/
+# Xcode's workspace-level resolution; each package's Package.resolved is the pin.
+Atelier.xcworkspace/xcshareddata/swiftpm/

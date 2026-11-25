@@ -1,0 +1,360 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable cyclomatic_complexity function_body_length
+import Foundation
+import KittyFileTree
+import TerminalKitCodecs
+public import TerminalKitInput
+public import TerminalKitRender
+import TerminalKitText
+
+/// How long command feedback stays on screen after the key sequence that produced it.
+private let commandFeedbackDuration: Duration = .milliseconds(1500)
+
+@MainActor
+public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline) -> Bool {
+    let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
+    let contentRows = layout.contentRows
+
+    switch event {
+        case .key(let key):
+            guard key.eventType != .release else { return true }
+            cancelPendingAcceleratedScroll(state: state, resetBurst: true)
+            state.isScrolling = false
+
+            if state.vimCommandLine != nil {
+                return state.handleVimCommandLineKey(key)
+            }
+
+            if state.inFileSearch != nil && state.mode != .searchPanel {
+                return handleSearchKey(key, state: state, pipeline: pipeline)
+            }
+
+            if key.eventType == .press || key.eventType == .repeat {
+                let stroke = KeyStroke(from: key)
+                let context = KeyContext.from(state: state)
+                let isRepeat = key.eventType == .repeat
+                let resolver = KeymapResolver(config: state.config)
+
+                // Multi-key sequence handling (press only, not repeat)
+                if !isRepeat {
+                    let sequenceTimeout = Duration.milliseconds(
+                        state.config.keybindings.sequenceTimeoutMilliseconds
+                    )
+                    if !state.pendingKeySequence.isEmpty,
+                        let pendingTime = state.pendingKeySequenceTime,
+                        pendingTime.duration(to: state.clock.erasedNow()) > sequenceTimeout
+                    {
+                        state.pendingKeySequence = []
+                        state.pendingKeySequenceTime = nil
+                    }
+
+                    let candidate = state.pendingKeySequence + [stroke]
+                    switch resolver.resolveSequence(candidate, context: context) {
+                        case .command(let command):
+                            state.pendingKeySequence = []
+                            state.pendingKeySequenceTime = nil
+                            let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
+                                .joined(
+                                    separator: " "
+                                )
+                            state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
+                            state.commandFeedbackExpiry = state.clock.erasedNow()
+                                .advanced(
+                                    by: commandFeedbackDuration
+                                )
+                            return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
+                        case .partial:
+                            state.pendingKeySequence = candidate
+                            state.pendingKeySequenceTime = state.clock.erasedNow()
+                            let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
+                                .joined(
+                                    separator: " "
+                                )
+                            state.commandFeedback = "\(seqLabel)..."
+                            state.commandFeedbackExpiry = state.clock.erasedNow()
+                                .advanced(
+                                    by: commandFeedbackDuration
+                                )
+                            return true
+                        case .none:
+                            if !state.pendingKeySequence.isEmpty {
+                                state.pendingKeySequence = []
+                                state.pendingKeySequenceTime = nil
+                            }
+                    }
+                }
+
+                if let command = resolver.resolve(stroke, context: context, isRepeat: isRepeat) {
+                    // Throttle repeat events for navigation commands
+                    if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
+                        let interval = state.config.editor.keyRepeatIntervalMilliseconds
+                        if interval > 0 {
+                            let now = state.clock.erasedNow()
+                            let threshold = Duration.milliseconds(interval)
+                            if let last = state.lastKeyRepeatProcessedAt,
+                                last.duration(to: now) < threshold
+                            {
+                                return true  // Skip this repeat, too soon
+                            }
+                            state.lastKeyRepeatProcessedAt = now
+                        }
+                    }
+                    if key.eventType == .press {
+                        state.lastKeyRepeatProcessedAt = nil
+                    }
+                    // Set command feedback
+                    let feedbackLabel = KeyStrokeFormatter.label(for: stroke)
+                    state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
+                    state.commandFeedbackExpiry = state.clock.erasedNow().advanced(by: commandFeedbackDuration)
+                    return dispatchEditorAwareCommand(
+                        command,
+                        key: key,
+                        state: state,
+                        pipeline: pipeline
+                    )
+                }
+                // Shift+navigation: try resolving without shift so selection tracking can wrap it
+                if key.modifiers.contains(.shift) {
+                    let strippedStroke = KeyStroke(
+                        keyCode: stroke.keyCode,
+                        modifiers: stroke.modifiers.subtracting(.shift)
+                    )
+                    if let command = resolver.resolve(
+                        strippedStroke,
+                        context: context,
+                        isRepeat: isRepeat
+                    ),
+                        command.isEditorNavigation
+                    {
+                        return dispatchEditorAwareCommand(
+                            command,
+                            key: key,
+                            state: state,
+                            pipeline: pipeline
+                        )
+                    }
+                }
+            }
+
+            // Fallback for overlay contexts: text insertion in prompts, eat input in context menus
+            if state.contextMenu != nil {
+                return true
+            }
+            if state.prompt != nil {
+                return state.handlePromptKey(key)
+            }
+
+            switch state.mode {
+                case .tree:
+                    return handleTreeKey(key, state: state, contentRows: contentRows)
+                case .editor:
+                    return handleEditorKey(key, state: state, contentRows: contentRows, pipeline: pipeline)
+                case .searchPanel:
+                    return handleSearchPanelKey(key, state: state, pipeline: pipeline)
+            }
+
+        case .paste(let text):
+            handlePaste(text, state: state)
+            return true
+
+        case .mouse(let mouse):
+            if state.prompt != nil {
+                return true
+            }
+            handleMouse(mouse, state: state, pipeline: pipeline)
+            return true
+
+        case .overflow(let overflow):
+            reportInputOverflow(overflow, state: state)
+            return true
+
+        case .unknown(let bytes):
+            state.receiveTerminalReply(bytes)
+            return true
+
+        default:
+            return true
+    }
+}
+
+@MainActor
+private func dispatchEditorAwareCommand(
+    _ command: CommandID,
+    key: KeyEvent,
+    state: EditorState,
+    pipeline: RenderPipeline
+) -> Bool {
+    let isShiftHeld = key.modifiers.contains(.shift)
+
+    // Selection handling for navigation commands
+    if command.isEditorNavigation {
+        if state.hasActiveSelection && !isShiftHeld {
+            // Plain navigation: collapse selection to appropriate edge
+            guard let selection = state.selection else {
+                return dispatchCommand(command, state: state, pipeline: pipeline)
+            }
+            let (start, end) = selection.ordered
+            switch command {
+                case .editorMoveLeft, .editorMoveUp, .editorMoveUpPage, .editorHome,
+                    .editorWordBackward:
+                    state.cursorRow = start.row
+                    state.cursorCol = start.col
+                default:
+                    state.cursorRow = end.row
+                    state.cursorCol = end.col
+            }
+            state.clearSelection()
+            ensureEditorVisibleFull(state: state, pipeline: pipeline)
+            return true
+        }
+
+        // Capture anchor for shift+navigation
+        let anchor: TextPosition? =
+            if isShiftHeld {
+                if let sel = state.selection {
+                    sel.anchor
+                } else {
+                    TextPosition(row: state.cursorRow, col: state.cursorCol)
+                }
+            } else {
+                nil
+            }
+
+        let result = dispatchCommand(command, state: state, pipeline: pipeline)
+
+        if let anchor = anchor {
+            let head = TextPosition(row: state.cursorRow, col: state.cursorCol)
+            state.selection = TextSelection(anchor: anchor, head: head)
+        }
+
+        return result
+    }
+
+    // Selection replacement for editing commands (insert/delete)
+    if command == .editorInsertNewline || command == .editorDeleteBackward {
+        if state.hasActiveSelection, let selection = state.selection {
+            let previousSnapshot = state.activeBufferSnapshot()
+            let mutation = TextOperations.deleteRange(
+                in: &state.textBuffer,
+                at: &state.textCursor,
+                selection: selection
+            )
+            state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+            state.clearSelection()
+            // For backspace, selection delete is sufficient — don't also delete backward
+            if command == .editorDeleteBackward {
+                ensureEditorVisibleFull(state: state, pipeline: pipeline)
+                return true
+            }
+        }
+    }
+
+    return dispatchCommand(command, state: state, pipeline: pipeline)
+}
+
+@MainActor
+public func handleCopy(state: EditorState) {
+    guard let selection = state.selection else { return }
+    let text = selection.extractText(
+        from: { state.fileLine(at: $0) },
+        lineCount: state.fileLineCount
+    )
+    let base64 = Data(text.utf8).base64EncodedString()
+    state.terminalWriter?(EscapeSequences.setClipboard(base64))
+    state.statusMessage = "Copied \(text.count) chars"
+}
+
+@MainActor
+public func handleCut(state: EditorState) {
+    guard let selection = state.selection else { return }
+    let text = selection.extractText(
+        from: { state.fileLine(at: $0) },
+        lineCount: state.fileLineCount
+    )
+    let base64 = Data(text.utf8).base64EncodedString()
+    state.terminalWriter?(EscapeSequences.setClipboard(base64))
+    let previousSnapshot = state.activeBufferSnapshot()
+    let mutation = TextOperations.deleteRange(
+        in: &state.textBuffer,
+        at: &state.textCursor,
+        selection: selection
+    )
+    state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+    state.clearSelection()
+    state.statusMessage = "Cut \(text.count) chars"
+}
+
+@MainActor
+public func handlePasteRequest(state: EditorState) {
+    if let terminalWriter = state.terminalWriter {
+        terminalWriter(EscapeSequences.requestClipboard)
+        state.pendingClipboardReplies += 1
+    }
+    state.statusMessage = "Paste request sent"
+}
+
+/// Pastes the clipboard reply a paste request waits for, or says why nothing was pasted. A reply no request waits
+/// for is ignored, so bytes that merely look like one cannot paste. Returns whether a request took the reply.
+@MainActor
+func receiveClipboardReply(_ reply: OSCClipboard.Reply, state: EditorState) -> Bool {
+    guard state.pendingClipboardReplies > 0 else { return false }
+    state.pendingClipboardReplies -= 1
+    switch reply {
+        case .text(let text):
+            handlePaste(text, state: state)
+        case .empty:
+            state.statusMessage = "Nothing to paste: the clipboard is empty or the terminal declined"
+        case .unreadable:
+            state.statusMessage = "Nothing pasted: the terminal's clipboard reply was not base64"
+    }
+    return true
+}
+
+/// Says in the status bar that the input router dropped a sequence past its cap, none of which was typed.
+@MainActor
+private func reportInputOverflow(_ overflow: InputOverflow, state: EditorState) {
+    let payloadCap = "\(SequenceRouter.maxPasteSize / 1_048_576) MiB"
+    switch overflow {
+        case .paste:
+            state.statusMessage = "Paste too large (over \(payloadCap)): nothing pasted"
+        case .osc(command: 52) where state.pendingClipboardReplies > 0:
+            state.pendingClipboardReplies -= 1
+            state.statusMessage = "Clipboard too large to paste (over \(payloadCap))"
+        case .osc:
+            state.statusMessage = "Ignored a terminal reply over \(payloadCap)"
+        case .controlSequence:
+            state.statusMessage =
+                "Ignored an escape sequence over \(SequenceRouter.maxControlSequenceSize / 1024) KiB"
+    }
+}
+
+@MainActor
+private func handlePaste(_ text: String, state: EditorState) {
+    let sanitized = TextSanitizer.sanitize(text)
+
+    if state.hasActiveSelection, let selection = state.selection {
+        let previousSnapshot = state.activeBufferSnapshot()
+        let mutation = TextOperations.deleteRange(
+            in: &state.textBuffer,
+            at: &state.textCursor,
+            selection: selection
+        )
+        state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+        state.clearSelection()
+    }
+
+    let previousSnapshot = state.activeBufferSnapshot()
+    let mutation = TextOperations.insert(
+        sanitized.text,
+        into: &state.textBuffer,
+        at: &state.textCursor
+    )
+    state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+
+    if sanitized.replacedCount > 0 {
+        state.statusMessage =
+            "Pasted \(sanitized.text.count) chars (\(sanitized.replacedCount) non-printable replaced)"
+    } else {
+        state.statusMessage = "Pasted \(sanitized.text.count) chars"
+    }
+}

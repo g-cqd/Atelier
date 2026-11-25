@@ -1,0 +1,44 @@
+import AemiTestKit
+import AtelierLexers
+import AtelierSyntaxModel
+import Testing
+
+/// The allocation bound describes the optimized lexer. An unoptimized build allocates once per token.
+private let isDebugBuild: Bool = {
+    #if DEBUG
+        true
+    #else
+        false
+    #endif
+}()
+
+/// The corpus-wide checks, run one at a time: the allocation counter is process-wide, so a corpus scan running beside
+/// the allocation test would add its own allocations to the count. The scanners' own corpus checks are aemi's
+/// (AemiLexersTests); these are the engine's.
+@Suite(.serialized)
+struct LexerCorpusTests {}
+
+extension LexerCorpusTests {
+    /// A scan allocates its token array and little else, whatever the size of the source: no string, set or array per
+    /// token or per keyword candidate.
+    struct Allocations {
+        @Test(
+            .enabled(if: allocationCountingAvailable && !isDebugBuild),
+            arguments: [Language.swift, .json, .yaml, .toml, .html, .css]
+        )
+        func `a scan makes a handful of allocations`(language: Language) throws {
+            let bytes = Array(LexerCorpus.text(language, fragments: 400).utf8)
+            let engine = LexicalHighlightEngine()
+            _ = engine.highlight(utf8: bytes, language: language)
+            // The counter is process-wide and the suites outside this one still run alongside, so a count can only
+            // come out high: the lowest of several is the scan's own.
+            var counts: [Int] = []
+            for _ in 0 ..< 64 {
+                guard let count = mallocDelta({ _ = engine.highlight(utf8: bytes, language: language) }) else { break }
+                counts.append(count)
+            }
+            let fewest = try #require(counts.min())
+            #expect(fewest <= 4)
+        }
+    }
+}

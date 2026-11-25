@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/tree-sitter-grammars/tree-sitter-toml",
+  "version": "v0.7.0",
+  "commit": "64b56832c2cffe41758f28e05c756a3a98d16f41",
+  "released": "2024-12-03",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "v0.7.0, with its patterns rewritten from \\x to \\u escapes",
+  "localChanges": {
+    "highlights.scm": "KittyCode's own query, kept over upstream's, which captures less"
+  }
+}

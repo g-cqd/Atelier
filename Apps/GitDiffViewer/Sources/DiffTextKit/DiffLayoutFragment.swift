@@ -1,0 +1,197 @@
+package import AppKit
+import AtelierDiagnostics
+import DiffCore
+package import DiffRendering
+import Foundation
+import SwiftUI
+import Synchronization
+
+/// Width of the pane's viewport, written on the main thread by the coordinator and read by fragments while drawing,
+/// which TextKit may do on its own threads; the atomic makes that cross-thread hand-off explicit.
+package final class ViewportMetrics: Sendable {
+    private let storage = Atomic<Double>(0)
+
+    package var width: CGFloat {
+        get { CGFloat(storage.load(ordering: .relaxed)) }
+        set { storage.store(Double(newValue), ordering: .relaxed) }
+    }
+}
+
+/// Draws a full-width background behind its line before the glyphs, which is how the diff colors whole rows
+/// without stretching background attributes to the container edge.
+///
+/// The row's decorations are read as the fragment draws (PERF-09 stage 2): its emphasis, and whether it only moved,
+/// which calms its background. So they land with a redraw, and no row is laid out again for them.
+package final class DiffLayoutFragment: NSTextLayoutFragment {
+    /// The text the fragment's row belongs to, and the row; nil for a fragment outside any row.
+    package var rendered: RenderedText?
+    package var row: RowMeta?
+    /// Where the pane keeps the decorations of the text it shows.
+    package var decorations: DecorationSnapshot?
+    package var metrics: ViewportMetrics?
+    /// How far to raise the glyphs inside their line, to centre them when the line is taller than they need.
+    package var baselineOffset: CGFloat = 0
+    /// The overlay diagnostics are read from, and this fragment's row within it; set together, at layout time.
+    package var overlay: DiagnosticOverlay?
+    package var rowIndex: Int = -1
+    /// The band of a gap after this row, at the bottom of the fragment, which stays empty: no row colour reaches it.
+    package var bandBelow: CGFloat = 0
+    /// The colour of the separator across that band's middle, when the band lies between two changes; the gutter
+    /// draws the separator's start, and the fragment the rest, across the whole text (book DIFF-02).
+    package var separatorColor: NSColor?
+
+    /// The row's background: its kind's colour, the calmer one once the row is known to have only moved.
+    package var backgroundColor: NSColor? {
+        guard let rendered, let row else { return nil }
+        let isMoved = currentDecorations?.isMoved(row) ?? false
+        return rendered.palette.rowBackground(for: row.kind, side: rendered.side, isMoved: isMoved)
+    }
+
+    /// The decorations of the fragment's own text; nil once the pane shows another.
+    private var currentDecorations: DiffDecorations? {
+        rendered.flatMap { decorations?.decorations(for: $0) }
+    }
+
+    package override var renderingSurfaceBounds: CGRect {
+        var bounds = super.renderingSurfaceBounds.union(backgroundRect(origin: .zero))
+        if let separator = separatorRect(origin: .zero) { bounds = bounds.union(separator) }
+        return bounds
+    }
+
+    package override func draw(at point: CGPoint, in context: CGContext) {
+        if let backgroundColor {
+            context.saveGState()
+            context.setFillColor(backgroundColor.cgColor)
+            context.fill(backgroundRect(origin: point))
+            context.restoreGState()
+        }
+        if let separatorColor, let separator = separatorRect(origin: point) {
+            context.saveGState()
+            context.setFillColor(separatorColor.cgColor)
+            context.fill(separator)
+            context.restoreGState()
+        }
+        drawEmphasis(at: point, in: context)
+        drawDiagnostics(at: point, in: context)
+        guard baselineOffset != 0 else { return super.draw(at: point, in: context) }
+        // Only the glyphs move: the backgrounds above fill the line as it was laid out.
+        context.saveGState()
+        context.translateBy(x: 0, y: -baselineOffset)
+        super.draw(at: point, in: context)
+        context.restoreGState()
+    }
+
+    /// The row's intraline changes, each filled over the whole height of its line, so they match the row whatever the
+    /// line height; a background attribute would stop at the glyphs. The ranges are the row's, from its start, which is
+    /// the paragraph's: each line of a wrapped row draws the part it holds.
+    private func drawEmphasis(at point: CGPoint, in context: CGContext) {
+        guard let rendered, let row, let decorations = currentDecorations else { return }
+        let ranges = decorations.emphasis(of: row, on: rendered.side)
+        guard !ranges.isEmpty else { return }
+        let color = rendered.palette.emphasis(for: row.kind, side: rendered.side)
+        for line in textLineFragments {
+            let bounds = line.typographicBounds
+            let lineRange = line.characterRange
+            for range in ranges {
+                let lower = max(range.lowerBound, lineRange.location)
+                let upper = min(range.upperBound, lineRange.location + lineRange.length)
+                guard upper > lower else { continue }
+                let start = line.locationForCharacter(at: lower).x
+                let end = line.locationForCharacter(at: upper).x
+                guard end > start else { continue }
+                context.saveGState()
+                context.setFillColor(color.cgColor)
+                context.fill(
+                    CGRect(
+                        x: point.x + bounds.minX + start,
+                        y: point.y + bounds.minY,
+                        width: end - start,
+                        height: bounds.height
+                    )
+                )
+                context.restoreGState()
+            }
+        }
+    }
+
+    /// Underlines the row's diagnostics beneath its first line fragment, across their column range or the whole
+    /// line. Wrapped lines stay bare: `SquiggleRange` columns are relative to the row, not to a wrapped line.
+    private func drawDiagnostics(at point: CGPoint, in context: CGContext) {
+        guard let overlay, rowIndex >= 0, let row = overlay.row(rowIndex), let line = textLineFragments.first else {
+            return
+        }
+        let bounds = line.typographicBounds
+        let y = point.y + bounds.maxY - 2
+        guard !row.squiggles.isEmpty else {
+            drawSquiggle(
+                in: context,
+                color: color(for: row.severity),
+                x0: point.x + bounds.minX,
+                x1: point.x + bounds.minX + bounds.width,
+                y: y
+            )
+            return
+        }
+        let length = line.characterRange.length
+        for squiggle in row.squiggles where squiggle.start < length {
+            let startX = line.locationForCharacter(at: squiggle.start).x
+            let endX = line.locationForCharacter(at: min(squiggle.end ?? length, length)).x
+            drawSquiggle(
+                in: context,
+                color: color(for: squiggle.severity),
+                x0: point.x + bounds.minX + startX,
+                x1: point.x + bounds.minX + endX,
+                y: y
+            )
+        }
+    }
+
+    private func drawSquiggle(in context: CGContext, color: NSColor, x0: CGFloat, x1: CGFloat, y: CGFloat) {
+        guard x1 > x0 else { return }
+        context.saveGState()
+        context.setStrokeColor(color.withAlphaComponent(0.8).cgColor)
+        context.setLineWidth(1.2)
+        context.setLineDash(phase: 0, lengths: [2, 2])
+        context.move(to: CGPoint(x: x0, y: y))
+        context.addLine(to: CGPoint(x: x1, y: y))
+        context.strokePath()
+        context.restoreGState()
+    }
+
+    private func color(for severity: Finding.Severity) -> NSColor {
+        switch severity {
+            case .error: .systemRed
+            case .warning: .systemYellow
+            case .note: .systemGray
+        }
+    }
+
+    /// Spans the whole document width (viewport or longest line, whichever is wider) for every line of the
+    /// paragraph, including wrapped continuation lines, down to the band of a gap after it. Kept bounded because
+    /// oversized fragment surfaces exceed the maximum layer size and then draw nothing at all.
+    private func backgroundRect(origin: CGPoint) -> CGRect {
+        let width = max(metrics?.width ?? 0, layoutFragmentFrame.width) + 2 * Self.horizontalOverdraw
+        return CGRect(
+            x: origin.x - layoutFragmentFrame.minX - Self.horizontalOverdraw,
+            y: origin.y,
+            width: width,
+            height: max(layoutFragmentFrame.height - bandBelow, 0)
+        )
+    }
+
+    /// The separator across the band after this row, as wide as the row's background, at the height the gutter draws
+    /// its own; nil without one.
+    private func separatorRect(origin: CGPoint) -> CGRect? {
+        guard separatorColor != nil, bandBelow > 0 else { return nil }
+        let row = backgroundRect(origin: origin)
+        let bandTop = origin.y + layoutFragmentFrame.height - bandBelow
+        return CGRect(
+            x: row.minX,
+            y: bandTop + GapHandleLayout.separatorOffset(bandHeight: bandBelow),
+            width: row.width,
+            height: 1
+        )
+    }
+
+    private static let horizontalOverdraw: CGFloat = 8
+}

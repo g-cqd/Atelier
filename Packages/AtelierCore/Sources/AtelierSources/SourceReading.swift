@@ -1,0 +1,67 @@
+import AemiDiff
+import AemiRuntime
+public import AtelierGit
+import AtelierSyntaxModel
+public import Foundation
+
+/// Everything the model needs to know about a comparison target, behind one seam so tests can substitute it.
+public protocol SourceReading: Sendable {
+    func repositoryInfo(containing url: URL) async -> RepositoryInfo?
+    /// Why the repository `url` lies in cannot be read, when its own configuration is refused; nil otherwise.
+    func configurationRefusal(containing url: URL) async -> GitConfigRefusal?
+    func entries(of source: ComparisonSource) async throws -> [GitTreeEntry]
+    /// Files git ignores in a working tree, which `entries(of:)` leaves out; empty for every other kind of source.
+    func ignoredEntries(of source: ComparisonSource) async throws -> [GitTreeEntry]
+    func content(of entry: GitTreeEntry, in source: ComparisonSource) async throws -> String
+    /// Contents of many files at once, keyed by relative path; sources that can batch reads override this.
+    func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String]
+    /// Renames git detects between the two sources, old path to new path, when both are trees of one repository.
+    func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String]
+    /// The commit hash `ref` names in `repository`.
+    /// - Throws: When the ref names nothing, or git cannot run.
+    func resolve(ref: String, in repository: URL) async throws -> String
+    /// Git's status of the working tree `source` names, every path relative to the source's root and every entry
+    /// outside it left out; nil for a source that is not a folder inside a repository.
+    /// - Throws: When git cannot run or fails.
+    func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]?
+    /// The paths among `paths`, relative to the folder `source` names, that git ignores there, judged in one go;
+    /// empty for any other kind of source.
+    /// - Throws: When git cannot run or fails, for example for a folder outside every repository.
+    func ignoredPaths(among paths: [String], in source: ComparisonSource) async throws -> Set<String>
+}
+
+/// Concurrent file reads for sources without batch reads; bounded so a large folder does not open a file storm.
+private let fileReadConcurrency = 6
+
+extension SourceReading {
+    /// A source with no git behind it has no configuration to refuse.
+    public func configurationRefusal(containing url: URL) async -> GitConfigRefusal? {
+        nil
+    }
+
+    public func ignoredEntries(of source: ComparisonSource) async throws -> [GitTreeEntry] {
+        []
+    }
+
+    /// A source with no git behind it names every ref by itself.
+    public func resolve(ref: String, in repository: URL) async throws -> String {
+        ref
+    }
+
+    /// A source with no git behind it has no working-tree status.
+    public func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]? {
+        nil
+    }
+
+    /// A source with no git behind it ignores nothing.
+    public func ignoredPaths(among paths: [String], in source: ComparisonSource) async throws -> Set<String> {
+        []
+    }
+
+    public func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String] {
+        let pairs = try await mapConcurrently(entries, limit: fileReadConcurrency) { entry in
+            (entry.relativePath, try await content(of: entry, in: source))
+        }
+        return Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+    }
+}
